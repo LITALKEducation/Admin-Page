@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LITALK - Book a Class</title>
+    <meta name="description" content="LITALK Education - ระบบจองคิวเรียนออนไลน์สำหรับเจ้าหน้าที่">
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Kanit:wght@200;300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root[data-theme="light"] {
+            --bg-primary: #f8f9fa;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f1f3f5;
+            --border-color: #e9ecef;
+            --text-primary: #121212;
+            --text-secondary: #495057;
+            --text-muted: #868e96;
+            --brand-primary: #000000;
+            --brand-secondary: #212529;
+            --brand-btn-text: #ffffff;
+            --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.02), 0 1px 3px rgba(0, 0, 0, 0.01);
+            --focus-ring: rgba(0, 0, 0, 0.1);
+            --accent-success: #198754;
+            --accent-danger: #dc3545;
+            --badge-bg: rgba(0, 0, 0, 0.05);
+            --badge-text: #121212;
+        }
+
+        :root[data-theme="dark"] {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #121212;
+            --bg-tertiary: #1c1c1e;
+            --border-color: #2a2a2a;
+            --text-primary: #f8f9fa;
+            --text-secondary: #ced4da;
+            --text-muted: #6c757d;
+            --brand-primary: #ffffff;
+            --brand-secondary: #e9ecef;
+            --brand-btn-text: #000000;
+            --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            --focus-ring: rgba(255, 255, 255, 0.15);
+            --accent-success: #2ecc71;
+            --accent-danger: #e74c3c;
+            --badge-bg: rgba(255, 255, 255, 0.1);
+            --badge-text: #ffffff;
+        }
+
+        body {
+            font-family: 'Outfit', 'Kanit', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.3s, color 0.3s;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Subtle modern dotted background */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: radial-gradient(circle at 1px 1px, var(--border-color) 1px, transparent 0);
+            background-size: 24px 24px;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.6;
+        }
+
+        /* Visibility of sections */
+        #booking-panel,
+        #login-section {
+            display: none;
+            z-index: 1;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid transparent;
+            text-decoration: none;
+            letter-spacing: -0.01em;
+        }
+
+        .btn-primary {
+            background-color: var(--brand-primary);
+            color: var(--brand-btn-text);
+            border-color: var(--brand-primary);
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            border-color: var(--text-primary);
+        }
+
+        /* Theme Toggle Button */
+        .theme-toggle-btn {
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            width: 38px;
+            height: 38px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .theme-toggle-btn:hover {
+            background-color: var(--bg-tertiary);
+            border-color: var(--text-primary);
+        }
+
+        /* Login Screen Layout */
+        .login-page {
+            min-height: 100vh;
+            width: 100%;
+            z-index: 10;
+            position: relative;
+        }
+
+        .login-wrapper {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            min-height: 100vh;
+            width: 100%;
+        }
+
+        .login-brand-side {
+            background: linear-gradient(135deg, #0f0f11 0%, #000000 100%);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            color: #ffffff;
+            overflow: hidden;
+            transition: background 0.3s;
+        }
+
+        :root[data-theme="light"] .login-brand-side {
+            background: linear-gradient(135deg, #18181b 0%, #000000 100%);
+        }
+
+        .login-brand-side::before {
+            content: '';
+            position: absolute;
+            top: -10%;
+            right: -10%;
+            width: 400px;
+            height: 400px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
+        }
+
+        .brand-content {
+            position: relative;
+            z-index: 2;
+            max-width: 460px;
+        }
+
+        .brand-logo-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 30px;
+        }
+
+        .brand-logo-container .logo-img {
+            height: 52px;
+            width: auto;
+            filter: brightness(0) invert(1);
+        }
+
+        .brand-tagline h2 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
+            color: #ffffff;
+        }
+
+        .brand-tagline p {
+            font-size: 16px;
+            color: #d4d4d8;
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+
+        .brand-features {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .brand-features li {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-size: 15px;
+            color: #eaeaea;
+        }
+
+        .brand-features li i {
+            color: #a1a1aa;
+            font-size: 18px;
+        }
+
+        .login-form-side {
+            background-color: var(--bg-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            position: relative;
+            transition: background-color 0.3s;
+        }
+
+        .login-form-container {
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .mobile-logo {
+            display: none;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .mobile-logo img {
+            height: 48px;
+            width: auto;
+        }
+
+        .login-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .login-subtitle {
+            font-size: 15px;
+            color: var(--text-secondary);
+            margin-bottom: 36px;
+            line-height: 1.5;
+        }
+
+        .login-card {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: var(--card-shadow);
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+
+        .login-desc-box {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+
+        .login-desc-box i {
+            color: var(--text-primary);
+            font-size: 16px;
+            margin-top: 2px;
+        }
+
+        /* Top level toggle */
+        .login-theme-toggle {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            z-index: 100;
+        }
+
+        /* Navigation Bar (Shared Menu) */
+        .navbar {
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            padding: 14px 24px;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-img {
+            height: 24px;
+            width: auto;
+            transition: filter 0.3s;
+        }
+
+        :root[data-theme="dark"] .logo-img {
+            filter: brightness(0) invert(1);
+        }
+
+        .logo-text {
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            text-transform: uppercase;
+        }
+
+        .admin-badge-text {
+            font-size: 10px;
+            font-weight: 700;
+            background-color: var(--badge-bg);
+            color: var(--badge-text);
+            padding: 2px 6px;
+            border-radius: 2px;
+            letter-spacing: 0.05em;
+            border: 1px solid var(--border-color);
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 8px;
+        }
+
+        .nav-menu-item {
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            padding: 6px 14px;
+            border-radius: 4px;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .nav-menu-item:hover {
+            color: var(--text-primary);
+            background-color: var(--bg-tertiary);
+        }
+
+        .nav-menu-item.active {
+            color: var(--text-primary);
+            background-color: var(--bg-tertiary);
+            border-color: var(--border-color);
+            font-weight: 600;
+        }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .staff-email {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-family: monospace;
+            border-right: 1px solid var(--border-color);
+            padding-right: 12px;
+        }
+
+        /* Dashboard Layout */
+        .admin-dashboard {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            z-index: 1;
+        }
+
+        .dashboard-content {
+            flex: 1;
+            max-width: 600px;
+            /* Centered narrow container for booking */
+            width: 100%;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+
+        /* Banner section */
+        .staff-hero {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 28px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            box-shadow: var(--card-shadow);
+        }
+
+        .staff-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .staff-avatar {
+            width: 44px;
+            height: 44px;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .staff-info h2 {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .staff-info p {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .staff-badge {
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(4px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Admin Action Card */
+        .admin-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 28px;
+            box-shadow: var(--card-shadow);
+            animation: fadeIn 0.4s ease;
+        }
+
+        .card-title-bar {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 4px;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: var(--text-primary);
+            flex-shrink: 0;
+        }
+
+        .card-title-bar h3 {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            letter-spacing: -0.01em;
+        }
+
+        .card-title-bar p {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Forms layout */
+        .form-body {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .form-group label i {
+            color: var(--text-muted);
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 13px;
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            transition: all 0.15s ease;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--text-primary);
+            background-color: var(--bg-secondary);
+            box-shadow: 0 0 0 3px var(--focus-ring);
+        }
+
+        .form-group input::placeholder,
+        .form-group textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        .select-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .select-wrapper select {
+            appearance: none;
+            -webkit-appearance: none;
+            padding-right: 32px;
+        }
+
+        .select-wrapper::after {
+            content: '\f078';
+            font-family: 'Font Awesome 5 Free';
+            font-weight: 900;
+            font-size: 10px;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
+
+        .btn-submit {
+            margin-top: 8px;
+            width: 100%;
+        }
+
+        /* Notices */
+        .info-notice {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 14px 16px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .info-notice i {
+            margin-top: 3px;
+            flex-shrink: 0;
+        }
+
+        /* Modals and overlays */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s ease-out;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-box {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            padding: 32px;
+            border-radius: 8px;
+            box-shadow: var(--card-shadow);
+            max-width: 450px;
+            width: 90%;
+            text-align: center;
+            transform: translateY(10px);
+            transition: all 0.2s ease-out;
+        }
+
+        .modal-overlay.active .modal-box {
+            transform: translateY(0);
+        }
+
+        .modal-icon {
+            font-size: 36px;
+            margin-bottom: 16px;
+            display: inline-flex;
+        }
+
+        .modal-icon.success {
+            color: var(--accent-success);
+        }
+
+        .modal-icon.error {
+            color: var(--accent-danger);
+        }
+
+        .modal-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            letter-spacing: -0.01em;
+            text-transform: uppercase;
+        }
+
+        .modal-message {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            background-color: var(--bg-tertiary);
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            text-align: left;
+            word-break: break-word;
+            font-family: inherit;
+        }
+
+        .modal-message a {
+            color: var(--text-primary);
+            font-weight: 600;
+            text-decoration: underline;
+        }
+
+        /* Loader spinner */
+        .loader {
+            border: 2px solid var(--border-color);
+            border-top: 2px solid var(--text-primary);
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Footer */
+        .dashboard-footer {
+            background-color: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            padding: 20px;
+            text-align: center;
+            margin-top: auto;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* Responsiveness */
+        @media (max-width: 900px) {
+            .login-wrapper {
+                grid-template-columns: 1fr;
+            }
+
+            .login-brand-side {
+                display: none;
+            }
+
+            .mobile-logo {
+                display: block;
+            }
+
+            .login-form-side {
+                padding: 40px 24px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .navbar {
+                padding: 10px 16px;
+            }
+
+            .nav-menu {
+                display: none;
+            }
+
+            .btn-logout span {
+                display: none;
+            }
+
+            .btn-logout {
+                width: 34px;
+                height: 34px;
+                padding: 0;
+                justify-content: center;
+            }
+
+            .staff-email {
+                display: none;
+            }
+
+            .dashboard-content {
+                padding: 20px 16px;
+            }
+
+            .admin-card {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- TOP LEVEL THEME TOGGLE (Login state) -->
+    <div class="login-theme-toggle" id="theme-toggle-container">
+        <button class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Theme">
+            <i id="theme-toggle-icon" class="fas fa-moon"></i>
+        </button>
+    </div>
+
+    <!-- ADMIN LOGIN -->
+    <div id="login-section" class="login-page">
+        <div class="login-wrapper">
+            <!-- Brand Panel (Desktop) -->
+            <div class="login-brand-side">
+                <div class="brand-content">
+                    <div class="brand-logo-container">
+                        <img src="../img/LITALK-Black.png" alt="LITALK Logo" class="logo-img">
+                    </div>
+                    <div class="brand-tagline">
+                        <h2>LITALK Bookings</h2>
+                        <p>ระบบจองคิวและลงตารางเข้าเรียน สำหรับเจ้าหน้าที่ผู้ดูแลและอาจารย์ผู้สอน</p>
+                    </div>
+                    <ul class="brand-features">
+                        <li><i class="fas fa-check-circle"></i> <span>จองคิวเรียนล่วงหน้าและระบุเวลาแบบเรียลไทม์</span>
+                        </li>
+                        <li><i class="fas fa-check-circle"></i> <span>ผสาน Google Calendar และสร้างห้อง Meet
+                                อัตโนมัติ</span></li>
+                        <li><i class="fas fa-check-circle"></i> <span>ระบบแจ้งเตือนตารางการสอนแบบครบวงจร</span></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Login Form Side -->
+            <div class="login-form-side">
+                <div class="login-form-container">
+                    <div class="mobile-logo">
+                        <img src="../img/LITALK-Black.png" alt="LITALK Logo" class="logo-img">
+                    </div>
+                    <h1 class="login-title">เข้าสู่ระบบจองคิว</h1>
+                    <p class="login-subtitle">ระบบบริหารจัดการคิวการศึกษา LITALK Education</p>
+
+                    <div class="login-card">
+                        <div class="login-desc-box">
+                            <i class="fas fa-info-circle"></i>
+                            <span>เฉพาะผู้ที่มีบัญชีเจ้าหน้าที่ผู้ดูแลระบบเท่านั้นที่ได้รับสิทธิ์การเข้าถึงข้อมูลนี้</span>
+                        </div>
+
+                        <button class="btn btn-primary" id="admin-login-btn" onclick="login()"
+                            style="width:100%; margin-bottom:12px;">
+                            <i class="fas fa-sign-in-alt"></i>
+                            เข้าสู่ระบบเจ้าหน้าที่
+                        </button>
+
+                        <a href="../" class="btn btn-secondary" id="back-to-student-btn" style="width:100%;">
+                            <i class="fas fa-arrow-left"></i>
+                            กลับไปหน้านักเรียน
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOOKING DASHBOARD -->
+    <div id="booking-panel" class="admin-dashboard">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-container">
+                <div class="nav-brand">
+                    <img src="../img/LITALK-Black.png" alt="LITALK Logo" class="logo-img">
+                    <span class="admin-badge-text">ADMIN</span>
+                </div>
+                <div class="nav-menu">
+                    <a href="index.html" class="nav-menu-item">Dashboard</a>
+                    <a href="booking.html" class="nav-menu-item active">Bookings</a>
+                </div>
+                <div class="nav-actions">
+                    <span id="admin-display-email" class="staff-email">loading...</span>
+                    <button class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Theme">
+                        <i id="theme-toggle-icon-dash" class="fas fa-moon"></i>
+                    </button>
+                    <button class="btn btn-secondary btn-logout" onclick="logout()" id="admin-logout-btn">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <main class="dashboard-content">
+            <!-- Staff Info Banner -->
+            <div class="staff-hero">
+                <div class="staff-info">
+                    <div class="staff-avatar"><i class="fas fa-calendar-check"></i></div>
+                    <div>
+                        <h2>ระบบจองคิวห้องเรียน LITALK</h2>
+                        <p>ลงชื่อเข้าใช้ด้วยบัญชี: <span id="admin-display-email-dash"
+                                style="font-weight: 500;">กำลังดึงข้อมูล...</span></p>
+                    </div>
+                </div>
+                <div class="staff-badge"><i class="fas fa-key"></i> Staff Authorized</div>
+            </div>
+
+            <!-- Card: Booking Form -->
+            <div class="admin-card">
+                <div class="card-title-bar">
+                    <span class="card-icon"><i class="fas fa-calendar-alt"></i></span>
+                    <div>
+                        <h3>จองคิวเข้าเรียน (Book a Class)</h3>
+                        <p>เลือกวันเวลาเรียนและระบุรหัสนักเรียนเพื่อทำการนัดหมาย</p>
+                    </div>
+                </div>
+
+                <div class="info-notice">
+                    <i class="fas fa-info-circle"></i>
+                    <div>
+                        <strong>เงื่อนไขการจอง:</strong> สามารถจองเวลาเรียนล่วงหน้าได้อย่างน้อย 1 วัน
+                        ระบบจะตรวจสอบคิวว่างและสร้างนัดหมายพร้อมลิงก์ Google Meet อัตโนมัติทันที
+                    </div>
+                </div>
+
+                <div class="form-body">
+                    <div class="form-group">
+                        <label><i class="fas fa-id-badge"></i> รหัสนักเรียน (Student ID)</label>
+                        <input type="text" id="student-id" placeholder="กรอกรหัสนักเรียน 6 หลัก เช่น x3y7z2"
+                            maxlength="6" autocomplete="off">
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> ชื่อ-นามสกุลนักเรียน</label>
+                        <input type="text" id="student-name" placeholder="กรอกชื่อ-นามสกุลจริง เพื่อแสดงบนปฏิทิน">
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-calendar-day"></i> เลือกวันที่ต้องการเรียน</label>
+                        <input type="date" id="booking-date">
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-clock"></i> เลือกเวลาเรียน (รอบละ 1 ชั่วโมง)</label>
+                        <div class="select-wrapper">
+                            <select id="booking-time">
+                                <option value="">-- เลือกช่วงเวลาเรียน --</option>
+                                <option value="09:00">09:00 - 10:00 น.</option>
+                                <option value="10:00">10:00 - 11:00 น.</option>
+                                <option value="11:00">11:00 - 12:00 น.</option>
+                                <option value="13:00">13:00 - 14:00 น.</option>
+                                <option value="14:00">14:00 - 15:00 น.</option>
+                                <option value="15:00">15:00 - 16:00 น.</option>
+                                <option value="16:00">16:00 - 17:00 น.</option>
+                                <option value="19:00">19:00 - 20:00 น.</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="far fa-sticky-note"></i> บันทึกเพิ่มเติมถึงผู้สอน (ถ้ามี)</label>
+                        <textarea id="booking-notes" rows="3"
+                            placeholder="ระบุหัวข้อที่ต้องการเน้นเป็นพิเศษ หรือข้อความเพิ่มเติม..."></textarea>
+                    </div>
+
+                    <button class="btn btn-primary btn-submit" onclick="submitBooking()">
+                        <i class="fas fa-check-circle"></i> ยืนยันการจองคิวเรียน
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="dashboard-footer">
+            <div class="footer-content">
+                &copy; 2026 LITALK Education. All rights reserved.
+            </div>
+        </footer>
+    </div>
+
+    <!-- Modals -->
+    <div id="loading-overlay" class="modal-overlay">
+        <div class="modal-box" style="background: transparent; border: none; box-shadow: none;">
+            <div class="loader"></div>
+            <div style="font-size: 13px; font-weight: 500; color: var(--text-primary);">กำลังตรวจสอบตารางสอนและจัดทำห้อง
+                Meet...</div>
+        </div>
+    </div>
+
+    <div id="custom-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div id="modal-icon-container" class="modal-icon success"><i class="fas fa-check-circle"></i></div>
+            <h3 id="modal-title" class="modal-title">หัวข้อ</h3>
+            <div id="modal-message" class="modal-message">ข้อความรายละเอียด</div>
+            <button class="btn btn-primary" style="width: 100%" onclick="closeModal()">ตกลง</button>
+        </div>
+    </div>
+
+    <script>
+        // Init theme function before page loads to prevent flickering
+        (function () {
+            const savedTheme = localStorage.getItem('theme');
+            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+
+        let currentAdminEmail = "";
+
+        // Cookie Helpers
+        function setCookie(name, value, days) {
+            let expires = "";
+            if (days) {
+                const date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                expires = "; expires=" + date.toUTCString();
+            }
+            document.cookie = name + "=" + (value || "") + expires + "; path=/; secure; samesite=strict";
+        }
+
+        function getCookie(name) {
+            const nameEQ = name + "=";
+            const ca = document.cookie.split(';');
+            for (let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+            }
+            return null;
+        }
+
+        function eraseCookie(name) {
+            document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+        }
+
+        const auth0Client = new auth0.Auth0Client({
+            domain: 'litalkeducation.us.auth0.com',
+            clientId: 'IYA9knWCvuP6UXlTI3M6idEFuiBQDXLS', // Admin Client ID
+            authorizationParams: { redirect_uri: window.location.href.split('?')[0] },
+            cacheLocation: 'localstorage',
+            useRefreshTokens: true
+        });
+
+        // URL Web App จาก Google Apps Script
+        const gasAppUrl = 'https://script.google.com/macros/s/AKfycbyyiEM4NUx-leLse4535upWTtf6q68o4dTFIkO2FS0mml3J3kkIhM7WO27BoAP4aJ-BMg/exec';
+
+        window.onload = async () => {
+            // Theme setup for icons
+            const activeTheme = document.documentElement.getAttribute('data-theme');
+            updateThemeIcons(activeTheme);
+
+            // ล็อกวันจองล่วงหน้า: บังคับให้เลือกได้เฉพาะวันพรุ่งนี้เป็นต้นไป
+            const today = new Date();
+            today.setDate(today.getDate() + 1);
+            document.getElementById('booking-date').min = today.toISOString().split('T')[0];
+
+            // Check if user has an active cookie session to immediately render authenticated UI
+            const cachedEmail = getCookie('litalk_admin_email');
+            if (cachedEmail) {
+                currentAdminEmail = cachedEmail;
+                document.getElementById('admin-display-email').innerText = currentAdminEmail;
+                const dashEmail = document.getElementById('admin-display-email-dash');
+                if (dashEmail) dashEmail.innerText = currentAdminEmail;
+                document.getElementById('booking-panel').style.display = 'block';
+                document.getElementById('theme-toggle-container').style.display = 'none';
+            }
+
+            if (location.search.includes("state=") && (location.search.includes("code=") || location.search.includes("error="))) {
+                await auth0Client.handleRedirectCallback();
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+
+            const isAuthenticated = await auth0Client.isAuthenticated();
+            if (isAuthenticated) {
+                const user = await auth0Client.getUser();
+                currentAdminEmail = user.email || user.nickname || user.name || "Admin";
+
+                // Save or refresh cookie
+                setCookie('litalk_admin_email', currentAdminEmail, 7);
+
+                document.getElementById('admin-display-email').innerText = currentAdminEmail;
+                const dashEmail = document.getElementById('admin-display-email-dash');
+                if (dashEmail) dashEmail.innerText = currentAdminEmail;
+
+                document.getElementById('booking-panel').style.display = 'block';
+                document.getElementById('login-section').style.display = 'none';
+                document.getElementById('theme-toggle-container').style.display = 'none';
+            } else {
+                // If not authenticated and we aren't handling a callback, clear cookie and redirect/show login
+                if (!location.search.includes("state=")) {
+                    eraseCookie('litalk_admin_email');
+                    document.getElementById('booking-panel').style.display = 'none';
+                    document.getElementById('login-section').style.display = 'flex';
+                    document.getElementById('theme-toggle-container').style.display = 'block';
+                }
+            }
+        };
+
+        const login = async () => { await auth0Client.loginWithRedirect(); };
+        const logout = () => {
+            eraseCookie('litalk_admin_email');
+            auth0Client.logout({ logoutParams: { returnTo: window.location.href.split('?')[0] } });
+        };
+
+        // Theme Toggle Logic
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcons(newTheme);
+        }
+
+        function updateThemeIcons(theme) {
+            const loginIcon = document.getElementById('theme-toggle-icon');
+            const dashIcon = document.getElementById('theme-toggle-icon-dash');
+
+            if (loginIcon) loginIcon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+            if (dashIcon) dashIcon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+        }
+
+        function showLoading() { document.getElementById('loading-overlay').classList.add('active'); }
+        function hideLoading() { document.getElementById('loading-overlay').classList.remove('active'); }
+
+        function showModal(title, message, type = 'success') {
+            const modal = document.getElementById('custom-modal');
+            const iconContainer = document.getElementById('modal-icon-container');
+            const messageElement = modal.querySelector('#modal-message');
+
+            document.getElementById('modal-title').innerText = title;
+
+            // แปลงข้อความและผูกลิงก์ HTML อัตโนมัติ หากตรวจพบลองก์ url ของ Google Meet
+            if (message.includes("https://meet.google.com/")) {
+                const urlRegex = /(https?:\/\/meet\.google\.com\/[^\s\n]+)/g;
+                const formattedMessage = message.replace(urlRegex, function (url) {
+                    return `<a href="${url}" target="_blank">${url} <i class="fas fa-external-link-alt" style="font-size:10px;"></i></a>`;
+                });
+                messageElement.innerHTML = formattedMessage;
+            } else {
+                messageElement.innerText = message;
+            }
+
+            if (type === 'success') {
+                iconContainer.className = 'modal-icon success';
+                iconContainer.innerHTML = '<i class="fas fa-check-circle"></i>';
+            } else {
+                iconContainer.className = 'modal-icon error';
+                iconContainer.innerHTML = '<i class="fas fa-times-circle"></i>';
+            }
+
+            modal.classList.add('active');
+        }
+
+        function closeModal() { document.getElementById('custom-modal').classList.remove('active'); }
+
+        async function submitBooking() {
+            const payload = {
+                studentId: document.getElementById('student-id').value.trim().toLowerCase(),
+                studentName: document.getElementById('student-name').value.trim(),
+                bookingDate: document.getElementById('booking-date').value,
+                bookingTime: document.getElementById('booking-time').value,
+                notes: document.getElementById('booking-notes').value.trim()
+            };
+
+            if (!payload.studentId || !payload.studentName || !payload.bookingDate || !payload.bookingTime) {
+                return showModal('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกรหัส ชื่อ วันที่ และช่วงเวลาเข้าเรียนให้ครบถ้วน', 'error');
+            }
+
+            if (payload.studentId.length !== 6) {
+                return showModal('รูปแบบรหัสไม่ถูกต้อง', 'รหัสนักเรียนต้องมีความยาว 6 หลักสุ่มตามระบบ', 'error');
+            }
+
+            showLoading();
+
+            try {
+                const response = await fetch(gasAppUrl, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'createBooking', adminEmail: currentAdminEmail || 'admin', payload: payload })
+                });
+
+                const result = await response.json();
+                hideLoading();
+
+                if (result.status === 'success') {
+                    showModal('จองคิวเรียนสำเร็จ', result.message, 'success');
+                    document.getElementById('booking-time').value = '';
+                    document.getElementById('booking-notes').value = '';
+                } else {
+                    showModal('ไม่สามารถดำเนินการได้', result.message, 'error');
+                }
+            } catch (error) {
+                console.error(error);
+                hideLoading();
+                showModal('ข้อผิดพลาดการเชื่อมต่อ', 'ระบบตรวจพบความขัดข้องในการเชื่อมต่อฐานข้อมูล กรุณาตรวจสอบ Console Log', 'error');
+            }
+        }
+    </script>
+</body>
+
+</html>
