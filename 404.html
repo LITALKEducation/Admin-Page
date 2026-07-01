@@ -1,254 +1,242 @@
 <!DOCTYPE html>
-<html lang="th" data-theme="light">
+<html lang="en" data-lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LITALK Education - 404 Not Found</title>
-    <meta name="description" content="ไม่พบหน้าที่ต้องการ - LITALK Education">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <title>Page Not Found — LITALK Education</title>
+    <meta name="description" content="ไม่พบหน้าที่คุณต้องการ - LITALK Education">
+    <link rel="icon" href="img/LITALK-Icon.png" type="image/png">
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        *,
-        *::before,
-        *::after {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+    <link
+        href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
 
-        :root[data-theme="light"] {
-            --bg-primary: #f5f5f7;
-            --bg-secondary: #ffffff;
-            --border-color: #e2e2e7;
-            --text-primary: #1d1d1f;
-            --text-secondary: #515154;
-            --text-muted: #86868b;
-            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
-            --brand-gradient: linear-gradient(135deg, #18181b 0%, #000000 100%);
-            --brand-btn-text: #ffffff;
-        }
-
-        :root[data-theme="dark"] {
-            --bg-primary: #000000;
-            --bg-secondary: #121212;
-            --border-color: #2c2c2e;
-            --text-primary: #ffffff;
-            --text-secondary: #d1d1d6;
-            --text-muted: #8e8e93;
-            --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.4);
-            --brand-gradient: linear-gradient(135deg, #ffffff 0%, #eaeaea 100%);
-            --brand-btn-text: #000000;
-        }
-
-        body {
-            font-family: 'Kanit', sans-serif;
-            background-color: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-            transition: background-color 0.3s, color 0.3s;
-            position: relative;
-            overflow: hidden;
-        }
-
-        /* Dotted Grid Background */
-        body::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background-image:
-                radial-gradient(circle at 50% 0%, rgba(0, 0, 0, 0.03) 0%, transparent 50%),
-                radial-gradient(var(--border-color) 1px, transparent 1px);
-            background-size: 100% 100%, 24px 24px;
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        :root[data-theme="dark"] body::before {
-            background-image:
-                radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.03) 0%, transparent 60%),
-                radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-        }
-
-        .error-container {
-            position: relative;
-            z-index: 10;
-            width: 100%;
-            max-width: 440px;
-            text-align: center;
-            background-color: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 48px 36px;
-            box-shadow: var(--shadow-md);
-            transition: background-color 0.3s, border-color 0.3s;
-        }
-
-        .logo-img {
-            height: 48px;
-            width: auto;
-            margin-bottom: 32px;
-            transition: filter 0.3s;
-        }
-
-        :root[data-theme="dark"] .logo-img {
-            filter: brightness(0) invert(1);
-        }
-
-        .error-code {
-            font-size: 96px;
-            font-weight: 800;
-            line-height: 1;
-            letter-spacing: -0.05em;
-            margin-bottom: 12px;
-            background: linear-gradient(135deg, var(--text-primary) 30%, var(--text-muted) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .error-title {
-            font-size: 20px;
-            font-weight: 600;
-            margin-bottom: 12px;
-        }
-
-        .error-desc {
-            font-size: 14px;
-            color: var(--text-secondary);
-            line-height: 1.6;
-            margin-bottom: 36px;
-        }
-
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            width: 100%;
-            padding: 14px 24px;
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            border: none;
-            text-decoration: none;
-        }
-
-        .btn-primary {
-            background: var(--brand-gradient);
-            color: var(--brand-btn-text);
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            opacity: 0.9;
-        }
-
-        .btn-secondary {
-            background-color: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-secondary);
-            margin-top: 12px;
-        }
-
-        .btn-secondary:hover {
-            background-color: var(--bg-primary);
-        }
-
-        /* Top Theme Toggle Switch */
-        .theme-toggle-container {
-            position: absolute;
-            top: 24px;
-            right: 24px;
-            z-index: 100;
-        }
-
-        .theme-toggle-btn {
-            background: none;
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            transition: all 0.2s;
-        }
-
-        .theme-toggle-btn:hover {
-            background-color: var(--bg-secondary);
-            border-color: var(--text-primary);
-        }
-    </style>
+    <!-- Styles -->
+    <link rel="stylesheet" href="https://litalkeducation.com/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 
-<body>
+<body class="page-enter">
 
-    <!-- Theme toggle -->
-    <div class="theme-toggle-container">
-        <button class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Theme">
-            <i id="theme-toggle-icon" class="fas fa-moon"></i>
-        </button>
-    </div>
+    <!-- ============================================================
+       NAVIGATION
+       ============================================================ -->
+    <header role="banner">
+        <nav class="nav" id="main-nav" aria-label="Main navigation">
+            <div class="container">
+                <div class="nav__inner">
 
-    <!-- 404 Container -->
-    <div class="error-container">
-        <img src="img/LITALK-Black.png" alt="LITALK Logo" class="logo-img">
-        <div class="error-code">404</div>
-        <h1 class="error-title">ไม่พบหน้าที่คุณต้องการ</h1>
-        <p class="error-desc">ลิงก์ที่คุณเข้าถึงอาจจะไม่ถูกต้อง หรือหน้าเว็บดังกล่าวถูกย้ายหรือลบไปเรียบร้อยแล้ว
-            กรุณาตรวจสอบลิงก์อีกครั้ง</p>
+                    <!-- Logo -->
+                    <a href="/" class="nav__logo" aria-label="LITALK Home">
+                        <img src="img/LITALK-Black.png" alt="LITALK Education" width="120" height="28">
+                    </a>
 
-        <a href="/LITALK" class="btn btn-primary">
-            <i class="fas fa-home"></i>
-            กลับสู่หน้าหลักนักเรียน
-        </a>
-        <a href="https://lin.ee/n4zLBXa" target="_blank" class="btn btn-secondary">
-            <i class="fab fa-line"></i>
-            ติดต่อฝ่ายสนับสนุนทาง Line
-        </a>
-    </div>
+                    <!-- Links -->
+                    <ul class="nav__links" role="list">
+                        <li><a href="programs" class="nav__link" data-en="Programs" data-th="หลักสูตร">Programs</a></li>
+                        <li><a href="about" class="nav__link" data-en="About" data-th="เกี่ยวกับเรา">About</a></li>
+                        <li><a href="/#teachers" class="nav__link" data-en="Teachers" data-th="อาจารย์">Teachers</a>
+                        </li>
+                        <li><a href="/#blog" class="nav__link" data-en="Blog" data-th="บทความ">Blog</a></li>
+                        <li><a href="/#contact" class="nav__link" data-en="Contact" data-th="ติดต่อ">Contact</a></li>
+                    </ul>
 
-    <script>
-        // Init theme function before page loads to prevent flickering
-        (function () {
-            const savedTheme = localStorage.getItem('theme');
-            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const theme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
-            document.documentElement.setAttribute('data-theme', theme);
+                    <!-- Actions -->
+                    <div class="nav__actions">
+                        <div class="lang-switcher t-tabs" role="group" aria-label="Language switcher">
+                            <span class="t-tabs-pill" aria-hidden="true"></span>
+                            <button class="lang-btn t-tab active" data-lang-target="en" id="lang-en"
+                                aria-pressed="true">EN</button>
+                            <button class="lang-btn t-tab" data-lang-target="th" id="lang-th"
+                                aria-pressed="false">TH</button>
+                        </div>
+                        <a href="/#contact" class="btn btn--primary btn--sm" data-en="Start Learning"
+                            data-th="เริ่มเรียน">Start Learning</a>
+                    </div>
 
-            // Set correct icon after DOM load
-            window.addEventListener('DOMContentLoaded', () => {
-                const icon = document.getElementById('theme-toggle-icon');
-                if (icon) {
-                    icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-                }
-            });
-        })();
+                    <!-- Hamburger -->
+                    <button class="nav__hamburger" id="hamburger" aria-label="Toggle menu" aria-expanded="false"
+                        aria-controls="mobile-drawer">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
 
-        // Theme Toggle Logic
-        function toggleTheme() {
-            const currentTheme = document.documentElement.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
+                </div>
+            </div>
 
-            const icon = document.getElementById('theme-toggle-icon');
-            if (icon) {
-                icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-            }
-        }
-    </script>
+            <!-- Mobile Drawer -->
+            <div class="nav__drawer" id="mobile-drawer" role="navigation" aria-label="Mobile navigation">
+                <a href="programs" class="nav__link" data-en="Programs" data-th="หลักสูตร">Programs</a>
+                <a href="about" class="nav__link" data-en="About" data-th="เกี่ยวกับเรา">About</a>
+                <a href="/#teachers" class="nav__link" data-en="Teachers" data-th="อาจารย์">Teachers</a>
+                <a href="/#blog" class="nav__link" data-en="Blog" data-th="บทความ">Blog</a>
+                <a href="/#contact" class="nav__link" data-en="Contact" data-th="ติดต่อ">Contact</a>
+                <div class="nav__actions">
+                    <div class="lang-switcher t-tabs" role="group" aria-label="Language switcher">
+                        <span class="t-tabs-pill" aria-hidden="true"></span>
+                        <button class="lang-btn t-tab active" data-lang-target="en" aria-pressed="true">EN</button>
+                        <button class="lang-btn t-tab" data-lang-target="th" aria-pressed="false">TH</button>
+                    </div>
+                    <a href="/#contact" class="btn btn--primary btn--sm" data-en="Start Learning"
+                        data-th="เริ่มเรียน">Start Learning</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main id="main-content">
+
+        <!-- ============================================================
+         404 PAGE HERO
+         ============================================================ -->
+        <section class="page-hero" aria-labelledby="error-heading">
+            <div class="container">
+                <nav class="page-hero__breadcrumb" aria-label="Breadcrumb">
+                    <a href="https://litalkeducation.com/" data-en="Home" data-th="หน้าหลัก">Home</a>
+                    <span class="sep" aria-hidden="true">/</span>
+                    <span data-en="404 Not Found" data-th="ไม่พบหน้า">404 Not Found</span>
+                </nav>
+                <span class="page-hero__label">404 Error</span>
+                <h1 class="page-hero__title" id="error-heading">
+                    <span data-en="Page Not Found" data-th="ไม่พบหน้าที่คุณต้องการ">Page Not Found</span>
+                </h1>
+                <p class="page-hero__sub"
+                    data-en="The page you are looking for might have been removed, had its name changed, or is temporarily unavailable. Please check the URL again."
+                    data-th="ลิงก์ที่คุณเข้าถึงอาจจะไม่ถูกต้อง หรือหน้าเว็บดังกล่าวถูกย้ายหรือลบไปเรียบร้อยแล้ว กรุณาตรวจสอบลิงก์อีกครั้ง">
+                    The page you are looking for might have been removed, had its name changed, or is temporarily
+                    unavailable. Please check the URL again.
+                </p>
+                <div class="page-hero__cta">
+                    <a href="https://litalkeducation.com/" class="btn btn--primary btn--lg" data-en="Back to Home"
+                        data-th="กลับสู่หน้าหลัก">Back to Home</a>
+                    <a href="https://lin.ee/n4zLBXa" target="_blank" rel="noopener noreferrer"
+                        class="btn btn--outline btn--lg">
+                        <i class="fab fa-line" style="margin-right: 8px;"></i>
+                        <span data-en="Contact Support on Line" data-th="ติดต่อฝ่ายสนับสนุนทาง Line">Contact Support on
+                            Line</span>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ============================================================
+       FOOTER
+       ============================================================ -->
+    <footer class="footer" role="contentinfo" aria-label="Site footer">
+        <div class="container">
+            <div class="footer__top">
+
+                <!-- Brand -->
+                <div class="footer__brand">
+                    <img src="https://litalkeducation.com/img/LITALK-Black.png" alt="LITALK Education" width="120"
+                        height="28">
+                    <p class="footer__tagline" data-en="Building confident English communicators, one lesson at a time."
+                        data-th="สร้างนักสื่อสารภาษาอังกฤษที่มั่นใจ ทีละบทเรียน">
+                        Building confident English communicators, one lesson at a time.
+                    </p>
+                    <!-- Social Icons -->
+                    <div class="footer__socials" aria-label="Social media">
+                        <a href="https://www.facebook.com/LITALKOfficial" class="footer__social-icon"
+                            aria-label="Facebook" target="_blank" rel="noopener noreferrer">
+                            <i class="fab fa-facebook-f"></i>
+                        </a>
+                        <a href="https://www.instagram.com/LITALKOfficial" class="footer__social-icon"
+                            aria-label="Instagram" target="_blank" rel="noopener noreferrer">
+                            <i class="fab fa-instagram"></i>
+                        </a>
+                        <a href="https://x.com/LITALKOfficial" class="footer__social-icon" aria-label="X (Twitter)"
+                            target="_blank" rel="noopener noreferrer">
+                            <i class="fab fa-x-twitter"></i>
+                        </a>
+                        <a href="https://lin.ee/n4zLBXa" class="footer__social-icon" aria-label="Line OA"
+                            target="_blank" rel="noopener noreferrer">
+                            <i class="fab fa-line"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Programs -->
+                <div>
+                    <h3 class="footer__col-title" data-en="Programs" data-th="หลักสูตร">Programs</h3>
+                    <ul class="footer__links" role="list">
+                        <li><a href="https://litalkeducation.com/programs#starter" class="footer__link"
+                                data-en="Starter" data-th="ผู้เริ่มต้น">Starter</a></li>
+                        <li><a href="https://litalkeducation.com/programs#communicator" class="footer__link"
+                                data-en="Communicator" data-th="นักสื่อสาร">Communicator</a></li>
+                        <li><a href="https://litalkeducation.com/programs#pro" class="footer__link"
+                                data-en="Pro English" data-th="Pro English">Pro English</a></li>
+                        <li><a href="https://litalkeducation.com/programs#custom" class="footer__link"
+                                data-en="Custom Package" data-th="แพ็คเกจกำหนดเอง">Custom Package</a></li>
+                    </ul>
+                </div>
+
+                <!-- Company -->
+                <div>
+                    <h3 class="footer__col-title" data-en="Company" data-th="บริษัท">Company</h3>
+                    <ul class="footer__links" role="list">
+                        <li><a href="https://litalkeducation.com/about" class="footer__link" data-en="About Us"
+                                data-th="เกี่ยวกับเรา">About Us</a></li>
+                        <li><a href="https://litalkeducation.com/#teachers" class="footer__link" data-en="Our Teachers"
+                                data-th="อาจารย์">Our Teachers</a></li>
+                        <li><a href="https://litalkeducation.com/student" class="footer__link" data-en="Student Portal"
+                                data-th="พอร์ทัลนักเรียน">Student Portal</a></li>
+                        <li><a href="https://litalkeducation.com/#contact" class="footer__link" data-en="Contact"
+                                data-th="ติดต่อ">Contact</a></li>
+                    </ul>
+                </div>
+
+                <!-- Resources -->
+                <div>
+                    <h3 class="footer__col-title" data-en="Resources" data-th="ทรัพยากร">Resources</h3>
+                    <ul class="footer__links" role="list">
+                        <li><a href="https://litalkeducation.com/#blog" class="footer__link" data-en="Blog"
+                                data-th="บทความ">Blog</a></li>
+                        <li><a href="https://litalkeducation.com/#faq" class="footer__link" data-en="FAQ"
+                                data-th="คำถามที่พบบ่อย">FAQ</a></li>
+                        <li><a href="https://litalkeducation.com/#" class="footer__link" data-en="Privacy Policy"
+                                data-th="นโยบายความเป็นส่วนตัว">Privacy Policy</a></li>
+                        <li><a href="https://litalkeducation.com/#" class="footer__link" data-en="Terms of Service"
+                                data-th="ข้อกำหนดการใช้งาน">Terms of Service</a></li>
+                    </ul>
+                </div>
+
+            </div>
+
+            <div class="footer__bottom">
+                <span data-en="© 2026 LITALK Education. All rights reserved."
+                    data-th="© 2026 LITALK Education สงวนลิขสิทธิ์ทุกประการ">© 2026 LITALK Education. All rights
+                    reserved.</span>
+                <div class="footer__bottom-right">
+                    <div class="footer__bottom-social" aria-label="Follow LITALK">
+                        <a href="https://www.facebook.com/LITALKOfficial" target="_blank" rel="noopener noreferrer"
+                            aria-label="Facebook">FB</a>
+                        <a href="https://www.instagram.com/LITALKOfficial" target="_blank" rel="noopener noreferrer"
+                            aria-label="Instagram">IG</a>
+                        <a href="https://x.com/LITALKOfficial" target="_blank" rel="noopener noreferrer"
+                            aria-label="X">X</a>
+                        <a href="https://lin.ee/n4zLBXa" target="_blank" rel="noopener noreferrer"
+                            aria-label="Line OA">LINE</a>
+                    </div>
+                    <div class="lang-switcher t-tabs" role="group" aria-label="Language switcher">
+                        <span class="t-tabs-pill" aria-hidden="true"></span>
+                        <button class="lang-btn t-tab active" data-lang-target="en" aria-pressed="true">EN</button>
+                        <button class="lang-btn t-tab" data-lang-target="th" aria-pressed="false">TH</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="https://litalkeducation.com/main.js" defer></script>
+
 </body>
 
 </html>
