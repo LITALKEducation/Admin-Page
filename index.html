@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="th" data-theme="dark">
+<html lang="th">
 
 <head>
     <meta charset="UTF-8">
@@ -12,7 +12,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="icon" href="https://litalkeducation.com/img/LITALK-Icon.png" type="image/png">
-    
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#121212">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/img/icon-192.png">
+
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Kanit:wght@200;300;400;500;600;700&display=swap"
         rel="stylesheet">
@@ -25,7 +30,8 @@
             padding: 0;
         }
 
-        :root[data-theme="light"] {
+        /* Light theme (default) */
+        :root {
             --bg-primary: #f8f9fa;
             --bg-secondary: #ffffff;
             --bg-tertiary: #f1f3f5;
@@ -44,6 +50,27 @@
             --badge-text: #121212;
         }
 
+        /* Dark theme (manual toggle & system preference fallback) */
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --bg-primary: #0a0a0a;
+                --bg-secondary: #121212;
+                --bg-tertiary: #1c1c1e;
+                --border-color: #2a2a2a;
+                --text-primary: #f8f9fa;
+                --text-secondary: #ced4da;
+                --text-muted: #6c757d;
+                --brand-primary: #ffffff;
+                --brand-secondary: #e9ecef;
+                --brand-btn-text: #000000;
+                --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+                --focus-ring: rgba(255, 255, 255, 0.15);
+                --accent-success: #2ecc71;
+                --accent-danger: #e74c3c;
+                --badge-bg: rgba(255, 255, 255, 0.1);
+                --badge-text: #ffffff;
+            }
+        }
         :root[data-theme="dark"] {
             --bg-primary: #0a0a0a;
             --bg-secondary: #121212;
@@ -160,13 +187,88 @@
             transform: translateY(-1px);
         }
 
-        /* Theme Toggle Button */
-        .theme-toggle-btn {
+        /* Hamburger Menu Button */
+        .hamburger-btn {
+            display: none;
             background: none;
             border: 1px solid var(--border-color);
             color: var(--text-primary);
             width: 38px;
             height: 38px;
+            border-radius: 4px;
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .hamburger-btn:hover {
+            background-color: var(--bg-tertiary);
+            border-color: var(--text-primary);
+        }
+
+        /* Mobile Menu Overlay */
+        .mobile-menu-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .mobile-menu-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .mobile-menu-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 280px;
+            max-width: 85vw;
+            height: 100%;
+            background-color: var(--bg-secondary);
+            border-left: 1px solid var(--border-color);
+            z-index: 1000;
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .mobile-menu-overlay.active .mobile-menu-panel {
+            transform: translateX(0);
+        }
+
+        .mobile-menu-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .mobile-menu-header span {
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-primary);
+        }
+
+        .mobile-menu-close {
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            width: 32px;
+            height: 32px;
             border-radius: 4px;
             cursor: pointer;
             display: flex;
@@ -176,9 +278,59 @@
             transition: all 0.2s;
         }
 
-        .theme-toggle-btn:hover {
+        .mobile-menu-close:hover {
             background-color: var(--bg-tertiary);
-            border-color: var(--text-primary);
+        }
+
+        .mobile-menu-nav {
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            gap: 4px;
+        }
+
+        .mobile-menu-nav a {
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            padding: 12px 16px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .mobile-menu-nav a:hover {
+            color: var(--text-primary);
+            background-color: var(--bg-tertiary);
+        }
+
+        .mobile-menu-nav a.active {
+            color: var(--text-primary);
+            background-color: var(--bg-tertiary);
+            font-weight: 600;
+            border: 1px solid var(--border-color);
+        }
+
+        .mobile-menu-footer {
+            margin-top: auto;
+            padding: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .mobile-menu-email {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-muted);
+            font-family: monospace;
+            margin-bottom: 12px;
+            word-break: break-all;
+        }
+
+        .mobile-menu-footer .btn {
+            width: 100%;
         }
 
         /* Login Screen Layout */
@@ -345,13 +497,7 @@
             margin-top: 2px;
         }
 
-        /* Top level toggle */
-        .login-theme-toggle {
-            position: absolute;
-            top: 24px;
-            right: 24px;
-            z-index: 100;
-        }
+
 
         /* Unauthorized Page */
         .unauthorized-page {
@@ -425,8 +571,10 @@
             transition: filter 0.3s;
         }
 
-        :root[data-theme="dark"] .logo-img {
-            filter: brightness(0) invert(1);
+        @media (prefers-color-scheme: dark) {
+            .logo-img {
+                filter: brightness(0) invert(1);
+            }
         }
 
         .logo-text {
@@ -565,40 +713,79 @@
         }
 
         /* Tabs Menu */
+        :root {
+            --tabs-dur: 250ms;
+            --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+            --tabs-bar-bg: var(--bg-tertiary);
+            --tabs-pill-bg: var(--bg-secondary);
+            --tabs-text-muted: var(--text-secondary);
+            --tabs-text-active: var(--text-primary);
+        }
+
         .tab-menu {
-            display: flex;
-            gap: 8px;
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 3px;
+            border-radius: 48px;
+            background: var(--tabs-bar-bg);
             margin-bottom: 24px;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 12px;
+            border: 1px solid var(--border-color);
         }
 
         .tab-btn {
-            padding: 8px 16px;
-            border: 1px solid transparent;
-            background: none;
-            color: var(--text-secondary);
-            font-size: 14px;
-            font-weight: 500;
-            font-family: inherit;
+            position: relative;
+            appearance: none;
+            border: 0;
+            background: transparent;
+            height: 38px;
+            padding: 6px 20px;
+            color: var(--tabs-text-muted);
             cursor: pointer;
-            transition: all 0.2s;
-            border-radius: 4px;
+            border-radius: 48px;
+            z-index: 1;
+            transition: color var(--tabs-dur) var(--tabs-ease);
             display: flex;
             align-items: center;
             gap: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
         }
 
-        .tab-btn:hover {
-            color: var(--text-primary);
-            background-color: var(--bg-tertiary);
+        .tab-btn:hover:not([aria-selected="true"]) {
+            color: var(--tabs-text-active);
         }
 
-        .tab-btn.active {
-            color: var(--text-primary);
-            background-color: var(--bg-secondary);
-            border-color: var(--border-color);
+        .tab-btn[aria-selected="true"] {
+            color: var(--tabs-text-active);
             font-weight: 600;
+        }
+
+        .tab-menu-pill {
+            position: absolute;
+            top: 3px;
+            left: 0;
+            height: 38px;
+            width: 0;
+            background: var(--tabs-pill-bg);
+            border-radius: 48px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02);
+            transform: translateX(0);
+            transition:
+                transform var(--tabs-dur) var(--tabs-ease),
+                width     var(--tabs-dur) var(--tabs-ease);
+            will-change: transform, width;
+            z-index: 0;
+            pointer-events: none;
+            border: 1px solid var(--border-color);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .tab-menu-pill, .tab-btn {
+                transition: none !important;
+            }
         }
 
         .tab-content {
@@ -622,54 +809,253 @@
             }
         }
 
-        /* Forms and layouts */
-        .admin-grid {
-            display: grid;
-            grid-template-columns: 320px 1fr;
-            gap: 24px;
-            align-items: start;
-        }
-
-        .admin-sidebar-card {
+        /* Student Picker Bar */
+        .student-picker {
             background-color: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            padding: 24px;
+            padding: 20px;
+            margin-bottom: 20px;
             box-shadow: var(--card-shadow);
+            position: sticky;
+            top: 64px;
+            z-index: 50;
         }
 
-        .card-header h3 {
-            font-size: 14px;
-            font-weight: 700;
+        .student-picker-label {
+            font-size: 13px;
+            font-weight: 600;
             color: var(--text-primary);
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        .card-header p {
+        /* Custom Searchable Dropdown */
+        :root {
+            --dropdown-open-dur: 250ms;
+            --dropdown-close-dur: 150ms;
+            --dropdown-pre-scale: 0.97;
+            --dropdown-closing-scale: 0.99;
+            --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .custom-dropdown {
+            position: relative;
+            width: 100%;
+            user-select: none;
+        }
+
+        .dropdown-trigger {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-primary);
+            transition: all 0.15s ease;
+        }
+
+        .dropdown-trigger:hover {
+            border-color: var(--text-primary);
+        }
+
+        .dropdown-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+        }
+
+        .clear-btn {
+            cursor: pointer;
+            padding: 4px;
+            font-size: 12px;
+            transition: color 0.15s;
+        }
+
+        .clear-btn:hover {
+            color: var(--accent-danger);
+        }
+
+        .arrow-icon {
+            font-size: 10px;
+            transition: transform 0.2s ease;
+        }
+
+        .custom-dropdown.active .arrow-icon {
+            transform: rotate(180deg);
+        }
+
+        .dropdown-menu-panel {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            z-index: 100;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            
+            /* t-dropdown transitions.dev integration */
+            transform-origin: top center;
+            transform: scale(var(--dropdown-pre-scale));
+            opacity: 0;
+            transition:
+                transform var(--dropdown-open-dur) var(--dropdown-ease),
+                opacity   var(--dropdown-open-dur) var(--dropdown-ease);
+            will-change: transform, opacity;
+        }
+
+        .custom-dropdown.active .dropdown-menu-panel {
+            display: flex;
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .custom-dropdown.is-closing .dropdown-menu-panel {
+            display: flex;
+            transform: scale(var(--dropdown-closing-scale));
+            opacity: 0;
+            transition:
+                transform var(--dropdown-close-dur) var(--dropdown-ease),
+                opacity   var(--dropdown-close-dur) var(--dropdown-ease);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .dropdown-menu-panel {
+                transition: none !important;
+            }
+        }
+
+        .dropdown-search-box {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+        }
+
+        .dropdown-search-box .search-icon {
+            color: var(--text-muted);
+            margin-right: 8px;
+            font-size: 12px;
+        }
+
+        .dropdown-search-box input {
+            border: none !important;
+            background: transparent !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            font-size: 13px !important;
+            color: var(--text-primary) !important;
+            outline: none !important;
+            width: 100% !important;
+            box-shadow: none !important;
+        }
+
+        .dropdown-options-list {
+            max-height: 240px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dropdown-option {
+            padding: 10px 14px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.15s;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dropdown-option:hover {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .dropdown-option.selected {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .dropdown-no-results {
+            padding: 14px;
+            font-size: 13px;
+            color: var(--text-muted);
+            text-align: center;
+            font-style: italic;
+        }
+
+        /* Student Indicator */
+        .student-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .student-indicator.empty {
+            background-color: var(--bg-tertiary);
+            border: 1px dashed var(--border-color);
+            color: var(--text-muted);
+        }
+
+        .student-indicator.selected {
+            background-color: rgba(25, 135, 84, 0.08);
+            border: 1px solid rgba(25, 135, 84, 0.25);
+            color: var(--accent-success);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .student-indicator.selected {
+                background-color: rgba(46, 204, 113, 0.08);
+                border-color: rgba(46, 204, 113, 0.25);
+            }
+        }
+
+        .student-indicator i {
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+
+        /* Form Disabled Overlay */
+        .form-cards-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .form-cards-wrapper.disabled {
+            opacity: 0.45;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        /* Form hint text */
+        .form-hint {
             font-size: 12px;
             color: var(--text-muted);
-            margin-bottom: 20px;
-            line-height: 1.5;
-        }
-
-        .sidebar-help {
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            margin-top: 20px;
-            color: var(--text-muted);
-            font-size: 11px;
-            line-height: 1.5;
-            background-color: var(--bg-tertiary);
-            padding: 12px;
-            border-radius: 4px;
-            border: 1px solid var(--border-color);
-        }
-
-        .sidebar-help i {
             margin-top: 2px;
+            line-height: 1.4;
         }
 
         .admin-main-forms {
@@ -737,11 +1123,9 @@
         }
 
         .form-group label {
-            font-size: 11px;
+            font-size: 13px;
             font-weight: 600;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            color: var(--text-primary);
             display: flex;
             align-items: center;
             gap: 6px;
@@ -749,6 +1133,7 @@
 
         .form-group label i {
             color: var(--text-muted);
+            font-size: 13px;
         }
 
         .form-group input,
@@ -815,6 +1200,261 @@
             width: 100%;
         }
 
+        /* Error state shake variables & classes */
+        :root {
+            --shake-distance: 6px;
+            --shake-overshoot: 4px;
+            --shake-dur-a: 80ms;
+            --shake-dur-b: 60ms;
+            --shake-ease: cubic-bezier(0.22, 1, 0.36, 1);
+            --revert-hold: 3000ms;
+            --revert-dur: 280ms;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea,
+        .student-picker .dropdown-trigger {
+            transition: border-color 150ms ease-out;
+            will-change: transform;
+        }
+
+        .form-group.is-error input,
+        .form-group.is-error select,
+        .form-group.is-error textarea,
+        .student-picker.is-error .dropdown-trigger {
+            border-color: var(--accent-danger) !important;
+            transition: border-color var(--revert-dur) ease-out;
+        }
+
+        .form-group.is-shaking input,
+        .form-group.is-shaking select,
+        .form-group.is-shaking textarea,
+        .student-picker.is-shaking .dropdown-trigger {
+            animation: t-input-shake calc(var(--shake-dur-a) * 2 + var(--shake-dur-b) * 2) linear;
+        }
+
+        .t-error-msg {
+            color: var(--accent-danger);
+            font-size: 12px;
+            font-weight: 500;
+            margin-top: 6px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            opacity: 0;
+            visibility: hidden;
+            transition:
+                opacity    var(--revert-dur) ease-out,
+                visibility 0s linear var(--revert-dur);
+        }
+
+        .form-group.is-error .t-error-msg,
+        .student-picker.is-error .t-error-msg {
+            opacity: 1;
+            visibility: visible;
+            transition:
+                opacity    var(--revert-dur) ease-out,
+                visibility 0s linear 0s;
+        }
+
+        @keyframes t-input-shake {
+            0%      { transform: translateX(0);                                 animation-timing-function: var(--shake-ease); }
+            28.57%  { transform: translateX(var(--shake-distance));             animation-timing-function: var(--shake-ease); }
+            57.14%  { transform: translateX(calc(var(--shake-distance) * -1)); animation-timing-function: var(--shake-ease); }
+            78.57%  { transform: translateX(var(--shake-overshoot));            animation-timing-function: var(--shake-ease); }
+            100%    { transform: translateX(0); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .form-group input,
+            .form-group select,
+            .form-group textarea,
+            .student-picker .dropdown-trigger {
+                animation: none !important;
+                transform: none !important;
+            }
+        }
+
+        /* Input Clear with Dissolve variables & classes */
+        :root {
+            --clear-dur: 1000ms;
+            --clear-out-dur: 400ms;
+            --clear-in-dur: 400ms;
+            --clear-out-fly: 12px;
+            --clear-in-fly: 12px;
+            --clear-out-ease: cubic-bezier(0.22, 1, 0.36, 1);
+            --clear-in-ease: cubic-bezier(0.22, 1, 0.36, 1);
+            --clear-blur: 2px;
+            --glow-delay: 50ms;
+            --glow-peak-at: 0.15;
+            --glow-opacity: 0.42;
+            --glow-spread: 1.5;
+        }
+
+        .t-clear {
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            flex: 1;
+        }
+
+        .t-clear > input {
+            padding-right: 32px !important;
+        }
+
+        .t-clear-mirror,
+        .t-clear-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            pointer-events: none;
+            white-space: nowrap;
+            overflow: hidden;
+            z-index: 2;
+            padding-left: 12px;
+            font-size: 13px;
+            font-family: inherit;
+            color: var(--text-primary);
+        }
+
+        .t-clear-placeholder {
+            color: var(--text-muted);
+            opacity: 0;
+            transform: translateY(0);
+        }
+
+        .t-clear:not(.has-value) .t-clear-placeholder {
+            opacity: 1;
+        }
+
+        .t-clear-mirror {
+            opacity: 0;
+        }
+
+        .t-clear.has-value .t-clear-mirror,
+        .t-clear.is-clearing .t-clear-mirror {
+            opacity: 1;
+        }
+
+        .t-clear.has-value > input,
+        .t-clear.is-clearing > input {
+            -webkit-text-fill-color: transparent;
+        }
+
+        .t-clear-glow {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 3;
+            mix-blend-mode: multiply;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .t-clear-glow {
+                mix-blend-mode: screen;
+            }
+        }
+
+        .t-clear-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            border: none;
+            background: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            z-index: 4;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            padding: 4px;
+            border-radius: 50%;
+            transition: color 0.15s, background-color 0.15s;
+        }
+
+        .t-clear-btn:hover {
+            color: var(--text-primary);
+            background-color: var(--bg-tertiary);
+        }
+
+        .t-clear.has-value .t-clear-btn {
+            display: flex;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .t-clear-glow {
+                opacity: 0 !important;
+            }
+        }
+
+        /* Success Check variables & classes */
+        :root {
+            --check-opacity-dur: 500ms;
+            --check-rotate-dur: 500ms;
+            --check-rotate-from: 80deg;
+            --check-bob-dur: 500ms;
+            --check-y-amount: 40px;
+            --check-blur-dur: 500ms;
+            --check-blur-from: 10px;
+            --check-path-dur: 500ms;
+            --check-path-delay: 80ms;
+            --check-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+            --check-ease-opacity: cubic-bezier(0.22, 1, 0.36, 1);
+            --check-ease-rotate: cubic-bezier(0.22, 1, 0.36, 1);
+            --check-ease-bob: cubic-bezier(0.34, 1.35, 0.64, 1);
+            --check-ease-path: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .t-success-check {
+            display: inline-block;
+            transform-origin: center;
+            opacity: 0;
+            will-change: transform, opacity, filter;
+        }
+
+        .t-success-check svg {
+            display: block;
+            overflow: visible;
+        }
+
+        .t-success-check[data-state="in"] {
+            animation:
+                t-check-fade   var(--check-opacity-dur) var(--check-ease-opacity) forwards,
+                t-check-rotate var(--check-rotate-dur)  var(--check-ease-rotate)  forwards,
+                t-check-blur   var(--check-blur-dur)    var(--check-ease-out)     forwards,
+                t-check-bob    var(--check-bob-dur)     var(--check-ease-bob)     forwards;
+        }
+
+        .t-success-check[data-state="in"] svg path {
+            animation: t-check-draw var(--check-path-dur) var(--check-ease-path) var(--check-path-delay, 0ms) forwards;
+        }
+
+        @keyframes t-check-fade { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes t-check-rotate {
+            from { transform: rotate(var(--check-rotate-from)); }
+            to   { transform: rotate(0deg); }
+        }
+        @keyframes t-check-blur {
+            from { filter: blur(var(--check-blur-from)); }
+            to   { filter: blur(0); }
+        }
+        @keyframes t-check-bob {
+            from { translate: 0 var(--check-y-amount); }
+            to   { translate: 0 0; }
+        }
+        @keyframes t-check-draw { to { stroke-dashoffset: 0; } }
+
+        @media (prefers-reduced-motion: reduce) {
+            .t-success-check { animation: none !important; opacity: 1; }
+            .t-success-check svg path { animation: none !important; stroke-dashoffset: 0 !important; }
+        }
+
         /* Notices */
         .info-notice {
             background-color: var(--bg-tertiary);
@@ -836,21 +1476,30 @@
         }
 
         /* Modals and overlays */
+        :root {
+            --modal-open-dur: 250ms;
+            --modal-close-dur: 150ms;
+            --modal-scale: 0.96;
+            --modal-scale-close: 0.96;
+            --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
         .modal-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(4px);
+            background: rgba(0, 0, 0, 0.25);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             display: flex;
             justify-content: center;
             align-items: center;
             z-index: 9999;
             opacity: 0;
             visibility: hidden;
-            transition: all 0.2s ease-out;
+            transition: opacity var(--modal-open-dur) var(--modal-ease), visibility var(--modal-open-dur) var(--modal-ease);
         }
 
         .modal-overlay.active {
@@ -858,27 +1507,58 @@
             visibility: visible;
         }
 
+        .modal-overlay.is-closing {
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity var(--modal-close-dur) var(--modal-ease), visibility var(--modal-close-dur) var(--modal-ease);
+        }
+
         .modal-box {
             background-color: var(--bg-secondary);
             border: 1px solid var(--border-color);
-            padding: 32px;
-            border-radius: 8px;
-            box-shadow: var(--card-shadow);
-            max-width: 420px;
+            padding: 36px 32px 32px 32px;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.02);
+            max-width: 360px;
             width: 90%;
             text-align: center;
-            transform: translateY(10px);
-            transition: all 0.2s ease-out;
+            position: relative;
+            
+            /* t-modal transitions.dev */
+            transform-origin: center;
+            transform: scale(var(--modal-scale));
+            opacity: 0;
+            transition:
+                transform var(--modal-open-dur) var(--modal-ease),
+                opacity   var(--modal-open-dur) var(--modal-ease);
+            will-change: transform, opacity;
         }
 
         .modal-overlay.active .modal-box {
-            transform: translateY(0);
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .modal-overlay.is-closing .modal-box {
+            transform: scale(var(--modal-scale-close));
+            opacity: 0;
+            transition:
+                transform var(--modal-close-dur) var(--modal-ease),
+                opacity   var(--modal-close-dur) var(--modal-ease);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .modal-overlay, .modal-box {
+                transition: none !important;
+            }
         }
 
         .modal-icon {
-            font-size: 36px;
-            margin-bottom: 16px;
+            font-size: 40px;
+            margin-bottom: 20px;
             display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .modal-icon.success {
@@ -894,27 +1574,148 @@
         }
 
         .modal-title {
-            font-size: 16px;
-            font-weight: 700;
+            font-size: 18px;
+            font-weight: 600;
             color: var(--text-primary);
-            margin-bottom: 8px;
-            letter-spacing: -0.01em;
-            text-transform: uppercase;
+            margin-bottom: 12px;
+            letter-spacing: -0.02em;
         }
 
         .modal-message {
-            font-size: 12px;
+            font-size: 13.5px;
             color: var(--text-secondary);
-            margin-bottom: 24px;
-            line-height: 1.5;
+            margin-bottom: 28px;
+            line-height: 1.6;
             white-space: pre-wrap;
-            background-color: var(--bg-tertiary);
-            padding: 12px;
-            border-radius: 4px;
-            border: 1px solid var(--border-color);
-            text-align: left;
-            word-break: break-word;
+            text-align: center;
             font-family: inherit;
+            word-break: break-word;
+        }
+
+        .modal-message a {
+            color: var(--text-primary);
+            text-decoration: underline;
+            font-weight: 500;
+        }
+
+        .modal-box .btn {
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 13.5px;
+            padding: 10px 24px;
+        }
+
+        /* Mobile Menu Overlay is-closing state transitions.dev */
+        .mobile-menu-overlay.is-closing {
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity var(--modal-close-dur) var(--modal-ease), visibility var(--modal-close-dur) var(--modal-ease);
+        }
+
+        .mobile-menu-overlay.is-closing .mobile-menu-panel {
+            transform: translateX(100%);
+            transition: transform var(--modal-close-dur) var(--modal-ease);
+        }
+
+        /* Icon Swap variables & classes transitions.dev */
+        :root {
+            --icon-swap-dur: 250ms;
+            --icon-swap-blur: 2px;
+            --icon-swap-start-scale: 0.25;
+            --icon-swap-ease: ease-in-out;
+        }
+
+        .t-icon-swap {
+            position: relative;
+            display: inline-grid;
+            width: 16px;
+            height: 16px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .t-icon-swap .t-icon {
+            grid-area: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition:
+                opacity   var(--icon-swap-dur) var(--icon-swap-ease),
+                filter    var(--icon-swap-dur) var(--icon-swap-ease),
+                transform var(--icon-swap-dur) var(--icon-swap-ease);
+            will-change: opacity, filter, transform;
+        }
+
+        .t-icon-swap[data-state="light"] .t-icon[data-icon="light"],
+        .t-icon-swap[data-state="dark"] .t-icon[data-icon="dark"] {
+            opacity: 1;
+            filter: blur(0);
+            transform: scale(1);
+        }
+
+        .t-icon-swap[data-state="light"] .t-icon[data-icon="dark"],
+        .t-icon-swap[data-state="dark"] .t-icon[data-icon="light"] {
+            opacity: 0;
+            filter: blur(var(--icon-swap-blur));
+            transform: scale(var(--icon-swap-start-scale));
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .t-icon-swap .t-icon {
+                transition: none !important;
+            }
+        }
+
+        /* Mini tabs sliding indicator transitions.dev */
+        .tab-menu-mini {
+            position: relative;
+            display: flex;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 2px;
+        }
+
+        .tab-btn-mini {
+            padding: 4px 10px;
+            font-size: 11px;
+            font-family: inherit;
+            font-weight: 500;
+            border-radius: 4px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            z-index: 1;
+            transition: color var(--tabs-dur) var(--tabs-ease);
+        }
+
+        .tab-btn-mini.active {
+            color: var(--brand-btn-text);
+            background: transparent !important;
+            border: none !important;
+        }
+
+        .tab-btn-mini:hover:not(.active) {
+            color: var(--text-primary);
+            background: transparent !important;
+        }
+
+        .tab-menu-pill-mini {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            height: calc(100% - 4px);
+            width: 0;
+            background: var(--brand-primary);
+            border-radius: 4px;
+            transform: translateX(0);
+            transition:
+                transform var(--tabs-dur) var(--tabs-ease),
+                width     var(--tabs-dur) var(--tabs-ease);
+            will-change: transform, width;
+            z-index: 0;
+            pointer-events: none;
         }
 
         /* Loader spinner */
@@ -973,11 +1774,6 @@
                 padding: 40px 24px;
             }
 
-            .admin-grid {
-                grid-template-columns: 1fr;
-                gap: 20px;
-            }
-
             .tab-menu {
                 overflow-x: auto;
                 padding-bottom: 8px;
@@ -994,6 +1790,10 @@
                 padding: 16px;
                 gap: 12px;
             }
+
+            .staff-badge {
+                display: none;
+            }
         }
 
         @media (max-width: 600px) {
@@ -1003,18 +1803,14 @@
 
             .nav-menu {
                 display: none;
-                /* Hide top nav links on micro mobile to fit profile */
             }
 
-            .btn-logout span {
-                display: none;
+            .hamburger-btn {
+                display: flex;
             }
 
             .btn-logout {
-                width: 34px;
-                height: 34px;
-                padding: 0;
-                justify-content: center;
+                display: none;
             }
 
             .staff-email {
@@ -1043,15 +1839,18 @@
             cursor: pointer;
             transition: var(--transition-all);
         }
+
         .tab-btn-mini.active {
             background-color: var(--brand-primary);
             color: var(--brand-btn-text);
             border-color: var(--brand-primary);
         }
+
         .tab-btn-mini:hover:not(.active) {
             background-color: var(--bg-secondary);
             color: var(--text-primary);
         }
+
         .markdown-preview {
             border: 1px solid var(--border-color);
             border-radius: var(--radius-sm);
@@ -1061,33 +1860,40 @@
             max-height: 300px;
             overflow-y: auto;
         }
-        
+
         /* Rendered Markdown Styling */
         .timeline-feedback {
             font-size: 14px;
             line-height: 1.6;
             color: var(--text-primary);
         }
+
         .timeline-feedback p {
             margin-bottom: 12px;
         }
+
         .timeline-feedback p:last-child {
             margin-bottom: 0;
         }
+
         .timeline-feedback ul,
         .timeline-feedback ol {
             margin-left: 20px;
             margin-bottom: 12px;
         }
+
         .timeline-feedback li {
             margin-bottom: 4px;
         }
+
         .timeline-feedback strong {
             font-weight: 600;
         }
+
         .timeline-feedback em {
             font-style: italic;
         }
+
         .timeline-feedback code {
             background-color: var(--bg-primary);
             padding: 2px 6px;
@@ -1096,6 +1902,7 @@
             font-size: 0.9em;
             border: 1px solid var(--border-color);
         }
+
         .timeline-feedback pre {
             background-color: var(--bg-primary);
             padding: 12px;
@@ -1104,15 +1911,18 @@
             margin: 12px 0;
             border: 1px solid var(--border-color);
         }
+
         .timeline-feedback pre code {
             background-color: transparent;
             padding: 0;
             border: none;
         }
+
         .timeline-feedback a {
             color: var(--brand-primary);
             text-decoration: underline;
         }
+
         .timeline-feedback blockquote {
             border-left: 4px solid var(--border-color);
             padding-left: 12px;
@@ -1120,6 +1930,7 @@
             margin: 12px 0;
             font-style: italic;
         }
+
         .timeline-feedback h1,
         .timeline-feedback h2,
         .timeline-feedback h3,
@@ -1129,21 +1940,28 @@
             font-weight: 600;
             color: var(--text-primary);
         }
-        .timeline-feedback h1 { font-size: 1.3rem; }
-        .timeline-feedback h2 { font-size: 1.2rem; }
-        .timeline-feedback h3 { font-size: 1.1rem; }
-        .timeline-feedback h4 { font-size: 1.0rem; }
+
+        .timeline-feedback h1 {
+            font-size: 1.3rem;
+        }
+
+        .timeline-feedback h2 {
+            font-size: 1.2rem;
+        }
+
+        .timeline-feedback h3 {
+            font-size: 1.1rem;
+        }
+
+        .timeline-feedback h4 {
+            font-size: 1.0rem;
+        }
     </style>
 </head>
 
 <body>
 
-    <!-- TOP LEVEL THEME TOGGLE (Login state) -->
-    <div class="login-theme-toggle" id="theme-toggle-container">
-        <button class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Theme">
-            <i id="theme-toggle-icon" class="fas fa-moon"></i>
-        </button>
-    </div>
+
 
     <!-- ADMIN LOGIN -->
     <div id="login-section" class="login-page">
@@ -1162,7 +1980,8 @@
                         <li><i class="fas fa-check-circle"></i> <span>บันทึกผลการเรียนนักเรียนและแชร์วิดีโอ</span></li>
                         <li><i class="fas fa-check-circle"></i> <span>บันทึกประวัติการชำระเงินและหลักฐานสลิป</span></li>
                         <li><i class="fas fa-check-circle"></i>
-                            <span>เพิ่มนักเรียนใหม่พร้อมระบบสร้างบัญชีอัตโนมัติ</span></li>
+                            <span>เพิ่มนักเรียนใหม่พร้อมระบบสร้างบัญชีอัตโนมัติ</span>
+                        </li>
                     </ul>
                 </div>
             </div>
@@ -1188,7 +2007,8 @@
                             เข้าสู่ระบบเจ้าหน้าที่
                         </button>
 
-                        <a href="https://litalkeducation.com" class="btn btn-secondary" id="back-to-student-btn" style="width:100%;">
+                        <a href="https://litalkeducation.com" class="btn btn-secondary" id="back-to-student-btn"
+                            style="width:100%;">
                             <i class="fas fa-arrow-left"></i>
                             กลับไปหน้านักเรียน
                         </a>
@@ -1228,12 +2048,18 @@
                 </div>
                 <div class="nav-actions">
                     <span id="admin-display-email" class="staff-email">loading...</span>
-                    <button class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Theme">
-                        <i id="theme-toggle-icon-dash" class="fas fa-moon"></i>
+                    <button class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Theme" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; margin-right: 8px;">
+                        <div class="t-icon-swap" id="theme-icon-swap" data-state="light">
+                            <span class="t-icon" data-icon="light"><i class="fas fa-sun"></i></span>
+                            <span class="t-icon" data-icon="dark"><i class="fas fa-moon"></i></span>
+                        </div>
                     </button>
                     <button class="btn btn-secondary btn-logout" onclick="logout()" id="admin-logout-btn">
                         <i class="fas fa-sign-out-alt"></i>
                         <span>Logout</span>
+                    </button>
+                    <button class="hamburger-btn" onclick="openMobileMenu()" aria-label="Open Menu">
+                        <i class="fas fa-bars"></i>
                     </button>
                 </div>
             </div>
@@ -1254,128 +2080,139 @@
             </div>
 
             <!-- Tab Menu -->
-            <div class="tab-menu">
-                <button class="tab-btn active" onclick="switchTab('manage')" id="tab-btn-manage">
-                    <i class="fas fa-edit"></i> จัดการข้อมูลและบันทึกการเรียน
+            <div class="tab-menu" role="tablist">
+                <span class="tab-menu-pill" aria-hidden="true"></span>
+                <button class="tab-btn" role="tab" aria-selected="true" onclick="switchTab('manage')" id="tab-btn-manage">
+                    <i class="fas fa-edit"></i> บันทึกข้อมูล
                 </button>
-                <button class="tab-btn" onclick="switchTab('create')" id="tab-btn-create">
-                    <i class="fas fa-user-plus"></i> ลงทะเบียนนักเรียนใหม่
+                <button class="tab-btn" role="tab" aria-selected="false" onclick="switchTab('create')" id="tab-btn-create">
+                    <i class="fas fa-user-plus"></i> เพิ่มนักเรียน
                 </button>
             </div>
 
             <!-- TAB 1: MANAGE -->
             <div id="tab-manage" class="tab-content active">
-                <div class="admin-grid">
-                    <!-- Sidebar: Select Student -->
-                    <div class="admin-sidebar-card">
-                        <div class="card-header">
-                            <h3>1. เลือกนักเรียน</h3>
-                            <p>กรุณาเลือกรายชื่อนักเรียนจากระบบเพื่อดำเนินการบันทึกข้อมูล</p>
-                        </div>
-                        <div class="form-group select-group">
-                            <label for="select-student">ค้นหาและเลือกนักเรียน</label>
-                            <div style="margin-bottom: 12px; position: relative;">
-                                <input type="text" id="search-student-input" onkeyup="filterStudentList()"
-                                    placeholder="🔍 ค้นหาชื่อหรือรหัสนักเรียน..."
-                                    style="padding: 10px 12px; font-size: 13px; margin-bottom: 0; width:100%; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--bg-tertiary); color: var(--text-primary); outline: none; transition: border-color 0.2s;">
-                            </div>
-                            <div class="select-wrapper">
-                                <select id="select-student" onchange="autoFillStudentId()">
-                                    <option value="">-- กำลังโหลดรายชื่อนักเรียน... --</option>
-                                </select>
+
+                <!-- Student Picker (sticky top searchable dropdown) -->
+                <div class="student-picker form-group">
+                    <div class="student-picker-label">
+                        <i class="fas fa-search"></i> ค้นหาหรือเลือกนักเรียน
+                    </div>
+                    <div class="custom-dropdown" id="student-dropdown-container">
+                        <div class="dropdown-trigger" onclick="toggleDropdown(event)">
+                            <span id="selected-student-text">กำลังโหลดรายชื่อนักเรียน...</span>
+                            <div class="dropdown-actions">
+                                <i class="fas fa-times clear-btn" id="clear-student-btn" onclick="clearStudentSelection(event)" style="display: none;"></i>
+                                <i class="fas fa-chevron-down arrow-icon"></i>
                             </div>
                         </div>
-                        <div class="sidebar-help">
-                            <i class="fas fa-info-circle"></i>
-                            <span>เมื่อเลือกนักเรียนแล้ว รหัสนักเรียนจะถูกกรอกลงในแบบฟอร์มด้านขวาโดยอัตโนมัติ</span>
+                        <div class="dropdown-menu-panel" id="dropdown-menu-panel">
+                            <div class="dropdown-search-box">
+                                <i class="fas fa-search search-icon"></i>
+                                <div class="t-clear" id="student-search-clear-wrapper">
+                                    <input type="text" id="student-search-input" placeholder="" onkeyup="filterStudentList()" onclick="event.stopPropagation()">
+                                    <div class="t-clear-mirror" aria-hidden="true"></div>
+                                    <div class="t-clear-placeholder" aria-hidden="true">พิมพ์เพื่อค้นหาชื่อหรือรหัส...</div>
+                                    <div class="t-clear-glow" aria-hidden="true"></div>
+                                    <button class="t-clear-btn" type="button" aria-label="Clear"><i class="fas fa-times-circle"></i></button>
+                                </div>
+                            </div>
+                            <div class="dropdown-options-list" id="dropdown-options-list">
+                                <!-- Options populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="select-student" value="">
+                </div>
+
+                <!-- Student Indicator -->
+                <div class="student-indicator empty" id="student-indicator">
+                    <i class="fas fa-info-circle"></i>
+                    <span>กรุณาเลือกนักเรียนจากรายชื่อด้านบนก่อนเริ่มบันทึกข้อมูล</span>
+                </div>
+
+                <!-- Form Cards -->
+                <div class="form-cards-wrapper disabled" id="form-cards-wrapper">
+                    <!-- Card: Study Log -->
+                    <div class="admin-card">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-book"></i></span>
+                            <div>
+                                <h3>บันทึกการเรียน</h3>
+                                <p>กรอก Feedback และแนบลิงก์วิดีโอหลังจบคลาส</p>
+                            </div>
+                        </div>
+
+                        <div class="form-body">
+                            <div class="form-group">
+                                <div class="textarea-tabs"
+                                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <label style="margin-bottom: 0;"><i class="far fa-comment-alt"></i> Feedback
+                                        การเรียนการสอน</label>
+                                    <div class="tab-menu-mini">
+                                        <span class="tab-menu-pill-mini"></span>
+                                        <button type="button" class="tab-btn-mini active"
+                                            onclick="switchTextareaTab('write')"
+                                            id="feedback-write-tab">เขียน</button>
+                                        <button type="button" class="tab-btn-mini"
+                                            onclick="switchTextareaTab('preview')"
+                                            id="feedback-preview-tab">ดูตัวอย่าง</button>
+                                    </div>
+                                </div>
+                                <textarea id="log-feedback" rows="4"
+                                    placeholder="ระบุเนื้อหาที่สอน ผลการพัฒนา และจุดที่ต้องเน้นย้ำ..."></textarea>
+                                <div id="log-feedback-preview" class="markdown-preview timeline-feedback"
+                                    style="display: none;"></div>
+                                <div class="form-hint">รองรับ Markdown เช่น **ตัวหนา**, *เอียง*, - รายการ</div>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-video"></i> ลิงก์วิดีโอย้อนหลัง</label>
+                                <input type="url" id="log-video" placeholder="https://drive.google.com/...">
+                                <div class="form-hint">Zoom, Google Drive, Dropbox หรือลิงก์อื่น (ไม่บังคับ)</div>
+                            </div>
+
+                            <button class="btn btn-primary btn-submit" onclick="submitAdminAction('addStudyLog')"
+                                id="submit-study-log-btn">
+                                <i class="fas fa-save"></i> บันทึกการเรียน
+                            </button>
                         </div>
                     </div>
 
-                    <!-- Main Forms column -->
-                    <div class="admin-main-forms">
-                        <!-- Card: Feedback -->
-                        <div class="admin-card">
-                            <div class="card-title-bar">
-                                <span class="card-icon"><i class="fas fa-book"></i></span>
-                                <div>
-                                    <h3>บันทึกประวัติการเรียน (Study Log)</h3>
-                                    <p>กรอกข้อมูล Feedback และแนบลิงก์วิดีโอหลังจากจบคลาส</p>
-                                </div>
-                            </div>
-
-                            <div class="form-body">
-                                <div class="form-group">
-                                    <label><i class="fas fa-id-badge"></i> รหัสนักเรียน</label>
-                                    <input type="text" id="log-id" readonly
-                                        placeholder="จะกรอกให้อัตโนมัติเมื่อเลือกนักเรียนด้านซ้าย">
-                                </div>
-                                <div class="form-group">
-                                    <div class="textarea-tabs" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                        <label style="margin-bottom: 0;"><i class="far fa-comment-alt"></i> Feedback การเรียนการสอน (รองรับ Markdown)</label>
-                                        <div style="display: flex; gap: 6px;">
-                                            <button type="button" class="tab-btn-mini active" onclick="switchTextareaTab('write')" id="feedback-write-tab">เขียน</button>
-                                            <button type="button" class="tab-btn-mini" onclick="switchTextareaTab('preview')" id="feedback-preview-tab">ดูตัวอย่าง</button>
-                                        </div>
-                                    </div>
-                                    <textarea id="log-feedback" rows="4"
-                                        placeholder="ระบุเนื้อหาหลักที่สอน ผลการพัฒนา และจุดที่ต้องเน้นย้ำ... (เช่น ใช้ **ตัวหนา**, * รายการข้อความ, [ลิงก์](url))"></textarea>
-                                    <div id="log-feedback-preview" class="markdown-preview timeline-feedback" style="display: none;"></div>
-                                </div>
-                                <div class="form-group">
-                                    <label><i class="fas fa-video"></i> ลิงก์บันทึกวิดีโอย้อนหลัง (Zoom / Drive /
-                                        Dropbox)</label>
-                                    <input type="url" id="log-video" placeholder="https://drive.google.com/...">
-                                </div>
-
-                                <button class="btn btn-primary btn-submit" onclick="submitAdminAction('addStudyLog')"
-                                    id="submit-study-log-btn">
-                                    <i class="fas fa-save"></i> บันทึกข้อมูลประวัติการเรียน
-                                </button>
+                    <!-- Card: Payment -->
+                    <div class="admin-card">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-receipt"></i></span>
+                            <div>
+                                <h3>บันทึกการชำระเงิน</h3>
+                                <p>บันทึกค่าเรียนและแนบหลักฐานสลิป</p>
                             </div>
                         </div>
 
-                        <!-- Card: Payment -->
-                        <div class="admin-card">
-                            <div class="card-title-bar">
-                                <span class="card-icon"><i class="fas fa-receipt"></i></span>
-                                <div>
-                                    <h3>บันทึกข้อมูลการชำระเงิน (Payment)</h3>
-                                    <p>บันทึกประวัติค่าเรียนและแนบหลักฐานเอกสาร/สลิป</p>
+                        <div class="form-body">
+                            <div class="form-group">
+                                <label><i class="fas fa-wallet"></i> ช่องทางชำระเงิน</label>
+                                <div class="select-wrapper">
+                                    <select id="pay-method">
+                                        <option value="โอนผ่านบัญชีธนาคาร">โอนผ่านบัญชีธนาคาร</option>
+                                        <option value="บัตรเครดิต">บัตรเครดิต</option>
+                                        <option value="เงินสด">เงินสด</option>
+                                    </select>
                                 </div>
                             </div>
-
-                            <div class="form-body">
-                                <div class="form-group">
-                                    <label><i class="fas fa-id-badge"></i> รหัสนักเรียน</label>
-                                    <input type="text" id="pay-id" readonly
-                                        placeholder="จะกรอกให้อัตโนมัติเมื่อเลือกนักเรียนด้านซ้าย">
-                                </div>
-                                <div class="form-group">
-                                    <label><i class="fas fa-wallet"></i> ช่องทางการชำระเงิน</label>
-                                    <div class="select-wrapper">
-                                        <select id="pay-method">
-                                            <option value="โอนผ่านบัญชีธนาคาร">โอนผ่านบัญชีธนาคาร</option>
-                                            <option value="บัตรเครดิต">บัตรเครดิต</option>
-                                            <option value="เงินสด">เงินสด</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label><i class="fas fa-money-bill-wave"></i> ยอดชำระเงินรวม (เช่น 5,000
-                                        บาท)</label>
-                                    <input type="text" id="pay-total" placeholder="ระบุจำนวนเงินที่ชำระ เช่น 5000">
-                                </div>
-                                <div class="form-group">
-                                    <label><i class="fas fa-file-invoice"></i> ลิงก์หลักฐานชำระเงิน / สลิปโอนเงิน
-                                        (URL)</label>
-                                    <input type="url" id="pay-proof" placeholder="https://drive.google.com/...">
-                                </div>
-
-                                <button class="btn btn-primary btn-submit" onclick="submitAdminAction('addPayment')"
-                                    id="submit-payment-btn">
-                                    <i class="fas fa-save"></i> บันทึกข้อมูลการชำระเงิน
-                                </button>
+                            <div class="form-group">
+                                <label><i class="fas fa-money-bill-wave"></i> ยอดชำระ (บาท)</label>
+                                <input type="text" id="pay-total" placeholder="เช่น 5000">
                             </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-file-invoice"></i> ลิงก์หลักฐาน / สลิป</label>
+                                <input type="url" id="pay-proof" placeholder="https://drive.google.com/...">
+                                <div class="form-hint">URL ของรูปสลิปหรือหลักฐานการชำระเงิน (ไม่บังคับ)</div>
+                            </div>
+
+                            <button class="btn btn-primary btn-submit" onclick="submitAdminAction('addPayment')"
+                                id="submit-payment-btn">
+                                <i class="fas fa-save"></i> บันทึกการชำระเงิน
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1387,8 +2224,8 @@
                     <div class="card-title-bar">
                         <span class="card-icon"><i class="fas fa-user-plus"></i></span>
                         <div>
-                            <h3>ลงทะเบียนนักเรียนใหม่ (Add Student)</h3>
-                            <p>สร้างบัญชีในระบบและเพิ่มข้อมูลเข้า Google Sheets</p>
+                            <h3>เพิ่มนักเรียนใหม่</h3>
+                            <p>สร้างบัญชีในระบบพร้อมรหัสอัตโนมัติ</p>
                         </div>
                     </div>
 
@@ -1403,7 +2240,7 @@
 
                     <div class="form-body">
                         <div class="form-group">
-                            <label><i class="fas fa-user"></i> ชื่อ-นามสกุลนักเรียน</label>
+                            <label><i class="fas fa-user"></i> ชื่อ-นามสกุล</label>
                             <input type="text" id="new-name" placeholder="เช่น สมชาย ดีเด่น">
                         </div>
                         <div class="form-group">
@@ -1413,7 +2250,7 @@
 
                         <button class="btn btn-primary btn-submit" onclick="submitAdminAction('createStudent')"
                             id="submit-create-student-btn">
-                            <i class="fas fa-plus"></i> สร้างบัญชีนักเรียนใหม่
+                            <i class="fas fa-plus"></i> เพิ่มนักเรียน
                         </button>
                     </div>
                 </div>
@@ -1445,14 +2282,37 @@
         </div>
     </div>
 
+    <!-- Mobile Menu Overlay -->
+    <div class="mobile-menu-overlay" id="mobile-menu-overlay" onclick="closeMobileMenu(event)">
+        <div class="mobile-menu-panel" onclick="event.stopPropagation()">
+            <div class="mobile-menu-header">
+                <span>เมนู</span>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Theme" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%;">
+                        <div class="t-icon-swap" id="mobile-theme-icon-swap" data-state="light">
+                            <span class="t-icon" data-icon="light"><i class="fas fa-sun"></i></span>
+                            <span class="t-icon" data-icon="dark"><i class="fas fa-moon"></i></span>
+                        </div>
+                    </button>
+                    <button class="mobile-menu-close" onclick="closeMobileMenu()" aria-label="Close Menu">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <nav class="mobile-menu-nav">
+                <a href="index" class="active"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                <a href="booking"><i class="fas fa-calendar-alt"></i> Bookings</a>
+            </nav>
+            <div class="mobile-menu-footer">
+                <div class="mobile-menu-email" id="mobile-menu-email">loading...</div>
+                <button class="btn btn-secondary" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i> ออกจากระบบ
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Init theme function before page loads to prevent flickering
-        (function () {
-            const savedTheme = localStorage.getItem('theme');
-            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const theme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
-            document.documentElement.setAttribute('data-theme', theme);
-        })();
 
         let currentAdminEmail = "";
 
@@ -1494,9 +2354,7 @@
         const gasAppUrl = 'https://script.google.com/macros/s/AKfycbyyiEM4NUx-leLse4535upWTtf6q68o4dTFIkO2FS0mml3J3kkIhM7WO27BoAP4aJ-BMg/exec';
 
         window.onload = async () => {
-            // Theme setup for icons
-            const activeTheme = document.documentElement.getAttribute('data-theme');
-            updateThemeIcons(activeTheme);
+
 
             // Check if user has an active cookie session to immediately render authenticated UI
             const cachedEmail = getCookie('litalk_admin_email');
@@ -1506,7 +2364,8 @@
                 const dashEmail = document.getElementById('admin-display-email-dash');
                 if (dashEmail) dashEmail.innerText = currentAdminEmail;
                 document.getElementById('admin-panel').style.display = 'block';
-                document.getElementById('theme-toggle-container').style.display = 'none';
+                initTabPill();
+
                 loadStudentList();
             }
 
@@ -1529,7 +2388,8 @@
 
                 document.getElementById('admin-panel').style.display = 'block';
                 document.getElementById('login-section').style.display = 'none';
-                document.getElementById('theme-toggle-container').style.display = 'none';
+                initTabPill();
+
 
                 // If list wasn't loaded because cookie wasn't present initially
                 if (!cachedEmail) {
@@ -1541,7 +2401,7 @@
                     eraseCookie('litalk_admin_email');
                     document.getElementById('admin-panel').style.display = 'none';
                     document.getElementById('login-section').style.display = 'flex';
-                    document.getElementById('theme-toggle-container').style.display = 'block';
+
                 }
             }
         };
@@ -1552,26 +2412,45 @@
             auth0Client.logout({ logoutParams: { returnTo: window.location.href.split('?')[0] } });
         };
 
-        // Theme Toggle Logic
-        function toggleTheme() {
-            const currentTheme = document.documentElement.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            updateThemeIcons(newTheme);
+        // Mobile Menu Logic
+        function openMobileMenu() {
+            document.getElementById('mobile-menu-overlay').classList.add('active');
+            document.body.style.overflow = 'hidden';
+            // Sync email to mobile menu
+            const emailEl = document.getElementById('admin-display-email');
+            const mobileEmailEl = document.getElementById('mobile-menu-email');
+            if (emailEl && mobileEmailEl) mobileEmailEl.textContent = emailEl.textContent;
         }
 
-        function updateThemeIcons(theme) {
-            const loginIcon = document.getElementById('theme-toggle-icon');
-            const dashIcon = document.getElementById('theme-toggle-icon-dash');
-
-            if (loginIcon) loginIcon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-            if (dashIcon) dashIcon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+        function closeMobileMenu(e) {
+            if (e && e.target !== e.currentTarget) return;
+            const menu = document.getElementById('mobile-menu-overlay');
+            const closeMs = parseFloat(
+                getComputedStyle(document.documentElement).getPropertyValue("--modal-close-dur")
+            ) || 150;
+            menu.classList.remove('active');
+            menu.classList.add('is-closing');
+            setTimeout(() => {
+                menu.classList.remove('is-closing');
+                document.body.style.overflow = '';
+            }, closeMs);
         }
 
         // Functions for Modals
-        function showLoading() { document.getElementById('loading-overlay').classList.add('active'); }
-        function hideLoading() { document.getElementById('loading-overlay').classList.remove('active'); }
+        function showLoading() {
+            const loader = document.getElementById('loading-overlay');
+            loader.classList.remove('is-closing');
+            loader.classList.add('active');
+        }
+        function hideLoading() {
+            const loader = document.getElementById('loading-overlay');
+            const closeMs = parseFloat(
+                getComputedStyle(document.documentElement).getPropertyValue("--modal-close-dur")
+            ) || 150;
+            loader.classList.remove('active');
+            loader.classList.add('is-closing');
+            setTimeout(() => loader.classList.remove('is-closing'), closeMs);
+        }
 
         function showModal(title, message, type = 'success') {
             const modal = document.getElementById('custom-modal');
@@ -1582,7 +2461,21 @@
 
             if (type === 'success') {
                 iconContainer.className = 'modal-icon success';
-                iconContainer.innerHTML = '<i class="fas fa-check-circle"></i>';
+                iconContainer.innerHTML = `
+                    <span class="t-success-check" data-state="out" aria-hidden="true" style="display: flex; align-items: center; justify-content: center;">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-success)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width: 48px; height: 48px;">
+                        <path d="M4 12l5 5L20 6" />
+                      </svg>
+                    </span>
+                `;
+                const check = iconContainer.querySelector('.t-success-check');
+                const path = check.querySelector('path');
+                const len = Math.ceil(path.getTotalLength()) || 23;
+                path.style.strokeDasharray = len;
+                path.style.strokeDashoffset = len;
+                requestAnimationFrame(() => {
+                    check.setAttribute("data-state", "in");
+                });
             } else if (type === 'error') {
                 iconContainer.className = 'modal-icon error';
                 iconContainer.innerHTML = '<i class="fas fa-times-circle"></i>';
@@ -1591,18 +2484,74 @@
                 iconContainer.innerHTML = '<i class="fas fa-info-circle"></i>';
             }
 
+            modal.classList.remove('is-closing');
             modal.classList.add('active');
         }
 
-        function closeModal() { document.getElementById('custom-modal').classList.remove('active'); }
+        function closeModal() {
+            const modal = document.getElementById('custom-modal');
+            const closeMs = parseFloat(
+                getComputedStyle(document.documentElement).getPropertyValue("--modal-close-dur")
+            ) || 150;
+            modal.classList.remove('active');
+            modal.classList.add('is-closing');
+            setTimeout(() => modal.classList.remove('is-closing'), closeMs);
+        }
 
         // Core Functions
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            
+            const tabButtons = document.querySelectorAll('.tab-btn');
+            tabButtons.forEach(btn => {
+                const isSelected = btn.id === 'tab-btn-' + tabName;
+                btn.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+                if (isSelected) {
+                    moveTabPillTo(btn, true);
+                }
+            });
+
             document.getElementById('tab-' + tabName).classList.add('active');
-            document.getElementById('tab-btn-' + tabName).classList.add('active');
         }
+
+        // Tabs sliding orchestration
+        function moveTabPillTo(tab, animate) {
+            const tabMenu = document.querySelector(".tab-menu");
+            if (!tabMenu) return;
+            const tabPill = tabMenu.querySelector(".tab-menu-pill");
+            if (!tabPill || !tab) return;
+
+            if (!animate) {
+                const prev = tabPill.style.transition;
+                tabPill.style.transition = "none";
+                tabPill.style.transform = `translateX(${tab.offsetLeft}px)`;
+                tabPill.style.width = `${tab.offsetWidth}px`;
+                void tabPill.offsetWidth; // force reflow
+                tabPill.style.transition = prev;
+            } else {
+                tabPill.style.transform = `translateX(${tab.offsetLeft}px)`;
+                tabPill.style.width = `${tab.offsetWidth}px`;
+            }
+        }
+
+        function activeTab() {
+            const tabMenu = document.querySelector(".tab-menu");
+            if (!tabMenu) return null;
+            const activeBtn = tabMenu.querySelector(".tab-btn[aria-selected='true']");
+            return activeBtn || tabMenu.querySelector(".tab-btn");
+        }
+
+        function initTabPill() {
+            const tab = activeTab();
+            if (tab) {
+                requestAnimationFrame(() => moveTabPillTo(tab, false));
+            }
+        }
+
+        window.addEventListener("resize", () => {
+            const tab = activeTab();
+            if (tab) moveTabPillTo(tab, false);
+        });
 
         let allStudentsData = [];
 
@@ -1610,33 +2559,55 @@
             try {
                 const response = await fetch(`${gasAppUrl}?action=getAllStudents`, { method: 'GET', redirect: 'follow' });
                 const result = await response.json();
-                const selectElement = document.getElementById('select-student');
+                const textElement = document.getElementById('selected-student-text');
 
                 if (result.status === 'success' && result.data.length > 0) {
                     allStudentsData = result.data;
                     renderStudentSelect(allStudentsData);
+                    
+                    const selectedValue = document.getElementById('select-student').value;
+                    if (!selectedValue) {
+                        textElement.innerText = '-- กรุณาเลือกนักเรียน --';
+                    } else {
+                        const student = allStudentsData.find(s => s.id === selectedValue);
+                        if (student) {
+                            textElement.innerText = `[${student.id}] ${student.name}`;
+                        }
+                    }
                 } else {
-                    selectElement.innerHTML = '<option value="">-- ยังไม่มีรายชื่อนักเรียนในระบบ --</option>';
+                    textElement.innerText = '-- ยังไม่มีรายชื่อนักเรียนในระบบ --';
                 }
             } catch (error) {
                 console.error('Error:', error);
-                document.getElementById('select-student').innerHTML = '<option value="">โหลดข้อมูลล้มเหลว ตรวจสอบ URL ของ GAS</option>';
+                document.getElementById('selected-student-text').innerText = 'โหลดข้อมูลล้มเหลว ตรวจสอบ URL ของ GAS';
             }
         }
 
         function renderStudentSelect(students) {
-            const selectElement = document.getElementById('select-student');
-            selectElement.innerHTML = '<option value="">-- กรุณาเลือกนักเรียน --</option>';
+            const listContainer = document.getElementById('dropdown-options-list');
+            listContainer.innerHTML = '';
+            
+            if (students.length === 0) {
+                listContainer.innerHTML = '<div class="dropdown-no-results">ไม่พบรายชื่อนักเรียน</div>';
+                return;
+            }
+
+            const selectedValue = document.getElementById('select-student').value;
+
             students.forEach(student => {
-                let option = document.createElement('option');
-                option.value = student.id;
-                option.text = `[${student.id}] ${student.name}`;
-                selectElement.add(option);
+                const optionEl = document.createElement('div');
+                optionEl.className = 'dropdown-option';
+                if (student.id === selectedValue) {
+                    optionEl.classList.add('selected');
+                }
+                optionEl.innerHTML = `<i class="far fa-user"></i> <span>[${student.id}] ${student.name}</span>`;
+                optionEl.onclick = () => selectDropdownOption(student.id, student.name);
+                listContainer.appendChild(optionEl);
             });
         }
 
         function filterStudentList() {
-            const query = document.getElementById('search-student-input').value.toLowerCase();
+            const query = document.getElementById('student-search-input').value.toLowerCase();
             const filtered = allStudentsData.filter(student =>
                 student.name.toLowerCase().includes(query) ||
                 student.id.toLowerCase().includes(query)
@@ -1644,10 +2615,144 @@
             renderStudentSelect(filtered);
         }
 
-        function autoFillStudentId() {
+        // Custom dropdown interactions
+        function toggleDropdown(e) {
+            if (e) e.stopPropagation();
+            const container = document.getElementById('student-dropdown-container');
+            const isActive = container.classList.contains('active');
+            
+            if (isActive) {
+                closeDropdown();
+            } else {
+                container.classList.remove('is-closing');
+                container.classList.add('active');
+                document.getElementById('student-search-input').value = '';
+                renderStudentSelect(allStudentsData);
+                document.getElementById('student-search-input').focus();
+            }
+        }
+
+        function closeDropdown() {
+            const container = document.getElementById('student-dropdown-container');
+            if (container && container.classList.contains('active')) {
+                const closeMs = parseFloat(
+                    getComputedStyle(document.documentElement).getPropertyValue("--dropdown-close-dur")
+                ) || 150;
+                container.classList.remove('active');
+                container.classList.add('is-closing');
+                setTimeout(() => container.classList.remove('is-closing'), closeMs);
+            }
+        }
+
+        function selectDropdownOption(studentId, studentName) {
+            document.getElementById('select-student').value = studentId;
+            document.getElementById('selected-student-text').innerText = `[${studentId}] ${studentName}`;
+            document.getElementById('clear-student-btn').style.display = 'block';
+            onStudentSelected();
+            closeDropdown();
+        }
+
+        function clearStudentSelection(e) {
+            if (e) e.stopPropagation();
+            document.getElementById('select-student').value = '';
+            document.getElementById('selected-student-text').innerText = '-- กรุณาเลือกนักเรียน --';
+            document.getElementById('clear-student-btn').style.display = 'none';
+            onStudentSelected();
+            closeDropdown();
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            const container = document.getElementById('student-dropdown-container');
+            if (container && !container.contains(e.target)) {
+                closeDropdown();
+            }
+        });
+
+        // Called when a student is selected from the dropdown
+        function onStudentSelected() {
             const selectedId = document.getElementById('select-student').value;
-            document.getElementById('log-id').value = selectedId;
-            document.getElementById('pay-id').value = selectedId;
+            const indicator = document.getElementById('student-indicator');
+            const formWrapper = document.getElementById('form-cards-wrapper');
+
+            if (selectedId) {
+                // Find student name
+                const student = allStudentsData.find(s => s.id === selectedId);
+                const studentName = student ? student.name : selectedId;
+
+                indicator.className = 'student-indicator selected';
+                indicator.innerHTML = `<i class="fas fa-user-check"></i> <span>กำลังบันทึกให้: <strong>${studentName}</strong> (${selectedId})</span>`;
+
+                formWrapper.classList.remove('disabled');
+            } else {
+                indicator.className = 'student-indicator empty';
+                indicator.innerHTML = '<i class="fas fa-info-circle"></i> <span>กรุณาเลือกนักเรียนจากรายชื่อด้านบนก่อนเริ่มบันทึกข้อมูล</span>';
+
+                formWrapper.classList.add('disabled');
+            }
+        }
+
+        // Legacy compatibility
+        function autoFillStudentId() {
+            onStudentSelected();
+        }
+
+        function triggerFieldError(fieldId, errorMessage) {
+            const field = document.getElementById(fieldId);
+            if (!field) return;
+            
+            const group = field.closest('.form-group');
+            if (!group) return;
+
+            // Find or create error message element
+            let errorMsg = group.querySelector('.t-error-msg');
+            if (!errorMsg) {
+                errorMsg = document.createElement('p');
+                errorMsg.className = 't-error-msg';
+                group.appendChild(errorMsg);
+            }
+            errorMsg.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${errorMessage}`;
+
+            // Trigger error class
+            group.classList.add('is-error');
+
+            // Replay shake animation
+            group.classList.remove('is-shaking');
+            void group.offsetWidth; // force reflow
+            group.classList.add('is-shaking');
+
+            // Remove shaking class after animation completes
+            const shakeMs = 280;
+            if (group._shakeTimer) clearTimeout(group._shakeTimer);
+            group._shakeTimer = setTimeout(() => {
+                group.classList.remove('is-shaking');
+                group._shakeTimer = null;
+            }, shakeMs + 20);
+
+            // Auto-revert
+            if (group._revertTimer) clearTimeout(group._revertTimer);
+            const hold = 3000;
+            group._revertTimer = setTimeout(() => {
+                group.classList.remove('is-error');
+                group._revertTimer = null;
+            }, shakeMs + hold);
+
+            // Cancel auto-revert on input
+            if (!field._inputHandlerBound) {
+                const clearError = () => {
+                    if (group._revertTimer) {
+                        clearTimeout(group._revertTimer);
+                        group._revertTimer = null;
+                    }
+                    group.classList.remove('is-error');
+                };
+                field.addEventListener('input', clearError);
+                field.addEventListener('change', clearError);
+                if (fieldId === 'student-dropdown-container') {
+                    field.addEventListener('click', clearError);
+                }
+                field._inputHandlerBound = true;
+            }
         }
 
         async function submitAdminAction(actionType) {
@@ -1656,18 +2761,41 @@
             // Validate Forms
             if (actionType === 'createStudent') {
                 payload = { name: document.getElementById('new-name').value, course: document.getElementById('new-course').value };
-                if (!payload.name || !payload.course) return showModal('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกชื่อและคอร์สเรียนให้ครบถ้วน', 'error');
+                if (!payload.name) {
+                    triggerFieldError('new-name', 'กรุณากรอกชื่อและนามสกุล');
+                    return;
+                }
+                if (!payload.course) {
+                    triggerFieldError('new-course', 'กรุณากรอกคอร์สเรียน');
+                    return;
+                }
             } else if (actionType === 'addStudyLog') {
-                payload = { studentId: document.getElementById('log-id').value, feedback: document.getElementById('log-feedback').value, video: document.getElementById('log-video').value };
-                if (!payload.studentId || !payload.feedback) return showModal('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกนักเรียนและกรอก Feedback', 'error');
+                const studentId = document.getElementById('select-student').value;
+                payload = { studentId: studentId, feedback: document.getElementById('log-feedback').value, video: document.getElementById('log-video').value };
+                if (!payload.studentId) {
+                    triggerFieldError('student-dropdown-container', 'กรุณาเลือกนักเรียนจากรายชื่อด้านบน');
+                    return;
+                }
+                if (!payload.feedback) {
+                    triggerFieldError('log-feedback', 'กรุณากรอก Feedback การเรียนการสอน');
+                    return;
+                }
             } else if (actionType === 'addPayment') {
+                const studentId = document.getElementById('select-student').value;
                 payload = {
-                    studentId: document.getElementById('pay-id').value,
+                    studentId: studentId,
                     method: document.getElementById('pay-method').value,
                     total: document.getElementById('pay-total').value,
                     proof: document.getElementById('pay-proof').value
                 };
-                if (!payload.studentId || !payload.total) return showModal('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกนักเรียนและกรอกยอดเงิน', 'error');
+                if (!payload.studentId) {
+                    triggerFieldError('student-dropdown-container', 'กรุณาเลือกนักเรียนจากรายชื่อด้านบน');
+                    return;
+                }
+                if (!payload.total) {
+                    triggerFieldError('pay-total', 'กรุณากรอกยอดเงิน');
+                    return;
+                }
             }
 
             // แสดง Loading Overlay
@@ -1736,6 +2864,205 @@
                 writeTab.classList.remove('active');
                 previewTab.classList.add('active');
             }
+
+            updateMiniTabPill();
+        }
+
+        function updateMiniTabPill() {
+            const container = document.querySelector('.tab-menu-mini');
+            if (!container) return;
+            const activeBtn = container.querySelector('.tab-btn-mini.active');
+            const pill = container.querySelector('.tab-menu-pill-mini');
+            if (!activeBtn || !pill) return;
+
+            pill.style.width = `${activeBtn.offsetWidth}px`;
+            pill.style.transform = `translateX(${activeBtn.offsetLeft - 2}px)`;
+        }
+
+        // Theme Toggle Logic transitions.dev Icon Swap
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', nextTheme);
+            localStorage.setItem('theme', nextTheme);
+            updateThemeToggleIcon(nextTheme);
+        }
+
+        function updateThemeToggleIcon(theme) {
+            const swap = document.getElementById('theme-icon-swap');
+            const mobileSwap = document.getElementById('mobile-theme-icon-swap');
+            if (swap) swap.setAttribute('data-state', theme === 'dark' ? 'dark' : 'light');
+            if (mobileSwap) mobileSwap.setAttribute('data-state', theme === 'dark' ? 'dark' : 'light');
+        }
+
+        // Auto-load saved theme on load
+        (function() {
+            const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            window.addEventListener('load', () => {
+                updateThemeToggleIcon(savedTheme);
+                updateMiniTabPill();
+            });
+            window.addEventListener('resize', () => {
+                updateMiniTabPill();
+            });
+        })();
+
+        // Input Clear with Dissolve orchestration
+        function initInputClearDissolve() {
+            const root = document.documentElement;
+            const num = (name, fb) => {
+                const v = parseFloat(getComputedStyle(root).getPropertyValue(name));
+                return Number.isFinite(v) ? v : fb;
+            };
+
+            function bezier(str) {
+                const m = String(str).match(/cubic-bezier\(([-\d.]+),([-\d.]+),([-\d.]+),([-\d.]+)\)/);
+                if (!m) return (t) => t;
+                const [x1, y1, x2, y2] = m.slice(1).map(parseFloat);
+                const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+                const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+                return (t) => {
+                    if (t <= 0) return 0;
+                    if (t >= 1) return 1;
+                    let s = t;
+                    for (let i = 0; i < 8; i++) {
+                        const dx = ((ax * s + bx) * s + cx) * s - t;
+                        const d = (3 * ax * s + 2 * bx) * s + cx;
+                        if (Math.abs(dx) < 1e-6 || d === 0) break;
+                        s -= dx / d;
+                    }
+                    return ((ay * s + by) * s + cy) * s;
+                };
+            }
+
+            document.querySelectorAll(".t-clear").forEach((wrap) => {
+                const input  = wrap.querySelector("input");
+                const mirror = wrap.querySelector(".t-clear-mirror");
+                const phold  = wrap.querySelector(".t-clear-placeholder");
+                const glow   = wrap.querySelector(".t-clear-glow");
+                const btn    = wrap.querySelector(".t-clear-btn");
+                const canvas = document.createElement("canvas").getContext("2d");
+                let clearing = false;
+
+                const sync = () => {
+                    const has = input.value.length > 0;
+                    wrap.classList.toggle("has-value", has);
+                    if (has) mirror.textContent = input.value.replace(/ /g, "\u00a0");
+                };
+
+                function buildGlow(text) {
+                    canvas.font = getComputedStyle(input).font;
+                    const isDark = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim() === '#0a0a0a';
+                    const rgb = isDark ? "255,255,255" : "0,0,0";
+                    const w = wrap.clientWidth || 280;
+                    const padLeft = parseFloat(getComputedStyle(input).paddingLeft) || 12;
+                    const spread = num("--glow-spread", 1.5);
+                    const layers = [];
+                    let x = 0;
+                    text.split(/(\s+)/).forEach((seg) => {
+                        const segW = canvas.measureText(seg).width;
+                        if (seg.trim()) {
+                            const cx = padLeft + x + segW / 2;
+                            const hw = Math.max(segW * 0.45, 8) * spread;
+                            [[0, 0.8, 7, 0.22], [hw * 0.45, 0.55, 8, 0.18],
+                             [-hw * 0.4, 0.65, 6, 0.16], [hw * 0.15, 0.9, 5, 0.14]]
+                              .forEach(([dx, rwm, rh, a]) => {
+                                const lx = (((cx + dx) / w) * 100).toFixed(2);
+                                layers.push(
+                                  `radial-gradient(ellipse ${Math.max(hw * rwm, 2).toFixed(1)}px ${rh}px at ${lx}% 100%, rgba(${rgb},${a}), transparent)`
+                                );
+                              });
+                        }
+                        x += segW;
+                    });
+                    return layers.join(", ");
+                }
+
+                function clearWithAnimation() {
+                    if (clearing || !input.value) return;
+                    clearing = true;
+                    const keepFocus = document.activeElement === input;
+                    mirror.textContent = input.value.replace(/ /g, "\u00a0");
+
+                    const total = num("--clear-dur", 1000);
+                    const outDur = num("--clear-out-dur", 400);
+                    const inDur  = num("--clear-in-dur", 400);
+                    const outFly = num("--clear-out-fly", 12);
+                    const inFly  = num("--clear-in-fly", 12);
+                    const blur   = num("--clear-blur", 2);
+                    const delay  = num("--glow-delay", 50);
+                    const peakAt = num("--glow-peak-at", 0.15);
+                    const gOp    = num("--glow-opacity", 0.42);
+                    const easeOut = bezier(getComputedStyle(root).getPropertyValue("--clear-out-ease"));
+                    const easeIn  = bezier(getComputedStyle(root).getPropertyValue("--clear-in-ease"));
+
+                    input.value = "";
+                    wrap.classList.remove("has-value");
+                    wrap.classList.add("is-clearing");
+                    glow.style.background = buildGlow(mirror.textContent);
+                    glow.style.opacity = "0";
+                    phold.style.transform = `translateY(-${inFly}px)`;
+                    phold.style.opacity = "0.9";
+                    phold.style.filter = `blur(${blur}px)`;
+
+                    if (typeof filterStudentList === "function") {
+                        filterStudentList();
+                    }
+
+                    const t0 = performance.now();
+                    (function tick(now) {
+                        const el = now - t0;
+                        const eo = easeOut(Math.min(1, el / outDur));
+                        mirror.style.transform = `translateY(${(eo * outFly).toFixed(1)}px)`;
+                        mirror.style.opacity = (1 - eo).toFixed(3);
+                        mirror.style.filter = `blur(${(eo * blur).toFixed(1)}px)`;
+
+                        const ei = easeIn(Math.min(1, el / inDur));
+                        phold.style.transform = `translateY(${(-inFly + ei * inFly).toFixed(1)}px)`;
+                        phold.style.opacity = (0.9 + ei * 0.1).toFixed(3);
+                        phold.style.filter = `blur(${(blur - ei * blur).toFixed(1)}px)`;
+
+                        let g = 0;
+                        if (el > delay) {
+                            const gp = Math.min(1, (el - delay) / Math.max(1, total - delay));
+                            g = gp < peakAt ? gp / peakAt : 1 - (gp - peakAt) / (1 - peakAt);
+                        }
+                        glow.style.opacity = (g * gOp).toFixed(3);
+
+                        if (el < total) {
+                            requestAnimationFrame(tick);
+                        } else {
+                            wrap.classList.remove("is-clearing");
+                            [mirror, phold].forEach((el) => (el.style.cssText = ""));
+                            mirror.textContent = "";
+                            glow.style.opacity = "0";
+                            glow.style.background = "";
+                            clearing = false;
+                            if (keepFocus) requestAnimationFrame(() => input.focus({ preventScroll: true }));
+                        }
+                    })(performance.now());
+                }
+
+                const keep = (e) => { if (document.activeElement === input) e.preventDefault(); };
+                btn.addEventListener("pointerdown", keep);
+                btn.addEventListener("mousedown", keep);
+                btn.addEventListener("click", clearWithAnimation);
+                input.addEventListener("input", sync);
+                sync();
+            });
+        }
+
+        initInputClearDissolve();
+    </script>
+    <script>
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('[PWA] Service Worker registered successfully:', reg.scope))
+                    .catch(err => console.error('[PWA] Service Worker registration failed:', err));
+            });
         }
     </script>
 </body>
