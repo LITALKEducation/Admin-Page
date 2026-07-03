@@ -3381,9 +3381,8 @@
             if (menu && menu.classList.contains('active')) closeMobileMenu();
         }
 
-        // ===== Dashboard (real data via GAS action=getDashboard -- see
-        // gas/README.md "Dashboard data rules" for exactly what each number
-        // means and the judgment calls baked into the aggregation) =====
+        // ===== Dashboard (real data via the Apps Script's
+        // action=getDashboard&range=today|week|month endpoint) =====
         let dashboardTimeframe = 'today';
         let dashboardData = null;
         let dashboardLoading = false;
