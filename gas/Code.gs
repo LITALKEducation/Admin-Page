@@ -25,6 +25,12 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 
+  if (e.parameter.action === 'getDashboard') {
+    const data = buildDashboardData(ss, e.parameter.range || 'today');
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", data: data }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   const studentId = e.parameter.studentId;
   if (!studentId) {
     return ContentService.createTextOutput(JSON.stringify({status: "error", message: "ไม่พบรหัสนักเรียนในการร้องขอ"}))
@@ -232,6 +238,229 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: error.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// =================================================================
+// Dashboard aggregation (action=getDashboard&range=today|week|month)
+//
+// Reads Info / Payment Info / Study Log / Booking directly -- there's no
+// separate "classes taught" record, so a booking IS a class. Business
+// rules baked in here (documented so they're easy to tune):
+//   - "คลาสเรียน" (classes)   = bookings whose class date falls in range.
+//   - "การจองล่วงหน้า" (booked) = of those, the ones still in the future.
+//   - "รายรับ" (revenue)      = sum of payments whose date falls in range.
+//   - "ค้างชำระ" (unpaid)     = active students (booked within the last/next
+//     45 days) whose last payment is missing or >30 days old. Independent
+//     of the range selector, same as the original design mock.
+//   - "คลาสวันนี้" (today's classes) and "การแจ้งเตือน" (alerts) are always
+//     "today" / "recent", regardless of the range selector.
+//   - Missing-log alerts look back 3 days for bookings with no matching
+//     study log (by studentId + class date).
+// =================================================================
+
+function buildDashboardData(ss, range) {
+  const infoSheet = ss.getSheetByName('LITALK Education - LITALK Education - Info') || ss.getSheetByName('LITALK Education - Info') || ss.getSheetByName('Info');
+  const paymentSheet = ss.getSheetByName('LITALK Education - LITALK Education - Payment Info') || ss.getSheetByName('Payment Info');
+  const studyLogSheet = ss.getSheetByName('LITALK Education - LITALK Education - Study Log') || ss.getSheetByName('Study Log');
+  const bookingSheet = ss.getSheetByName('LITALK Education - Booking') || ss.getSheetByName('Booking');
+
+  const infoData = infoSheet ? infoSheet.getDataRange().getValues() : [];
+  const paymentData = paymentSheet ? paymentSheet.getDataRange().getValues() : [];
+  const studyLogData = studyLogSheet ? studyLogSheet.getDataRange().getValues() : [];
+  const bookingData = bookingSheet ? bookingSheet.getDataRange().getValues() : [];
+
+  const studentsById = {};
+  for (let i = 1; i < infoData.length; i++) {
+    const id = String(infoData[i][1] || '').trim();
+    if (!id) continue;
+    studentsById[id] = { name: infoData[i][0], course: infoData[i][2], lastPaidRaw: infoData[i][3] };
+  }
+
+  const today = todayYMD();
+  const nowHM = Utilities.formatDate(new Date(), 'GMT+7', 'HH:mm');
+  const dowM0 = dayOfWeekMonday0(today.y, today.m, today.d);
+  const weekStartD = addDays(today.y, today.m, today.d, -dowM0);
+  const weekEndD = addDays(today.y, today.m, today.d, 6 - dowM0);
+  const lastDayOfMonth = new Date(today.y, today.m, 0).getDate();
+  const periods = {
+    today: { start: today.str, end: today.str, label: 'วันนี้' },
+    week: { start: ymd(weekStartD.y, weekStartD.m, weekStartD.d), end: ymd(weekEndD.y, weekEndD.m, weekEndD.d), label: 'สัปดาห์นี้' },
+    month: { start: ymd(today.y, today.m, 1), end: ymd(today.y, today.m, lastDayOfMonth), label: 'เดือนนี้' }
+  };
+  const period = periods[range] || periods.today;
+
+  // ----- Bookings within the selected range -----
+  let classesCount = 0;
+  let bookedCount = 0;
+  const bookingsByDate = {}; // ymd -> [{studentId, studentName, time}]
+  for (let i = 1; i < bookingData.length; i++) {
+    const row = bookingData[i];
+    const dateYMD = cellToYMD(row[3]);
+    if (!dateYMD) continue;
+    const timeHM = cellToHM(row[3]);
+    (bookingsByDate[dateYMD] = bookingsByDate[dateYMD] || []).push({
+      studentId: String(row[1] || '').trim(),
+      studentName: row[2],
+      time: timeHM
+    });
+    if (dateYMD >= period.start && dateYMD <= period.end) {
+      classesCount++;
+      if (dateYMD > today.str || (dateYMD === today.str && timeHM >= nowHM)) bookedCount++;
+    }
+  }
+
+  // ----- Study logs: studentId+classDate -> true, for "done" lookups -----
+  const logKeySet = {};
+  for (let i = 1; i < studyLogData.length; i++) {
+    const row = studyLogData[i];
+    const sid = String(row[1] || '').trim();
+    if (!sid) continue;
+    const classDateYMD = cellToYMD(row[4]) || cellToYMD(row[0]);
+    if (classDateYMD) logKeySet[sid + '|' + classDateYMD] = true;
+  }
+
+  // ----- Revenue within range + recent payments feed (always latest, any range) -----
+  let revenueTotal = 0;
+  let revenueCount = 0;
+  const recentPayments = [];
+  for (let i = 1; i < paymentData.length; i++) {
+    const row = paymentData[i];
+    const sid = String(row[1] || '').trim();
+    if (!sid) continue;
+    const total = parseFloat(String(row[4]).replace(/[^0-9.\-]/g, '')) || 0;
+    const dateYMD = cellToYMD(row[5]) || cellToYMD(row[0]);
+    const student = studentsById[sid];
+    recentPayments.push({ studentId: sid, name: student ? student.name : sid, method: row[2], total: total, dateYMD: dateYMD || '' });
+    if (dateYMD && dateYMD >= period.start && dateYMD <= period.end) {
+      revenueTotal += total;
+      revenueCount++;
+    }
+  }
+  recentPayments.reverse(); // sheet rows are append-ordered oldest -> newest
+  const recentPaymentsTop = recentPayments.slice(0, 5);
+
+  // ----- Today's classes -----
+  const todayClasses = (bookingsByDate[today.str] || []).map(b => ({
+    time: b.time,
+    studentId: b.studentId,
+    name: b.studentName || (studentsById[b.studentId] ? studentsById[b.studentId].name : b.studentId),
+    course: studentsById[b.studentId] ? studentsById[b.studentId].course : '',
+    done: !!logKeySet[b.studentId + '|' + today.str]
+  })).sort((a, b) => a.time.localeCompare(b.time));
+
+  // ----- Alerts: unpaid (active students only) + missing logs (last 3 days) -----
+  const alerts = [];
+
+  const activePast = addDays(today.y, today.m, today.d, -45);
+  const activeFuture = addDays(today.y, today.m, today.d, 45);
+  const activePastStr = ymd(activePast.y, activePast.m, activePast.d);
+  const activeFutureStr = ymd(activeFuture.y, activeFuture.m, activeFuture.d);
+  const activeStudentIds = {};
+  Object.keys(bookingsByDate).forEach(dateYMD => {
+    if (dateYMD >= activePastStr && dateYMD <= activeFutureStr) {
+      bookingsByDate[dateYMD].forEach(b => { activeStudentIds[b.studentId] = true; });
+    }
+  });
+
+  const unpaidCutoff = addDays(today.y, today.m, today.d, -30);
+  const unpaidCutoffStr = ymd(unpaidCutoff.y, unpaidCutoff.m, unpaidCutoff.d);
+  let unpaidCount = 0;
+  Object.keys(studentsById).forEach(id => {
+    if (!activeStudentIds[id]) return;
+    const lastPaidYMD = cellToYMD(studentsById[id].lastPaidRaw);
+    if (lastPaidYMD && lastPaidYMD >= unpaidCutoffStr) return;
+    unpaidCount++;
+    if (alerts.length < 6) {
+      alerts.push({
+        type: 'unpaid',
+        studentId: id,
+        text: (studentsById[id].name || id) + (lastPaidYMD ? ' ค้างชำระค่าเรียน (ชำระล่าสุด ' + lastPaidYMD + ')' : ' ค้างชำระค่าเรียน (ยังไม่เคยชำระ)'),
+        actionLabel: 'บันทึกการชำระเงิน',
+        screen: 'payments'
+      });
+    }
+  });
+
+  for (let d = 1; d <= 3 && alerts.length < 9; d++) {
+    const dd = addDays(today.y, today.m, today.d, -d);
+    const ddStr = ymd(dd.y, dd.m, dd.d);
+    (bookingsByDate[ddStr] || []).forEach(b => {
+      if (alerts.length >= 9) return;
+      if (logKeySet[b.studentId + '|' + ddStr]) return;
+      alerts.push({
+        type: 'missing_log',
+        studentId: b.studentId,
+        text: 'คลาสของ ' + (b.studentName || b.studentId) + ' เมื่อวันที่ ' + ddStr + ' ยังไม่มีบันทึกการเรียน',
+        actionLabel: 'บันทึกการเรียน',
+        screen: 'logs'
+      });
+    });
+  }
+
+  return {
+    range: range,
+    stats: {
+      classes: classesCount,
+      booked: bookedCount,
+      revenue: revenueTotal,
+      revenueLabel: 'จาก ' + revenueCount + ' รายการ' + period.label,
+      unpaid: unpaidCount
+    },
+    revenueSub: 'รวม ฿' + revenueTotal.toLocaleString('en-US'),
+    todayClasses: todayClasses,
+    alerts: alerts,
+    recentPayments: recentPaymentsTop
+  };
+}
+
+// ----- Date helpers (all in GMT+7, compared as yyyy-MM-dd strings to avoid
+// server-timezone drift when doing calendar math) -----
+
+function todayYMD() {
+  const s = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
+  const parts = s.split('-').map(Number);
+  return { y: parts[0], m: parts[1], d: parts[2], str: s };
+}
+
+function ymd(y, m, d) {
+  return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+}
+
+function addDays(y, m, d, delta) {
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + delta);
+  return { y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() };
+}
+
+function dayOfWeekMonday0(y, m, d) {
+  const dow = new Date(y, m - 1, d).getDay(); // 0=Sun..6=Sat
+  return (dow + 6) % 7; // 0=Mon..6=Sun
+}
+
+// Accepts either a real Date (Sheets may auto-convert date-shaped text) or a
+// string in "dd/MM/yyyy ..." (timestamp columns) / "yyyy-MM-dd ..." (booking
+// date column) format. Returns "yyyy-MM-dd" or null.
+function cellToYMD(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, 'GMT+7', 'yyyy-MM-dd');
+  }
+  const s = String(value || '').trim();
+  if (!s) return null;
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return m[3] + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0');
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return m[1] + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[3]).padStart(2, '0');
+  return null;
+}
+
+// Same input shapes as cellToYMD; returns "HH:mm" or ''.
+function cellToHM(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, 'GMT+7', 'HH:mm');
+  }
+  const s = String(value || '').trim();
+  const m = s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*$/);
+  return m ? String(m[1]).padStart(2, '0') + ':' + m[2] : '';
 }
 
 function generateRandomId() {

@@ -3359,7 +3359,7 @@
             if (main) main.scrollTop = 0;
 
             if (screen === 'dashboard') {
-                renderDashboard();
+                loadDashboard();
                 requestAnimationFrame(() => moveTabPillTo(activeTab(), false));
             }
             if (screen === 'logs') {
@@ -3381,31 +3381,12 @@
             if (menu && menu.classList.contains('active')) closeMobileMenu();
         }
 
-        // ===== Dashboard (placeholder data until a real aggregation
-        // endpoint exists in the GAS backend -- see README/GAS notes) =====
-        const DASH_STATS_BY_TIMEFRAME = {
-            today: { classes: '5', booked: '4', revenue: '฿7,700', sub: 'จาก 2 รายการวันนี้' },
-            week: { classes: '28', booked: '22', revenue: '฿46,400', sub: 'จาก 14 รายการสัปดาห์นี้' },
-            month: { classes: '112', booked: '96', revenue: '฿186,300', sub: 'จาก 58 รายการเดือนนี้' }
-        };
-        const DASH_TODAY_CLASSES = [
-            { time: '09:00', name: 'น้องมายด์ (พิมพ์ชนก)', course: 'Kids English Vol.3', done: true },
-            { time: '11:00', name: 'ปวีณา ศรีสุข', course: 'Business English B1', done: true },
-            { time: '14:00', name: 'น้องเจได (ภูมิ)', course: 'Kids English Vol.2', done: false },
-            { time: '16:00', name: 'สมชาย ดีเด่น', course: 'General English A2', done: false }
-        ];
-        const DASH_ALERTS = [
-            { icon: 'fas fa-triangle-exclamation', danger: true, text: 'สมชาย ดีเด่น ค้างชำระค่าเรียนรอบเดือนนี้', actionLabel: 'บันทึกการชำระเงิน', studentName: 'สมชาย ดีเด่น', screen: 'payments' },
-            { icon: 'fas fa-triangle-exclamation', danger: true, text: 'ธนกร วงศ์สวัสดิ์ ค้างชำระค่าเรียนรอบเดือนนี้', actionLabel: 'บันทึกการชำระเงิน', studentName: 'ธนกร วงศ์สวัสดิ์', screen: 'payments' },
-            { icon: 'far fa-sticky-note', danger: false, text: 'คลาสของ น้องเจได (ภูมิ) เมื่อวานยังไม่มีบันทึกการเรียน', actionLabel: 'บันทึกการเรียน', studentName: 'น้องเจได (ภูมิ)', screen: 'logs' }
-        ];
-        const DASH_RECENT_PAYMENTS = [
-            { name: 'ปวีณา ศรีสุข', method: 'โอนผ่านบัญชีธนาคาร', date: '2 ก.ค.', amount: '฿4,500' },
-            { name: 'อรทัย จันทร์เพ็ญ', method: 'พร้อมเพย์', date: '1 ก.ค.', amount: '฿3,200' },
-            { name: 'กิตติพงษ์ แก้วใส', method: 'เงินสด', date: '30 มิ.ย.', amount: '฿2,800' },
-            { name: 'ศิริพร ทองดี', method: 'พร้อมเพย์', date: '29 มิ.ย.', amount: '฿2,000' }
-        ];
+        // ===== Dashboard (real data via GAS action=getDashboard -- see
+        // gas/README.md "Dashboard data rules" for exactly what each number
+        // means and the judgment calls baked into the aggregation) =====
         let dashboardTimeframe = 'today';
+        let dashboardData = null;
+        let dashboardLoading = false;
 
         function setDashboardTimeframe(id, evt) {
             dashboardTimeframe = id;
@@ -3414,60 +3395,104 @@
                 btn.setAttribute('aria-selected', isSelected ? 'true' : 'false');
                 if (isSelected) moveTabPillTo(btn, true);
             });
+            loadDashboard();
+        }
+
+        async function loadDashboard() {
+            if (dashboardLoading) return;
+            dashboardLoading = true;
+            renderDashboardLoading();
+            try {
+                const response = await fetch(`${gasAppUrl}?action=getDashboard&range=${encodeURIComponent(dashboardTimeframe)}`, { method: 'GET', redirect: 'follow' });
+                const result = await response.json();
+                dashboardData = result.status === 'success' ? result.data : null;
+                if (!dashboardData) console.error('getDashboard error:', result.message);
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                dashboardData = null;
+            }
+            dashboardLoading = false;
             renderDashboard();
+        }
+
+        function renderDashboardLoading() {
+            document.getElementById('dash-stat-grid').innerHTML = '<div class="form-hint">กำลังโหลดข้อมูล...</div>';
+            document.getElementById('dash-today-classes').innerHTML = '<div class="form-hint">กำลังโหลดข้อมูล...</div>';
+            document.getElementById('dash-recent-payments').innerHTML = '<div class="form-hint">กำลังโหลดข้อมูล...</div>';
         }
 
         function renderDashboard() {
             document.getElementById('dash-today-label').textContent =
                 new Date().toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-            const stats = DASH_STATS_BY_TIMEFRAME[dashboardTimeframe];
+            if (!dashboardData) {
+                document.getElementById('dash-stat-grid').innerHTML = '<div class="form-hint">โหลดข้อมูลแดชบอร์ดไม่สำเร็จ ลองสลับแท็บช่วงเวลาหรือรีเฟรชหน้าอีกครั้ง</div>';
+                document.getElementById('dash-today-classes').innerHTML = '<div class="form-hint">โหลดข้อมูลไม่สำเร็จ</div>';
+                document.getElementById('dash-alerts-card').style.display = 'none';
+                document.getElementById('dash-revenue-sub').textContent = '-';
+                document.getElementById('dash-recent-payments').innerHTML = '<div class="form-hint">โหลดข้อมูลไม่สำเร็จ</div>';
+                return;
+            }
+
+            const stats = dashboardData.stats || {};
             const statCards = [
-                { label: 'คลาสเรียน', icon: 'fas fa-chalkboard-teacher', value: stats.classes, sub: 'คลาสที่สอนในช่วงนี้' },
-                { label: 'การจองล่วงหน้า', icon: 'fas fa-calendar-check', value: stats.booked, sub: 'คลาสที่จองไว้แล้ว' },
-                { label: 'รายรับ', icon: 'fas fa-money-bill-wave', value: stats.revenue, sub: stats.sub },
-                { label: 'ค้างชำระ', icon: 'fas fa-triangle-exclamation', value: String(DASH_ALERTS.filter(a => a.danger).length), sub: 'นักเรียนที่ต้องติดตาม' }
+                { label: 'คลาสเรียน', icon: 'fas fa-chalkboard-teacher', value: String(stats.classes || 0), sub: 'คลาสที่สอนในช่วงนี้' },
+                { label: 'การจองล่วงหน้า', icon: 'fas fa-calendar-check', value: String(stats.booked || 0), sub: 'คลาสที่จองไว้แล้ว' },
+                { label: 'รายรับ', icon: 'fas fa-money-bill-wave', value: formatBaht(stats.revenue), sub: stats.revenueLabel || '' },
+                { label: 'ค้างชำระ', icon: 'fas fa-triangle-exclamation', value: String(stats.unpaid || 0), sub: 'นักเรียนที่ต้องติดตาม' }
             ];
             document.getElementById('dash-stat-grid').innerHTML = statCards.map(c => `
                 <div class="stat-card">
                     <div class="stat-card-top"><span class="stat-card-label">${c.label}</span><i class="${c.icon}"></i></div>
                     <div class="stat-card-value">${c.value}</div>
-                    <div class="stat-card-sub">${c.sub}</div>
+                    <div class="stat-card-sub">${escapeHtml(c.sub)}</div>
                 </div>`).join('');
 
-            document.getElementById('dash-today-classes').innerHTML = DASH_TODAY_CLASSES.map(row => `
+            const todayClasses = dashboardData.todayClasses || [];
+            document.getElementById('dash-today-classes').innerHTML = todayClasses.length ? todayClasses.map(row => `
                 <div class="class-row">
-                    <div class="class-time">${row.time}</div>
-                    <div class="class-info"><div class="name">${escapeHtml(row.name)}</div><div class="course">${escapeHtml(row.course)}</div></div>
+                    <div class="class-time">${escapeHtml(row.time || '-')}</div>
+                    <div class="class-info"><div class="name">${escapeHtml(row.name)}</div><div class="course">${escapeHtml(row.course || '')}</div></div>
                     <span class="class-status ${row.done ? 'done' : 'pending'}"><i class="${row.done ? 'fas fa-check-circle' : 'far fa-clock'}"></i> ${row.done ? 'บันทึกแล้ว' : 'รอบันทึกผล'}</span>
-                    <button class="class-log-btn" onclick="goToStudentAndScreen('${escapeJs(row.name)}', 'logs')"><i class="fas fa-pen"></i> บันทึกผล</button>
-                </div>`).join('');
+                    <button class="class-log-btn" onclick="goToStudentAndScreen('${escapeJs(row.studentId)}', 'logs')"><i class="fas fa-pen"></i> บันทึกผล</button>
+                </div>`).join('') : '<div class="form-hint">ไม่มีคลาสเรียนวันนี้</div>';
 
-            document.getElementById('dash-alerts-card').style.display = DASH_ALERTS.length ? '' : 'none';
-            document.getElementById('dash-alerts').innerHTML = DASH_ALERTS.map(a => `
+            const alerts = dashboardData.alerts || [];
+            document.getElementById('dash-alerts-card').style.display = alerts.length ? '' : 'none';
+            document.getElementById('dash-alerts').innerHTML = alerts.map(a => `
                 <div class="alert-row">
-                    <i class="${a.icon}" style="color: ${a.danger ? 'var(--accent-danger)' : 'var(--text-muted)'};"></i>
+                    <i class="${a.type === 'unpaid' ? 'fas fa-triangle-exclamation' : 'far fa-sticky-note'}" style="color: ${a.type === 'unpaid' ? 'var(--accent-danger)' : 'var(--text-muted)'};"></i>
                     <div style="flex: 1; min-width: 0;">
                         <div class="alert-text">${escapeHtml(a.text)}</div>
-                        <button class="alert-action" onclick="goToStudentAndScreen('${escapeJs(a.studentName)}', '${a.screen}')">${a.actionLabel} <i class="fas fa-arrow-right" style="font-size: 10px;"></i></button>
+                        <button class="alert-action" onclick="goToStudentAndScreen('${escapeJs(a.studentId)}', '${a.screen}')">${escapeHtml(a.actionLabel)} <i class="fas fa-arrow-right" style="font-size: 10px;"></i></button>
                     </div>
                 </div>`).join('');
 
-            document.getElementById('dash-revenue-sub').textContent = 'รวม ' + stats.revenue;
-            document.getElementById('dash-recent-payments').innerHTML = DASH_RECENT_PAYMENTS.map(p => `
+            document.getElementById('dash-revenue-sub').textContent = dashboardData.revenueSub || ('รวม ' + formatBaht(stats.revenue));
+            const recentPayments = dashboardData.recentPayments || [];
+            document.getElementById('dash-recent-payments').innerHTML = recentPayments.length ? recentPayments.map(p => `
                 <div class="payment-row">
-                    <div class="payment-info"><div class="name">${escapeHtml(p.name)}</div><div class="meta">${escapeHtml(p.method)} · ${p.date}</div></div>
-                    <div class="amount">${p.amount}</div>
-                </div>`).join('');
+                    <div class="payment-info"><div class="name">${escapeHtml(p.name)}</div><div class="meta">${escapeHtml(p.method || '-')} · ${escapeHtml(formatShortThaiDate(p.dateYMD))}</div></div>
+                    <div class="amount">${formatBaht(p.total)}</div>
+                </div>`).join('') : '<div class="form-hint">ยังไม่มีรายการชำระเงิน</div>';
         }
 
-        // Best-effort deep link: if the (placeholder) dashboard row's student
-        // name matches a real loaded student, pre-select them; otherwise just
-        // navigate. Once real dashboard data is wired this always matches.
-        function goToStudentAndScreen(studentName, screen) {
-            const match = allStudentsData.find(s => s.name === studentName);
-            if (match) {
-                selectedStudentId = match.id;
+        function formatBaht(n) {
+            return '฿' + Number(n || 0).toLocaleString('en-US');
+        }
+
+        function formatShortThaiDate(dateYMD) {
+            if (!dateYMD) return '-';
+            const d = new Date(dateYMD + 'T00:00:00');
+            if (isNaN(d.getTime())) return dateYMD;
+            return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+        }
+
+        // Dashboard rows/alerts now carry a real studentId straight from the
+        // GAS aggregation, so this is a direct pre-select -- no name matching.
+        function goToStudentAndScreen(studentId, screen) {
+            if (studentId) {
+                selectedStudentId = studentId;
                 updateSharedStudentIndicators();
                 ['logs', 'payments', 'files'].forEach(syncPickerText);
             }

@@ -29,12 +29,38 @@ so nothing already in the Sheet or already deployed breaks:
   payment rows, read from the new columns (blank for older rows that
   predate them).
 - **`getAllStudents`**: unchanged — still just `{ name, id }` pairs.
+- **`getDashboard` (new)**: `GET ?action=getDashboard&range=today|week|month`.
+  Powers the admin console's Dashboard screen with real data aggregated
+  from Info / Payment Info / Study Log / Booking. See the "Dashboard data
+  rules" section below for exactly what each number means and the
+  judgment calls baked in — tune the constants in `buildDashboardData` if
+  they don't match how the school actually wants this counted.
 
-The admin console's new **Dashboard** screen (today's classes, revenue,
-alerts) currently ships with placeholder data — it has no corresponding
-endpoint here yet. Wiring it up would mean new read actions (e.g. a
-schedule/aggregation query) added to `doGet`; ask before adding those so
-the Sheet layout they'd depend on is agreed first.
+## Dashboard data rules (`getDashboard`)
+
+There's no separate "classes taught" record in the Sheet, so a **booking
+row is treated as a class**. With that:
+
+- **คลาสเรียน (classes)** — count of bookings whose class date falls in
+  the selected range (today/this week/this month).
+- **การจองล่วงหน้า (booked)** — of those, the ones still in the future
+  (haven't started yet).
+- **รายรับ (revenue)** — sum of `total` from Payment Info whose payment
+  date falls in the selected range.
+- **ค้างชำระ (unpaid)** — count of *active* students (had a booking within
+  ±45 days of today) whose last payment is missing or older than 30 days.
+  This one **ignores the range selector** — same as the original design
+  mock, it's always "current outstanding," not period-scoped.
+- **คลาสวันนี้ (today's classes)** and **การแจ้งเตือน (alerts)** are
+  always "today" / "recent," regardless of which range tab is active.
+  Missing-log alerts look back 3 days for a booking with no matching
+  study log (matched by student id + class date).
+
+These are reasonable defaults, not confirmed business rules — the 30-day
+"unpaid" cutoff and 45-day "active student" window in particular are
+guesses. Adjust `unpaidCutoff`/`activePast`/`activeFuture` in
+`buildDashboardData` (`gas/Code.gs`) if the school's actual billing cycle
+differs.
 
 ## Deploying
 
