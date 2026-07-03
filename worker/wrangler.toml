@@ -14,6 +14,6 @@ bucket_name = "flies-litalk"
 
 [vars]
 AUTH0_DOMAIN = "litalkeducation.us.auth0.com"
-AUTH0_AUDIENCE = "REPLACE_WITH_AUTH0_API_IDENTIFIER" # the Identifier of the Auth0 API created for this Worker
+AUTH0_AUDIENCE = "https://admin.litalkeducation.com/files-api" # Auth0 API ID 6a475ce71d0772bca086a160
 AUTH0_EMAIL_CLAIM = "https://admin.litalkeducation.com/email" # namespaced claim added by an Auth0 Action; falls back to `sub` if absent
 ALLOWED_ORIGIN = "https://admin.litalkeducation.com"
