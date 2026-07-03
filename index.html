@@ -2434,7 +2434,7 @@
         const gasAppUrl = 'https://script.google.com/macros/s/AKfycbyyiEM4NUx-leLse4535upWTtf6q68o4dTFIkO2FS0mml3J3kkIhM7WO27BoAP4aJ-BMg/exec';
 
         // Cloudflare Worker API for the Student Files feature (upload/list/download/delete)
-        const filesApiUrl = 'REPLACE_WITH_WORKER_URL'; // e.g. https://litalk-files-api.<subdomain>.workers.dev
+        const filesApiUrl = 'https://litalk-files-api.n62c5gwghk.workers.dev';
 
         async function getFilesApiToken() {
             return auth0Client.getTokenSilently({ authorizationParams: { audience: filesApiAudience } });
