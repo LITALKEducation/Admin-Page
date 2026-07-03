@@ -2,7 +2,7 @@
 
 Cloudflare Worker backing the "Student Files" feature (upload / list /
 download / delete) for the admin panel. Metadata lives in D1 (`litalk`),
-blobs live in R2 (`flies-litalk`). Everything else in the admin panel (student
+blobs live in R2 (`files-litalk`). Everything else in the admin panel (student
 records, bookings, payments, study logs) keeps using Google Apps Script —
 this Worker is additive, not a replacement.
 
@@ -50,11 +50,11 @@ changes in this repo for that wiring.
 
 ## 2. One-time Cloudflare resource setup
 
-If `litalk` (D1) and `flies-litalk` (R2) don't already exist:
+If `litalk` (D1) and `files-litalk` (R2) don't already exist:
 
 ```sh
 npx wrangler d1 create litalk
-npx wrangler r2 bucket create flies-litalk
+npx wrangler r2 bucket create files-litalk
 ```
 
 `wrangler d1 create` prints a `database_id` — paste it into

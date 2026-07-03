@@ -6,11 +6,11 @@ compatibility_date = "2024-11-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "litalk"
-database_id = "REPLACE_WITH_D1_DATABASE_ID" # run: wrangler d1 create litalk (if not already created)
+database_id = "77c10f96-55ba-4830-abcc-cd3364fb22f7"
 
 [[r2_buckets]]
 binding = "BUCKET"
-bucket_name = "flies-litalk"
+bucket_name = "files-litalk"
 
 [vars]
 AUTH0_DOMAIN = "litalkeducation.us.auth0.com"
