@@ -1,0 +1,19 @@
+name = "litalk-files-api"
+account_id = "aacf06eb2a3dcbf4fc501455805047d0"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "litalk"
+database_id = "77c10f96-55ba-4830-abcc-cd3364fb22f7"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "files-litalk"
+
+[vars]
+AUTH0_DOMAIN = "litalkeducation.us.auth0.com"
+AUTH0_AUDIENCE = "https://admin.litalkeducation.com/files-api" # Auth0 API ID 6a475ce71d0772bca086a160
+AUTH0_EMAIL_CLAIM = "https://admin.litalkeducation.com/email" # namespaced claim added by an Auth0 Action; falls back to `sub` if absent
+ALLOWED_ORIGIN = "https://admin.litalkeducation.com"
