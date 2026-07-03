@@ -2088,6 +2088,9 @@
                 <button class="tab-btn" role="tab" aria-selected="false" onclick="switchTab('create')" id="tab-btn-create">
                     <i class="fas fa-user-plus"></i> เพิ่มนักเรียน
                 </button>
+                <button class="tab-btn" role="tab" aria-selected="false" onclick="switchTab('files')" id="tab-btn-files">
+                    <i class="fas fa-folder-open"></i> ไฟล์นักเรียน
+                </button>
             </div>
 
             <!-- TAB 1: MANAGE -->
@@ -2255,6 +2258,80 @@
                     </div>
                 </div>
             </div>
+
+            <!-- TAB 3: STUDENT FILES -->
+            <div id="tab-files" class="tab-content">
+                <div class="admin-card">
+                    <div class="card-title-bar">
+                        <span class="card-icon"><i class="fas fa-upload"></i></span>
+                        <div>
+                            <h3>อัปโหลดไฟล์นักเรียน</h3>
+                            <p>แนบการบ้าน ใบงาน หรือเอกสารอื่น ๆ ให้กับนักเรียน</p>
+                        </div>
+                    </div>
+
+                    <div class="form-body">
+                        <div class="form-group">
+                            <label><i class="fas fa-user"></i> นักเรียน</label>
+                            <div class="select-wrapper">
+                                <select id="files-student-select" onchange="onFilesStudentSelected()">
+                                    <option value="">-- กรุณาเลือกนักเรียน --</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-tag"></i> ประเภทเอกสาร</label>
+                            <div class="select-wrapper">
+                                <select id="files-doc-type">
+                                    <option value="Homework">การบ้าน (Homework)</option>
+                                    <option value="Worksheet">ใบงาน (Worksheet)</option>
+                                    <option value="Exam">ข้อสอบ (Exam)</option>
+                                    <option value="Attendance">การเข้าเรียน (Attendance)</option>
+                                    <option value="Certificate">ใบรับรอง (Certificate)</option>
+                                    <option value="Portfolio">ผลงาน (Portfolio)</option>
+                                    <option value="Other">อื่น ๆ (Other)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-paperclip"></i> ไฟล์</label>
+                            <input type="file" id="files-upload-input">
+                            <div class="form-hint">รองรับไฟล์ PDF, รูปภาพ และเอกสารทั่วไป</div>
+                        </div>
+
+                        <button class="btn btn-primary btn-submit" onclick="uploadStudentFile()" id="submit-file-upload-btn">
+                            <i class="fas fa-upload"></i> อัปโหลดไฟล์
+                        </button>
+                    </div>
+                </div>
+
+                <div class="admin-card">
+                    <div class="card-title-bar">
+                        <span class="card-icon"><i class="fas fa-folder-open"></i></span>
+                        <div>
+                            <h3>ไฟล์ทั้งหมด</h3>
+                            <p>รายการไฟล์ของนักเรียนที่เลือก</p>
+                        </div>
+                    </div>
+                    <div class="form-body">
+                        <div id="files-list-empty" class="form-hint">กรุณาเลือกนักเรียนเพื่อดูรายการไฟล์</div>
+                        <div id="files-list-container" style="display: none; overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="text-align: left; border-bottom: 1px solid var(--border-color);">
+                                        <th style="padding: 8px;">ไฟล์</th>
+                                        <th style="padding: 8px;">ประเภท</th>
+                                        <th style="padding: 8px;">อัปโหลดเมื่อ</th>
+                                        <th style="padding: 8px;">โดย</th>
+                                        <th style="padding: 8px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="files-list-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
 
         <!-- Footer -->
@@ -2342,16 +2419,26 @@
             document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
         }
 
+        // Auth0 API identifier for the Student Files Worker (see worker/README.md step 1)
+        const filesApiAudience = 'REPLACE_WITH_AUTH0_API_IDENTIFIER';
+
         const auth0Client = new auth0.Auth0Client({
             domain: 'litalkeducation.us.auth0.com',
             clientId: 'IYA9knWCvuP6UXlTI3M6idEFuiBQDXLS',
-            authorizationParams: { redirect_uri: window.location.href.split('?')[0] },
+            authorizationParams: { redirect_uri: window.location.href.split('?')[0], audience: filesApiAudience },
             cacheLocation: 'localstorage',
             useRefreshTokens: true
         });
 
         // URL Web App จาก Google Apps Script
         const gasAppUrl = 'https://script.google.com/macros/s/AKfycbyyiEM4NUx-leLse4535upWTtf6q68o4dTFIkO2FS0mml3J3kkIhM7WO27BoAP4aJ-BMg/exec';
+
+        // Cloudflare Worker API for the Student Files feature (upload/list/download/delete)
+        const filesApiUrl = 'REPLACE_WITH_WORKER_URL'; // e.g. https://litalk-files-api.<subdomain>.workers.dev
+
+        async function getFilesApiToken() {
+            return auth0Client.getTokenSilently({ authorizationParams: { audience: filesApiAudience } });
+        }
 
         window.onload = async () => {
 
@@ -2564,7 +2651,8 @@
                 if (result.status === 'success' && result.data.length > 0) {
                     allStudentsData = result.data;
                     renderStudentSelect(allStudentsData);
-                    
+                    renderFilesStudentSelect();
+
                     const selectedValue = document.getElementById('select-student').value;
                     if (!selectedValue) {
                         textElement.innerText = '-- กรุณาเลือกนักเรียน --';
@@ -2580,6 +2668,195 @@
             } catch (error) {
                 console.error('Error:', error);
                 document.getElementById('selected-student-text').innerText = 'โหลดข้อมูลล้มเหลว ตรวจสอบ URL ของ GAS';
+            }
+        }
+
+        // ===== Student Files (Cloudflare Worker + D1 + R2) =====
+
+        let filesApiPermissions = null;
+
+        async function loadFilesPermissions() {
+            if (filesApiPermissions) return filesApiPermissions;
+            try {
+                const token = await getFilesApiToken();
+                const response = await fetch(`${filesApiUrl}/me`, { headers: { Authorization: `Bearer ${token}` } });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const me = await response.json();
+                filesApiPermissions = me.permissions || [];
+            } catch (error) {
+                console.error('Error loading files API permissions:', error);
+                filesApiPermissions = [];
+            }
+            return filesApiPermissions;
+        }
+
+        function renderFilesStudentSelect() {
+            const select = document.getElementById('files-student-select');
+            if (!select) return;
+            const currentValue = select.value;
+            select.innerHTML = '<option value="">-- กรุณาเลือกนักเรียน --</option>';
+            allStudentsData.forEach(student => {
+                const option = document.createElement('option');
+                option.value = student.id;
+                option.textContent = `[${student.id}] ${student.name}`;
+                select.appendChild(option);
+            });
+            if (currentValue) select.value = currentValue;
+        }
+
+        async function onFilesStudentSelected() {
+            const studentId = document.getElementById('files-student-select').value;
+            const emptyEl = document.getElementById('files-list-empty');
+            const containerEl = document.getElementById('files-list-container');
+            const tbody = document.getElementById('files-list-tbody');
+
+            if (!studentId) {
+                emptyEl.textContent = 'กรุณาเลือกนักเรียนเพื่อดูรายการไฟล์';
+                emptyEl.style.display = 'block';
+                containerEl.style.display = 'none';
+                tbody.innerHTML = '';
+                return;
+            }
+
+            emptyEl.textContent = 'กำลังโหลดรายการไฟล์...';
+            emptyEl.style.display = 'block';
+            containerEl.style.display = 'none';
+
+            try {
+                const permissions = await loadFilesPermissions();
+                const token = await getFilesApiToken();
+                const response = await fetch(`${filesApiUrl}/students/${encodeURIComponent(studentId)}/files`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const files = await response.json();
+
+                if (!files.length) {
+                    emptyEl.textContent = 'ยังไม่มีไฟล์สำหรับนักเรียนคนนี้';
+                    emptyEl.style.display = 'block';
+                    containerEl.style.display = 'none';
+                    return;
+                }
+
+                tbody.innerHTML = '';
+                const canDelete = permissions.includes('files:delete');
+                files.forEach(file => {
+                    const tr = document.createElement('tr');
+                    tr.style.borderBottom = '1px solid var(--border-color)';
+                    tr.innerHTML = `
+                        <td style="padding: 8px;">${file.filename}</td>
+                        <td style="padding: 8px;">${file.file_type}</td>
+                        <td style="padding: 8px;">${new Date(file.uploaded_at).toLocaleString('th-TH')}</td>
+                        <td style="padding: 8px;">${file.uploaded_by || '-'}</td>
+                        <td style="padding: 8px; white-space: nowrap;">
+                            <button class="btn btn-secondary" style="padding: 4px 10px;" onclick="downloadStudentFile(${file.id}, '${String(file.filename).replace(/'/g, "\\'")}')"><i class="fas fa-download"></i></button>
+                            ${canDelete ? `<button class="btn btn-danger" style="padding: 4px 10px; margin-left: 4px;" onclick="deleteStudentFile(${file.id})"><i class="fas fa-trash"></i></button>` : ''}
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                emptyEl.style.display = 'none';
+                containerEl.style.display = 'block';
+            } catch (error) {
+                console.error('Error loading files:', error);
+                emptyEl.textContent = 'โหลดรายการไฟล์ล้มเหลว ตรวจสอบการตั้งค่า Worker API';
+                emptyEl.style.display = 'block';
+                containerEl.style.display = 'none';
+            }
+        }
+
+        async function uploadStudentFile() {
+            const studentId = document.getElementById('files-student-select').value;
+            const fileType = document.getElementById('files-doc-type').value;
+            const fileInput = document.getElementById('files-upload-input');
+            const file = fileInput.files[0];
+
+            if (!studentId) {
+                triggerFieldError('files-student-select', 'กรุณาเลือกนักเรียน');
+                return;
+            }
+            if (!file) {
+                triggerFieldError('files-upload-input', 'กรุณาเลือกไฟล์');
+                return;
+            }
+
+            showLoading();
+            try {
+                const token = await getFilesApiToken();
+                const formData = new FormData();
+                formData.append('student_id', studentId);
+                formData.append('file_type', fileType);
+                formData.append('file', file);
+
+                const response = await fetch(`${filesApiUrl}/upload`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` },
+                    body: formData
+                });
+
+                hideLoading();
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || `HTTP ${response.status}`);
+                }
+
+                fileInput.value = '';
+                showModal('อัปโหลดสำเร็จ', 'บันทึกไฟล์เรียบร้อยแล้ว', 'success');
+                onFilesStudentSelected();
+            } catch (error) {
+                hideLoading();
+                console.error('Error uploading file:', error);
+                showModal('อัปโหลดล้มเหลว', error.message || 'เกิดข้อผิดพลาดในการอัปโหลดไฟล์', 'error');
+            }
+        }
+
+        async function downloadStudentFile(fileId, filename) {
+            showLoading();
+            try {
+                const token = await getFilesApiToken();
+                const response = await fetch(`${filesApiUrl}/files/${fileId}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('Error downloading file:', error);
+                showModal('ดาวน์โหลดล้มเหลว', 'ไม่สามารถดาวน์โหลดไฟล์ได้', 'error');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function deleteStudentFile(fileId) {
+            if (!confirm('ยืนยันการลบไฟล์นี้?')) return;
+
+            showLoading();
+            try {
+                const token = await getFilesApiToken();
+                const response = await fetch(`${filesApiUrl}/files/${fileId}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                hideLoading();
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                showModal('ลบสำเร็จ', 'ลบไฟล์เรียบร้อยแล้ว', 'success');
+                onFilesStudentSelected();
+            } catch (error) {
+                hideLoading();
+                console.error('Error deleting file:', error);
+                showModal('ลบล้มเหลว', 'ไม่สามารถลบไฟล์ได้', 'error');
             }
         }
 

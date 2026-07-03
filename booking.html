@@ -1785,10 +1785,13 @@
             document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
         }
 
+        // Auth0 API identifier for the Student Files Worker (see worker/README.md step 1)
+        const filesApiAudience = 'REPLACE_WITH_AUTH0_API_IDENTIFIER';
+
         const auth0Client = new auth0.Auth0Client({
             domain: 'litalkeducation.us.auth0.com',
             clientId: 'IYA9knWCvuP6UXlTI3M6idEFuiBQDXLS', // Admin Client ID
-            authorizationParams: { redirect_uri: window.location.href.split('?')[0] },
+            authorizationParams: { redirect_uri: window.location.href.split('?')[0], audience: filesApiAudience },
             cacheLocation: 'localstorage',
             useRefreshTokens: true
         });

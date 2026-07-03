@@ -1,0 +1,19 @@
+name = "litalk-files-api"
+account_id = "aacf06eb2a3dcbf4fc501455805047d0"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "litalk"
+database_id = "REPLACE_WITH_D1_DATABASE_ID" # run: wrangler d1 create litalk (if not already created)
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "flies-litalk"
+
+[vars]
+AUTH0_DOMAIN = "litalkeducation.us.auth0.com"
+AUTH0_AUDIENCE = "REPLACE_WITH_AUTH0_API_IDENTIFIER" # the Identifier of the Auth0 API created for this Worker
+AUTH0_EMAIL_CLAIM = "https://admin.litalkeducation.com/email" # namespaced claim added by an Auth0 Action; falls back to `sub` if absent
+ALLOWED_ORIGIN = "https://admin.litalkeducation.com"
