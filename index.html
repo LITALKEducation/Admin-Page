@@ -90,6 +90,30 @@
             --badge-text: #ffffff;
         }
 
+        /* Design-system scale tokens (radius / type / weight / motion) -- same
+           values already used ad-hoc across this file, named for reuse in the
+           sidebar + screens markup below. */
+        :root {
+            --radius-xs: 2px;
+            --radius-sm: 4px;
+            --radius-md: 6px;
+            --radius-lg: 8px;
+            --text-xs: 11px;
+            --text-sm: 12px;
+            --text-base-sm: 13px;
+            --text-base: 14px;
+            --text-base-lg: 15px;
+            --weight-medium: 500;
+            --weight-semibold: 600;
+            --weight-bold: 700;
+            --tracking-snug: -0.02em;
+            --tracking-wide: 0.05em;
+            --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            --dur-base: 0.2s;
+            --ease-btn: cubic-bezier(0.4, 0, 0.2, 1);
+            --leading-tight: 1.3;
+        }
+
         body {
             font-family: 'Outfit', 'Kanit', sans-serif;
             background-color: var(--bg-primary);
@@ -539,32 +563,7 @@
             line-height: 1.6;
         }
 
-        /* Navigation Bar (Shared Menu) */
-        .navbar {
-            background-color: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-color);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            padding: 14px 24px;
-            transition: background-color 0.3s, border-color 0.3s;
-        }
-
-        .nav-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-        }
-
-        .nav-brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
+        /* Logo (sidebar header + login screens) */
         .logo-img {
             height: 24px;
             width: auto;
@@ -577,142 +576,648 @@
             }
         }
 
-        .logo-text {
-            font-size: 16px;
-            font-weight: 800;
-            letter-spacing: -0.04em;
-            text-transform: uppercase;
-        }
-
         .admin-badge-text {
-            font-size: 10px;
-            font-weight: 700;
+            font-size: var(--text-xs);
+            font-weight: var(--weight-bold);
             background-color: var(--badge-bg);
             color: var(--badge-text);
             padding: 2px 6px;
-            border-radius: 2px;
-            letter-spacing: 0.05em;
+            border-radius: var(--radius-xs);
+            letter-spacing: var(--tracking-wide);
             border: 1px solid var(--border-color);
         }
 
-        .nav-menu {
+        /* App Shell: sidebar + scrollable main */
+        .admin-dashboard {
             display: flex;
-            gap: 8px;
+            height: 100vh;
+            overflow: hidden;
+            background-color: var(--bg-primary);
+            z-index: 1;
         }
 
-        .nav-menu-item {
-            text-decoration: none;
+        .sidebar {
+            width: 240px;
+            flex-shrink: 0;
+            background-color: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sidebar-header .logo-img {
+            height: 22px;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 14px 12px;
+            overflow-y: auto;
+        }
+
+        .sidebar-nav-heading {
+            font-size: var(--text-xs);
+            font-weight: var(--weight-bold);
+            text-transform: uppercase;
+            letter-spacing: var(--tracking-wide);
+            color: var(--text-muted);
+            padding: 0 10px 6px;
+        }
+
+        .sidebar-nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: var(--radius-md);
+            text-align: left;
+            font-size: var(--text-base-lg);
+            font-family: inherit;
+            cursor: pointer;
+            font-weight: var(--weight-medium);
             color: var(--text-secondary);
-            font-size: 13px;
-            font-weight: 500;
-            padding: 6px 14px;
-            border-radius: 4px;
-            transition: all 0.2s;
+            background-color: transparent;
             border: 1px solid transparent;
+            transition: all var(--dur-base) var(--ease-btn);
         }
 
-        .nav-menu-item:hover {
-            color: var(--text-primary);
+        .sidebar-nav-item i {
+            width: 18px;
+            text-align: center;
+            font-size: 13px;
+        }
+
+        .sidebar-nav-item:hover {
             background-color: var(--bg-tertiary);
+            color: var(--text-primary);
         }
 
-        .nav-menu-item.active {
+        .sidebar-nav-item.active {
+            font-weight: var(--weight-semibold);
             color: var(--text-primary);
             background-color: var(--bg-tertiary);
             border-color: var(--border-color);
-            font-weight: 600;
         }
 
-        .nav-actions {
+        .sidebar-footer {
+            padding: 14px 16px;
+            border-top: 1px solid var(--border-color);
             display: flex;
-            align-items: center;
+            flex-direction: column;
             gap: 12px;
         }
 
-        .staff-email {
+        .sidebar-footer-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .sidebar-email {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .app-main {
+            flex: 1;
+            overflow-y: auto;
+            height: 100vh;
+            background-image: radial-gradient(circle at 1px 1px, var(--border-color) 1px, transparent 0);
+            background-size: 24px 24px;
+        }
+
+        .dashboard-content {
+            max-width: 1080px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 28px 32px 64px;
+        }
+
+        .screen-header {
+            margin-bottom: 18px;
+        }
+
+        .screen-header h1 {
+            font-size: 26px;
+            font-weight: var(--weight-bold);
+            letter-spacing: var(--tracking-snug);
+            margin: 0 0 4px;
+            color: var(--text-primary);
+        }
+
+        .screen-header p {
+            margin: 0;
+            font-size: var(--text-base);
+            color: var(--text-muted);
+        }
+
+        /* Dashboard screen */
+        .dashboard-top {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 22px;
+            flex-wrap: wrap;
+        }
+
+        .dashboard-top .screen-header {
+            margin-bottom: 0;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+
+        .stat-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--card-shadow);
+            padding: 18px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .stat-card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .stat-card-label {
+            font-size: var(--text-xs);
+            font-weight: var(--weight-bold);
+            text-transform: uppercase;
+            letter-spacing: var(--tracking-wide);
+            color: var(--text-muted);
+        }
+
+        .stat-card-top i {
             font-size: 12px;
-            font-weight: 500;
-            color: var(--text-secondary);
-            font-family: monospace;
+            color: var(--text-muted);
+        }
+
+        .stat-card-value {
+            font-size: 28px;
+            font-weight: var(--weight-bold);
+            letter-spacing: var(--tracking-snug);
+            color: var(--text-primary);
+            line-height: 1.1;
+        }
+
+        .stat-card-sub {
+            font-size: var(--text-base-sm);
+            color: var(--text-muted);
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 18px;
+            align-items: start;
+        }
+
+        .dashboard-col {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .row-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .row-list.tight {
+            gap: 14px;
+        }
+
+        .class-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px 14px;
+            padding: 12px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background-color: var(--bg-tertiary);
+        }
+
+        .class-row .class-time {
+            width: 52px;
+            flex-shrink: 0;
+            text-align: center;
+            font-weight: var(--weight-semibold);
+            font-size: var(--text-base);
+            color: var(--text-primary);
             border-right: 1px solid var(--border-color);
             padding-right: 12px;
         }
 
-        /* Dashboard Layout */
-        .admin-dashboard {
-            min-height: 100vh;
+        .class-row .class-info {
+            flex: 1;
+            min-width: 160px;
+        }
+
+        .class-row .class-info .name {
+            font-size: var(--text-base);
+            font-weight: var(--weight-semibold);
+            color: var(--text-primary);
+        }
+
+        .class-row .class-info .course {
+            font-size: var(--text-base-sm);
+            color: var(--text-muted);
+        }
+
+        .class-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            flex-shrink: 0;
+            font-size: var(--text-sm);
+            font-weight: var(--weight-medium);
+        }
+
+        .class-status.done {
+            color: var(--accent-success);
+        }
+
+        .class-status.pending {
+            color: var(--text-muted);
+        }
+
+        .class-log-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-size: var(--text-sm);
+            font-family: inherit;
+            font-weight: var(--weight-medium);
+            cursor: pointer;
+            transition: all var(--dur-base) var(--ease-btn);
+        }
+
+        .class-log-btn:hover {
+            color: var(--text-primary);
+            border-color: var(--text-primary);
+        }
+
+        .alert-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background-color: var(--bg-tertiary);
+        }
+
+        .alert-row i {
+            font-size: 13px;
+            margin-top: 3px;
+            flex-shrink: 0;
+        }
+
+        .alert-row .alert-text {
+            font-size: var(--text-base-sm);
+            color: var(--text-secondary);
+            line-height: var(--leading-tight);
+        }
+
+        .alert-row .alert-action {
+            margin-top: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 0;
+            border: none;
+            background: none;
+            color: var(--text-primary);
+            font-size: var(--text-sm);
+            font-family: inherit;
+            font-weight: var(--weight-semibold);
+            cursor: pointer;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        .payment-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .payment-row .payment-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .payment-row .payment-info .name {
+            font-size: var(--text-base-sm);
+            font-weight: var(--weight-semibold);
+            color: var(--text-primary);
+        }
+
+        .payment-row .payment-info .meta {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+        }
+
+        .payment-row .amount {
+            font-size: var(--text-base);
+            font-weight: var(--weight-bold);
+            color: var(--accent-success);
+            flex-shrink: 0;
+        }
+
+        /* Sticky (flat, no card chrome) student picker for logs/payments/files/booking */
+        .sticky-picker {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background-color: var(--bg-primary);
+            padding: 8px 0 14px;
             display: flex;
             flex-direction: column;
-            z-index: 1;
+            gap: 10px;
         }
 
-        .dashboard-content {
-            flex: 1;
-            max-width: 1200px;
-            width: 100%;
-            margin: 0 auto;
-            padding: 32px 24px;
-        }
-
-        /* Banner section */
-        .staff-hero {
-            background-color: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 24px;
-            margin-bottom: 28px;
+        /* Student Files list */
+        .files-table {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 16px;
-            box-shadow: var(--card-shadow);
+            flex-direction: column;
         }
 
-        .staff-info {
-            display: flex;
+        .files-table-head,
+        .files-table-row {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr 1fr 1.2fr auto;
+            gap: 12px;
             align-items: center;
-            gap: 16px;
         }
 
-        .staff-avatar {
-            width: 44px;
-            height: 44px;
-            background-color: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
+        .files-table-head {
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: var(--text-sm);
+            font-weight: var(--weight-semibold);
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: var(--tracking-wide);
+        }
+
+        .files-table-row {
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .files-table-row .filename {
+            font-size: var(--text-base-sm);
+            font-weight: var(--weight-semibold);
             color: var(--text-primary);
-            border-radius: 4px;
             display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .files-table-row .filename i {
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .files-table-row .file-type {
+            font-size: var(--text-base-sm);
+            color: var(--text-secondary);
+        }
+
+        .files-table-row .uploaded-at,
+        .files-table-row .uploaded-by {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+        }
+
+        .files-table-row .uploaded-by {
+            font-family: var(--font-mono);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .files-table-row .file-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .icon-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: var(--text-sm);
+            font-family: inherit;
+            cursor: pointer;
+            transition: all var(--dur-base) var(--ease-btn);
+        }
+
+        .icon-btn:hover {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            border-color: var(--text-primary);
+        }
+
+        .icon-btn-danger {
+            border-color: var(--accent-danger);
+            color: var(--accent-danger);
+        }
+
+        .icon-btn-danger:hover {
+            background-color: var(--accent-danger);
+            color: #ffffff;
+        }
+
+        /* Booking wizard */
+        .booking-wrap {
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .step-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .step-circle {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
-        }
-
-        .staff-info h2 {
-            font-size: 16px;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-            color: var(--text-primary);
-            margin-bottom: 2px;
-        }
-
-        .staff-info p {
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-
-        .staff-badge {
+            font-size: var(--text-sm);
+            font-weight: var(--weight-semibold);
             background-color: var(--bg-tertiary);
-            color: var(--text-secondary);
+            color: var(--text-muted);
             border: 1px solid var(--border-color);
-            font-size: 11px;
-            font-weight: 600;
-            padding: 4px 10px;
-            border-radius: 4px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            transition: all var(--dur-base) var(--ease-btn);
         }
 
-        /* Tabs Menu */
+        .step-circle.active,
+        .step-circle.done {
+            background-color: var(--brand-primary);
+            color: var(--brand-btn-text);
+            border-color: var(--brand-primary);
+        }
+
+        .step-label {
+            font-size: var(--text-base-sm);
+            font-weight: var(--weight-medium);
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .step-label.active {
+            font-weight: var(--weight-semibold);
+            color: var(--text-primary);
+        }
+
+        .step-line {
+            flex: 1;
+            height: 1px;
+            background-color: var(--border-color);
+        }
+
+        .slot-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+
+        .slot-btn {
+            padding: 10px 0;
+            text-align: center;
+            border-radius: var(--radius-sm);
+            font-size: var(--text-base-sm);
+            font-family: inherit;
+            font-weight: var(--weight-medium);
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            transition: all var(--dur-base) var(--ease-btn);
+        }
+
+        .slot-btn.booked {
+            cursor: not-allowed;
+            background-color: var(--bg-primary);
+            color: var(--text-muted);
+            text-decoration: line-through;
+        }
+
+        .slot-btn.selected {
+            border-color: var(--brand-primary);
+            background-color: var(--brand-primary);
+            color: var(--brand-btn-text);
+        }
+
+        .summary-list {
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+        }
+
+        .summary-row:last-child {
+            border-bottom: none;
+        }
+
+        .summary-row .label {
+            font-size: var(--text-base-sm);
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .summary-row .label i {
+            width: 14px;
+            text-align: center;
+        }
+
+        .summary-row .value {
+            font-size: var(--text-base);
+            font-weight: var(--weight-semibold);
+            color: var(--text-primary);
+        }
+
+        .wizard-footer {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .wizard-footer.end {
+            justify-content: flex-end;
+        }
+
+        /* Tabs Menu (reused for: dashboard timeframe switch) */
         :root {
             --tabs-dur: 250ms;
             --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -807,29 +1312,6 @@
                 opacity: 1;
                 transform: translateY(0);
             }
-        }
-
-        /* Student Picker Bar */
-        .student-picker {
-            background-color: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: var(--card-shadow);
-            position: sticky;
-            top: 64px;
-            z-index: 50;
-        }
-
-        .student-picker-label {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
 
         /* Custom Searchable Dropdown */
@@ -1214,7 +1696,7 @@
         .form-group input,
         .form-group select,
         .form-group textarea,
-        .student-picker .dropdown-trigger {
+        .form-group .dropdown-trigger {
             transition: border-color 150ms ease-out;
             will-change: transform;
         }
@@ -1222,7 +1704,7 @@
         .form-group.is-error input,
         .form-group.is-error select,
         .form-group.is-error textarea,
-        .student-picker.is-error .dropdown-trigger {
+        .form-group.is-error .dropdown-trigger {
             border-color: var(--accent-danger) !important;
             transition: border-color var(--revert-dur) ease-out;
         }
@@ -1230,7 +1712,7 @@
         .form-group.is-shaking input,
         .form-group.is-shaking select,
         .form-group.is-shaking textarea,
-        .student-picker.is-shaking .dropdown-trigger {
+        .form-group.is-shaking .dropdown-trigger {
             animation: t-input-shake calc(var(--shake-dur-a) * 2 + var(--shake-dur-b) * 2) linear;
         }
 
@@ -1249,8 +1731,7 @@
                 visibility 0s linear var(--revert-dur);
         }
 
-        .form-group.is-error .t-error-msg,
-        .student-picker.is-error .t-error-msg {
+        .form-group.is-error .t-error-msg {
             opacity: 1;
             visibility: visible;
             transition:
@@ -1270,7 +1751,7 @@
             .form-group input,
             .form-group select,
             .form-group textarea,
-            .student-picker .dropdown-trigger {
+            .form-group .dropdown-trigger {
                 animation: none !important;
                 transform: none !important;
             }
@@ -1745,18 +2226,25 @@
             color: var(--text-secondary);
         }
 
-        /* Footer */
-        .dashboard-footer {
+        /* Responsiveness */
+        .mobile-topbar {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
             background-color: var(--bg-secondary);
-            border-top: 1px solid var(--border-color);
-            padding: 20px;
-            text-align: center;
-            margin-top: auto;
-            font-size: 11px;
-            color: var(--text-muted);
+            position: sticky;
+            top: 0;
+            z-index: 60;
         }
 
-        /* Responsiveness */
+        .mobile-topbar .sidebar-header {
+            padding: 0;
+            border-bottom: none;
+        }
+
         @media (max-width: 900px) {
             .login-wrapper {
                 grid-template-columns: 1fr;
@@ -1784,39 +2272,24 @@
                 font-size: 13px;
             }
 
-            .staff-hero {
-                flex-direction: column;
-                align-items: flex-start;
-                padding: 16px;
-                gap: 12px;
-            }
-
-            .staff-badge {
+            .sidebar {
                 display: none;
             }
-        }
 
-        @media (max-width: 600px) {
-            .navbar {
-                padding: 10px 16px;
-            }
-
-            .nav-menu {
-                display: none;
+            .mobile-topbar {
+                display: flex;
             }
 
             .hamburger-btn {
                 display: flex;
             }
 
-            .btn-logout {
-                display: none;
+            .sticky-picker {
+                top: 48px;
             }
+        }
 
-            .staff-email {
-                display: none;
-            }
-
+        @media (max-width: 600px) {
             .dashboard-content {
                 padding: 20px 16px;
             }
@@ -2034,312 +2507,587 @@
 
     <!-- ADMIN PANEL -->
     <div id="admin-panel" class="admin-dashboard">
-        <!-- Navigation -->
-        <nav class="navbar">
-            <div class="nav-container">
-                <div class="nav-brand">
-                    <img src="../img/LITALK-Black.png" alt="LITALK Logo" class="logo-img">
-                    <span class="logo-text" style="display:none">LITALK</span>
-                    <span class="admin-badge-text">ADMIN</span>
-                </div>
-                <div class="nav-menu">
-                    <a href="index" class="nav-menu-item active">Dashboard</a>
-                    <a href="booking" class="nav-menu-item">Bookings</a>
-                </div>
-                <div class="nav-actions">
-                    <span id="admin-display-email" class="staff-email">loading...</span>
-                    <button class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Theme" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; margin-right: 8px;">
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <img src="../img/LITALK-Black.png" alt="LITALK Logo" class="logo-img theme-logo" style="height: 22px;">
+                <span class="admin-badge-text">ADMIN</span>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="sidebar-nav-heading">Menu</div>
+                <button class="sidebar-nav-item active" data-screen="dashboard" onclick="goScreen('dashboard')">
+                    <i class="fas fa-gauge-high"></i> <span>Dashboard</span>
+                </button>
+                <button class="sidebar-nav-item" data-screen="logs" onclick="goScreen('logs')">
+                    <i class="fas fa-book-open"></i> <span>บันทึกการเรียน</span>
+                </button>
+                <button class="sidebar-nav-item" data-screen="payments" onclick="goScreen('payments')">
+                    <i class="fas fa-money-bill-wave"></i> <span>บันทึกการชำระเงิน</span>
+                </button>
+                <button class="sidebar-nav-item" data-screen="create" onclick="goScreen('create')">
+                    <i class="fas fa-user-plus"></i> <span>สร้างบัญชีนักเรียน</span>
+                </button>
+                <button class="sidebar-nav-item" data-screen="files" onclick="goScreen('files')">
+                    <i class="fas fa-folder-open"></i> <span>ไฟล์นักเรียน</span>
+                </button>
+                <button class="sidebar-nav-item" data-screen="booking" onclick="goScreen('booking')">
+                    <i class="fas fa-calendar-check"></i> <span>จองเวลาเรียน</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="sidebar-footer-row">
+                    <span id="admin-display-email" class="sidebar-email">loading...</span>
+                    <button class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Theme" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;">
                         <div class="t-icon-swap" id="theme-icon-swap" data-state="light">
                             <span class="t-icon" data-icon="light"><i class="fas fa-sun"></i></span>
                             <span class="t-icon" data-icon="dark"><i class="fas fa-moon"></i></span>
                         </div>
                     </button>
-                    <button class="btn btn-secondary btn-logout" onclick="logout()" id="admin-logout-btn">
-                        <i class="fas fa-sign-out-alt"></i>
-                        <span>Logout</span>
-                    </button>
-                    <button class="hamburger-btn" onclick="openMobileMenu()" aria-label="Open Menu">
-                        <i class="fas fa-bars"></i>
-                    </button>
                 </div>
+                <button class="btn btn-secondary" onclick="logout()" id="admin-logout-btn" style="width: 100%;">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
             </div>
-        </nav>
+        </aside>
 
-        <main class="dashboard-content">
-            <!-- Staff Info Banner -->
-            <div class="staff-hero">
-                <div class="staff-info">
-                    <div class="staff-avatar"><i class="fas fa-user-shield"></i></div>
-                    <div>
-                        <h2>ยินดีต้อนรับเจ้าหน้าที่ LITALK</h2>
-                        <p>ลงชื่อเข้าใช้ด้วยบัญชี: <span id="admin-display-email-dash"
-                                style="font-weight: 500;">กำลังดึงข้อมูล...</span></p>
-                    </div>
+        <main class="app-main" data-main="true">
+            <!-- Mobile top bar (sidebar hidden below 900px) -->
+            <div class="mobile-topbar">
+                <div class="sidebar-header">
+                    <img src="../img/LITALK-Black.png" alt="LITALK Logo" class="logo-img theme-logo" style="height: 20px;">
+                    <span class="admin-badge-text">ADMIN</span>
                 </div>
-                <div class="staff-badge"><i class="fas fa-key"></i> Staff Authorized</div>
-            </div>
-
-            <!-- Tab Menu -->
-            <div class="tab-menu" role="tablist">
-                <span class="tab-menu-pill" aria-hidden="true"></span>
-                <button class="tab-btn" role="tab" aria-selected="true" onclick="switchTab('manage')" id="tab-btn-manage">
-                    <i class="fas fa-edit"></i> บันทึกข้อมูล
-                </button>
-                <button class="tab-btn" role="tab" aria-selected="false" onclick="switchTab('create')" id="tab-btn-create">
-                    <i class="fas fa-user-plus"></i> เพิ่มนักเรียน
-                </button>
-                <button class="tab-btn" role="tab" aria-selected="false" onclick="switchTab('files')" id="tab-btn-files">
-                    <i class="fas fa-folder-open"></i> ไฟล์นักเรียน
+                <button class="hamburger-btn" onclick="openMobileMenu()" aria-label="Open Menu">
+                    <i class="fas fa-bars"></i>
                 </button>
             </div>
 
-            <!-- TAB 1: MANAGE -->
-            <div id="tab-manage" class="tab-content active">
+            <div class="dashboard-content">
 
-                <!-- Student Picker (sticky top searchable dropdown) -->
-                <div class="student-picker form-group">
-                    <div class="student-picker-label">
-                        <i class="fas fa-search"></i> ค้นหาหรือเลือกนักเรียน
-                    </div>
-                    <div class="custom-dropdown" id="student-dropdown-container">
-                        <div class="dropdown-trigger" onclick="toggleDropdown(event)">
-                            <span id="selected-student-text">กำลังโหลดรายชื่อนักเรียน...</span>
-                            <div class="dropdown-actions">
-                                <i class="fas fa-times clear-btn" id="clear-student-btn" onclick="clearStudentSelection(event)" style="display: none;"></i>
-                                <i class="fas fa-chevron-down arrow-icon"></i>
-                            </div>
+                <!-- ============ DASHBOARD ============ -->
+                <div id="screen-dashboard" class="tab-content active" data-screen-panel="dashboard">
+                    <div class="dashboard-top">
+                        <div class="screen-header">
+                            <h1>Dashboard</h1>
+                            <p><i class="fas fa-calendar-day" style="margin-right: 6px;"></i><span id="dash-today-label">-</span></p>
                         </div>
-                        <div class="dropdown-menu-panel" id="dropdown-menu-panel">
-                            <div class="dropdown-search-box">
-                                <i class="fas fa-search search-icon"></i>
-                                <div class="t-clear" id="student-search-clear-wrapper">
-                                    <input type="text" id="student-search-input" placeholder="" onkeyup="filterStudentList()" onclick="event.stopPropagation()">
-                                    <div class="t-clear-mirror" aria-hidden="true"></div>
-                                    <div class="t-clear-placeholder" aria-hidden="true">พิมพ์เพื่อค้นหาชื่อหรือรหัส...</div>
-                                    <div class="t-clear-glow" aria-hidden="true"></div>
-                                    <button class="t-clear-btn" type="button" aria-label="Clear"><i class="fas fa-times-circle"></i></button>
+                        <div class="tab-menu" role="tablist" id="timeframe-tabs">
+                            <span class="tab-menu-pill" aria-hidden="true"></span>
+                            <button class="tab-btn" role="tab" aria-selected="true" onclick="setDashboardTimeframe('today', event)">วันนี้</button>
+                            <button class="tab-btn" role="tab" aria-selected="false" onclick="setDashboardTimeframe('week', event)">สัปดาห์นี้</button>
+                            <button class="tab-btn" role="tab" aria-selected="false" onclick="setDashboardTimeframe('month', event)">เดือนนี้</button>
+                        </div>
+                    </div>
+
+                    <div class="stat-grid" id="dash-stat-grid"></div>
+
+                    <div class="dashboard-grid">
+                        <div class="admin-card">
+                            <div class="card-title-bar">
+                                <span class="card-icon"><i class="fas fa-clock"></i></span>
+                                <div>
+                                    <h3>คลาสวันนี้</h3>
+                                    <p>ตารางเรียนและสถานะการบันทึกผล</p>
                                 </div>
                             </div>
-                            <div class="dropdown-options-list" id="dropdown-options-list">
-                                <!-- Options populated by JS -->
-                            </div>
-                        </div>
-                    </div>
-                    <input type="hidden" id="select-student" value="">
-                </div>
-
-                <!-- Student Indicator -->
-                <div class="student-indicator empty" id="student-indicator">
-                    <i class="fas fa-info-circle"></i>
-                    <span>กรุณาเลือกนักเรียนจากรายชื่อด้านบนก่อนเริ่มบันทึกข้อมูล</span>
-                </div>
-
-                <!-- Form Cards -->
-                <div class="form-cards-wrapper disabled" id="form-cards-wrapper">
-                    <!-- Card: Study Log -->
-                    <div class="admin-card">
-                        <div class="card-title-bar">
-                            <span class="card-icon"><i class="fas fa-book"></i></span>
-                            <div>
-                                <h3>บันทึกการเรียน</h3>
-                                <p>กรอก Feedback และแนบลิงก์วิดีโอหลังจบคลาส</p>
-                            </div>
+                            <div class="row-list" id="dash-today-classes"></div>
                         </div>
 
-                        <div class="form-body">
-                            <div class="form-group">
-                                <div class="textarea-tabs"
-                                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                    <label style="margin-bottom: 0;"><i class="far fa-comment-alt"></i> Feedback
-                                        การเรียนการสอน</label>
-                                    <div class="tab-menu-mini">
-                                        <span class="tab-menu-pill-mini"></span>
-                                        <button type="button" class="tab-btn-mini active"
-                                            onclick="switchTextareaTab('write')"
-                                            id="feedback-write-tab">เขียน</button>
-                                        <button type="button" class="tab-btn-mini"
-                                            onclick="switchTextareaTab('preview')"
-                                            id="feedback-preview-tab">ดูตัวอย่าง</button>
+                        <div class="dashboard-col">
+                            <div class="admin-card">
+                                <div class="card-title-bar">
+                                    <span class="card-icon"><i class="fas fa-bolt"></i></span>
+                                    <div>
+                                        <h3>ทางลัด</h3>
+                                        <p>เริ่มงานที่ทำบ่อย</p>
                                     </div>
                                 </div>
-                                <textarea id="log-feedback" rows="4"
-                                    placeholder="ระบุเนื้อหาที่สอน ผลการพัฒนา และจุดที่ต้องเน้นย้ำ..."></textarea>
-                                <div id="log-feedback-preview" class="markdown-preview timeline-feedback"
-                                    style="display: none;"></div>
-                                <div class="form-hint">รองรับ Markdown เช่น **ตัวหนา**, *เอียง*, - รายการ</div>
-                            </div>
-                            <div class="form-group">
-                                <label><i class="fas fa-video"></i> ลิงก์วิดีโอย้อนหลัง</label>
-                                <input type="url" id="log-video" placeholder="https://drive.google.com/...">
-                                <div class="form-hint">Zoom, Google Drive, Dropbox หรือลิงก์อื่น (ไม่บังคับ)</div>
+                                <div class="form-body">
+                                    <button class="btn btn-primary" style="width: 100%;" onclick="goScreen('logs')"><i class="fas fa-book-open"></i> บันทึกการเรียน</button>
+                                    <button class="btn btn-secondary" style="width: 100%;" onclick="goScreen('payments')"><i class="fas fa-money-bill-wave"></i> บันทึกการชำระเงิน</button>
+                                    <button class="btn btn-secondary" style="width: 100%;" onclick="goScreen('create')"><i class="fas fa-user-plus"></i> สร้างบัญชีนักเรียน</button>
+                                    <button class="btn btn-secondary" style="width: 100%;" onclick="goScreen('booking')"><i class="fas fa-calendar-check"></i> จองเวลาเรียน</button>
+                                </div>
                             </div>
 
-                            <button class="btn btn-primary btn-submit" onclick="submitAdminAction('addStudyLog')"
-                                id="submit-study-log-btn">
-                                <i class="fas fa-save"></i> บันทึกการเรียน
-                            </button>
+                            <div class="admin-card" id="dash-alerts-card">
+                                <div class="card-title-bar">
+                                    <span class="card-icon"><i class="fas fa-bell"></i></span>
+                                    <div>
+                                        <h3>การแจ้งเตือน</h3>
+                                        <p>รายการที่ต้องติดตาม</p>
+                                    </div>
+                                </div>
+                                <div class="row-list" id="dash-alerts"></div>
+                            </div>
+
+                            <div class="admin-card">
+                                <div class="card-title-bar">
+                                    <span class="card-icon"><i class="fas fa-money-bill-wave"></i></span>
+                                    <div>
+                                        <h3>การชำระเงินล่าสุด</h3>
+                                        <p id="dash-revenue-sub">-</p>
+                                    </div>
+                                </div>
+                                <div class="row-list tight" id="dash-recent-payments"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============ CLASS LOGS ============ -->
+                <div id="screen-logs" class="tab-content" data-screen-panel="logs">
+                    <div class="screen-header">
+                        <h1>บันทึกการเรียน</h1>
+                        <p>บันทึกฟีดแบ็กและวิดีโอย้อนหลังหลังจบคลาส</p>
+                    </div>
+
+                    <div class="sticky-picker">
+                        <div class="form-group" id="logs-picker-group">
+                            <div class="custom-dropdown" id="logs-dropdown-container">
+                                <div class="dropdown-trigger" onclick="toggleDropdown(event, 'logs')">
+                                    <span id="logs-selected-student-text">กำลังโหลดรายชื่อนักเรียน...</span>
+                                    <div class="dropdown-actions">
+                                        <i class="fas fa-times clear-btn" id="logs-clear-student-btn" onclick="clearStudentSelection(event, 'logs')" style="display: none;"></i>
+                                        <i class="fas fa-chevron-down arrow-icon"></i>
+                                    </div>
+                                </div>
+                                <div class="dropdown-menu-panel">
+                                    <div class="dropdown-search-box">
+                                        <i class="fas fa-search search-icon"></i>
+                                        <div class="t-clear" id="logs-student-search-clear-wrapper">
+                                            <input type="text" id="logs-student-search-input" placeholder="" onkeyup="filterStudentList('logs')" onclick="event.stopPropagation()">
+                                            <div class="t-clear-mirror" aria-hidden="true"></div>
+                                            <div class="t-clear-placeholder" aria-hidden="true">พิมพ์เพื่อค้นหาชื่อหรือรหัส...</div>
+                                            <div class="t-clear-glow" aria-hidden="true"></div>
+                                            <button class="t-clear-btn" type="button" aria-label="Clear"><i class="fas fa-times-circle"></i></button>
+                                        </div>
+                                    </div>
+                                    <div class="dropdown-options-list" id="logs-dropdown-options-list"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="student-indicator empty" id="logs-student-indicator">
+                            <i class="fas fa-info-circle"></i>
+                            <span>กรุณาเลือกนักเรียนจากรายชื่อด้านบนก่อนเริ่มบันทึกข้อมูล</span>
                         </div>
                     </div>
 
-                    <!-- Card: Payment -->
+                    <div class="form-cards-wrapper disabled" id="logs-form-wrapper">
+                        <div class="admin-card">
+                            <div class="card-title-bar">
+                                <span class="card-icon"><i class="fas fa-book"></i></span>
+                                <div>
+                                    <h3>ข้อมูลคลาสเรียน</h3>
+                                    <p>กรอกข้อมูลหลังจบคลาส ระบบจะบันทึกลงชีตอัตโนมัติ</p>
+                                </div>
+                            </div>
+
+                            <div class="form-body">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                    <div class="form-group">
+                                        <label><i class="fas fa-calendar-day"></i> วันที่เรียน</label>
+                                        <input type="date" id="log-date">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-video"></i> ลิงก์วิดีโอย้อนหลัง</label>
+                                        <input type="url" id="log-video" placeholder="https://drive.google.com/...">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <div class="textarea-tabs"
+                                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                        <label style="margin-bottom: 0;"><i class="far fa-comment-alt"></i> ฟีดแบ็กการเรียน</label>
+                                        <div class="tab-menu-mini">
+                                            <span class="tab-menu-pill-mini"></span>
+                                            <button type="button" class="tab-btn-mini active"
+                                                onclick="switchTextareaTab('write')"
+                                                id="feedback-write-tab">เขียน</button>
+                                            <button type="button" class="tab-btn-mini"
+                                                onclick="switchTextareaTab('preview')"
+                                                id="feedback-preview-tab">ดูตัวอย่าง</button>
+                                        </div>
+                                    </div>
+                                    <textarea id="log-feedback" rows="5"
+                                        placeholder="วันนี้เรียนเรื่อง..."></textarea>
+                                    <div id="log-feedback-preview" class="markdown-preview timeline-feedback"
+                                        style="display: none;"></div>
+                                    <div class="form-hint">สรุปสิ่งที่เรียน จุดแข็ง และสิ่งที่ควรฝึกเพิ่ม · รองรับ Markdown เช่น **ตัวหนา**, *เอียง*, - รายการ</div>
+                                </div>
+
+                                <div style="display: flex; justify-content: flex-end;">
+                                    <button class="btn btn-primary" onclick="submitAdminAction('addStudyLog')"
+                                        id="submit-study-log-btn">
+                                        <i class="fas fa-save"></i> บันทึกข้อมูลการเรียน
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============ PAYMENTS ============ -->
+                <div id="screen-payments" class="tab-content" data-screen-panel="payments">
+                    <div class="screen-header">
+                        <h1>บันทึกการชำระเงิน</h1>
+                        <p>บันทึกยอดชำระและหลักฐานการโอนของนักเรียน</p>
+                    </div>
+
+                    <div class="sticky-picker">
+                        <div class="form-group" id="payments-picker-group">
+                            <div class="custom-dropdown" id="payments-dropdown-container">
+                                <div class="dropdown-trigger" onclick="toggleDropdown(event, 'payments')">
+                                    <span id="payments-selected-student-text">กำลังโหลดรายชื่อนักเรียน...</span>
+                                    <div class="dropdown-actions">
+                                        <i class="fas fa-times clear-btn" id="payments-clear-student-btn" onclick="clearStudentSelection(event, 'payments')" style="display: none;"></i>
+                                        <i class="fas fa-chevron-down arrow-icon"></i>
+                                    </div>
+                                </div>
+                                <div class="dropdown-menu-panel">
+                                    <div class="dropdown-search-box">
+                                        <i class="fas fa-search search-icon"></i>
+                                        <div class="t-clear" id="payments-student-search-clear-wrapper">
+                                            <input type="text" id="payments-student-search-input" placeholder="" onkeyup="filterStudentList('payments')" onclick="event.stopPropagation()">
+                                            <div class="t-clear-mirror" aria-hidden="true"></div>
+                                            <div class="t-clear-placeholder" aria-hidden="true">พิมพ์เพื่อค้นหาชื่อหรือรหัส...</div>
+                                            <div class="t-clear-glow" aria-hidden="true"></div>
+                                            <button class="t-clear-btn" type="button" aria-label="Clear"><i class="fas fa-times-circle"></i></button>
+                                        </div>
+                                    </div>
+                                    <div class="dropdown-options-list" id="payments-dropdown-options-list"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="student-indicator empty" id="payments-student-indicator">
+                            <i class="fas fa-info-circle"></i>
+                            <span>กรุณาเลือกนักเรียนจากรายชื่อด้านบนก่อนเริ่มบันทึกข้อมูล</span>
+                        </div>
+                    </div>
+
+                    <div class="form-cards-wrapper disabled" id="payments-form-wrapper">
+                        <div class="admin-card">
+                            <div class="card-title-bar">
+                                <span class="card-icon"><i class="fas fa-receipt"></i></span>
+                                <div>
+                                    <h3>ข้อมูลการชำระเงิน</h3>
+                                    <p>ระบบจะบันทึกลงชีตการเงินอัตโนมัติ</p>
+                                </div>
+                            </div>
+
+                            <div class="form-body">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                    <div class="form-group">
+                                        <label><i class="fas fa-baht-sign"></i> จำนวนเงิน (บาท)</label>
+                                        <input type="number" id="pay-total" placeholder="0.00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-credit-card"></i> วิธีชำระเงิน</label>
+                                        <div class="select-wrapper">
+                                            <select id="pay-method">
+                                                <option value="โอนผ่านบัญชีธนาคาร">โอนผ่านบัญชีธนาคาร</option>
+                                                <option value="พร้อมเพย์">พร้อมเพย์</option>
+                                                <option value="เงินสด">เงินสด</option>
+                                                <option value="บัตรเครดิต">บัตรเครดิต</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-calendar-day"></i> วันที่ชำระ</label>
+                                        <input type="date" id="pay-date">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-link"></i> ลิงก์หลักฐานการโอน</label>
+                                        <input type="url" id="pay-proof" placeholder="https://drive.google.com/...">
+                                    </div>
+                                </div>
+
+                                <div style="display: flex; justify-content: flex-end;">
+                                    <button class="btn btn-primary" onclick="submitAdminAction('addPayment')"
+                                        id="submit-payment-btn">
+                                        <i class="fas fa-save"></i> บันทึกการชำระเงิน
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============ CREATE STUDENT ============ -->
+                <div id="screen-create" class="tab-content" data-screen-panel="create">
+                    <div class="screen-header">
+                        <h1>สร้างบัญชีนักเรียน</h1>
+                        <p>เพิ่มนักเรียนใหม่เข้าสู่ระบบ</p>
+                    </div>
+
                     <div class="admin-card">
                         <div class="card-title-bar">
-                            <span class="card-icon"><i class="fas fa-receipt"></i></span>
+                            <span class="card-icon"><i class="fas fa-user"></i></span>
                             <div>
-                                <h3>บันทึกการชำระเงิน</h3>
-                                <p>บันทึกค่าเรียนและแนบหลักฐานสลิป</p>
+                                <h3>ข้อมูลนักเรียนใหม่</h3>
+                                <p>กรอกข้อมูลให้ครบทุกช่อง</p>
+                            </div>
+                        </div>
+
+                        <div class="info-notice">
+                            <i class="fas fa-info-circle"></i>
+                            <div>
+                                <strong>ระบบดำเนินการอัตโนมัติ:</strong>
+                                สร้างบัญชี Auth0 พร้อมรหัสผ่านชั่วคราว และเพิ่มแถวข้อมูลนักเรียนลงชีตให้ทันทีหลังกดบันทึก
                             </div>
                         </div>
 
                         <div class="form-body">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div class="form-group">
+                                    <label><i class="fas fa-user"></i> ชื่อ-นามสกุล</label>
+                                    <input type="text" id="new-name" placeholder="เช่น สมชาย ดีเด่น">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-tag"></i> ชื่อเล่น</label>
+                                    <input type="text" id="new-nickname" placeholder="เช่น น้องมายด์">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-envelope"></i> อีเมล</label>
+                                    <input type="email" id="new-email" placeholder="student@email.com">
+                                    <div class="form-hint">อีเมลติดต่อจริง (ระบบจะสร้างอีเมลผู้ใช้งานสำหรับเข้าสู่ระบบแยกต่างหากให้อัตโนมัติ)</div>
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-phone"></i> เบอร์โทรศัพท์</label>
+                                    <input type="tel" id="new-phone" placeholder="08x-xxx-xxxx">
+                                </div>
+                            </div>
                             <div class="form-group">
-                                <label><i class="fas fa-wallet"></i> ช่องทางชำระเงิน</label>
+                                <label><i class="fas fa-graduation-cap"></i> คอร์สเรียน</label>
                                 <div class="select-wrapper">
-                                    <select id="pay-method">
-                                        <option value="โอนผ่านบัญชีธนาคาร">โอนผ่านบัญชีธนาคาร</option>
-                                        <option value="บัตรเครดิต">บัตรเครดิต</option>
-                                        <option value="เงินสด">เงินสด</option>
+                                    <select id="new-course">
+                                        <option value="">-- เลือกคอร์สเรียน --</option>
+                                        <option value="General English A2">General English A2</option>
+                                        <option value="General English B2">General English B2</option>
+                                        <option value="Business English B1">Business English B1</option>
+                                        <option value="IELTS Prep">IELTS Prep</option>
+                                        <option value="Kids English Vol.1">Kids English Vol.1</option>
+                                        <option value="Kids English Vol.2">Kids English Vol.2</option>
+                                        <option value="Kids English Vol.3">Kids English Vol.3</option>
+                                        <option value="Conversation A2">Conversation A2</option>
                                     </select>
                                 </div>
                             </div>
-                            <div class="form-group">
-                                <label><i class="fas fa-money-bill-wave"></i> ยอดชำระ (บาท)</label>
-                                <input type="text" id="pay-total" placeholder="เช่น 5000">
-                            </div>
-                            <div class="form-group">
-                                <label><i class="fas fa-file-invoice"></i> ลิงก์หลักฐาน / สลิป</label>
-                                <input type="url" id="pay-proof" placeholder="https://drive.google.com/...">
-                                <div class="form-hint">URL ของรูปสลิปหรือหลักฐานการชำระเงิน (ไม่บังคับ)</div>
-                            </div>
 
-                            <button class="btn btn-primary btn-submit" onclick="submitAdminAction('addPayment')"
-                                id="submit-payment-btn">
-                                <i class="fas fa-save"></i> บันทึกการชำระเงิน
-                            </button>
+                            <div style="display: flex; justify-content: flex-end;">
+                                <button class="btn btn-primary" onclick="submitAdminAction('createStudent')"
+                                    id="submit-create-student-btn">
+                                    <i class="fas fa-user-plus"></i> สร้างบัญชีนักเรียน
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- TAB 2: CREATE -->
-            <div id="tab-create" class="tab-content">
-                <div class="admin-card">
-                    <div class="card-title-bar">
-                        <span class="card-icon"><i class="fas fa-user-plus"></i></span>
-                        <div>
-                            <h3>เพิ่มนักเรียนใหม่</h3>
-                            <p>สร้างบัญชีในระบบพร้อมรหัสอัตโนมัติ</p>
-                        </div>
+                <!-- ============ STUDENT FILES ============ -->
+                <div id="screen-files" class="tab-content" data-screen-panel="files">
+                    <div class="screen-header">
+                        <h1>ไฟล์นักเรียน</h1>
+                        <p>แนบการบ้าน ใบงาน หรือเอกสารอื่น ๆ ให้กับนักเรียน</p>
                     </div>
 
-                    <div class="info-notice">
-                        <i class="fas fa-info-circle"></i>
-                        <div>
-                            <strong>ระบบดำเนินการอัตโนมัติ:</strong>
-                            กรอกชื่อและคอร์สเรียน ระบบจะสร้างบัญชี Auth0 ให้โดยอัตโนมัติ สุ่มรหัสเริ่มต้น และเพิ่มเข้า
-                            Google Sheets พร้อมแจ้งรายละเอียดให้ทราบ
-                        </div>
-                    </div>
-
-                    <div class="form-body">
-                        <div class="form-group">
-                            <label><i class="fas fa-user"></i> ชื่อ-นามสกุล</label>
-                            <input type="text" id="new-name" placeholder="เช่น สมชาย ดีเด่น">
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-graduation-cap"></i> คอร์สเรียน</label>
-                            <input type="text" id="new-course" placeholder="เช่น English Business Vol.1">
-                        </div>
-
-                        <button class="btn btn-primary btn-submit" onclick="submitAdminAction('createStudent')"
-                            id="submit-create-student-btn">
-                            <i class="fas fa-plus"></i> เพิ่มนักเรียน
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB 3: STUDENT FILES -->
-            <div id="tab-files" class="tab-content">
-                <div class="admin-card">
-                    <div class="card-title-bar">
-                        <span class="card-icon"><i class="fas fa-upload"></i></span>
-                        <div>
-                            <h3>อัปโหลดไฟล์นักเรียน</h3>
-                            <p>แนบการบ้าน ใบงาน หรือเอกสารอื่น ๆ ให้กับนักเรียน</p>
-                        </div>
-                    </div>
-
-                    <div class="form-body">
-                        <div class="form-group">
-                            <label><i class="fas fa-user"></i> นักเรียน</label>
-                            <div class="select-wrapper">
-                                <select id="files-student-select" onchange="onFilesStudentSelected()">
-                                    <option value="">-- กรุณาเลือกนักเรียน --</option>
-                                </select>
+                    <div class="sticky-picker">
+                        <div class="form-group" id="files-picker-group">
+                            <div class="custom-dropdown" id="files-dropdown-container">
+                                <div class="dropdown-trigger" onclick="toggleDropdown(event, 'files')">
+                                    <span id="files-selected-student-text">กำลังโหลดรายชื่อนักเรียน...</span>
+                                    <div class="dropdown-actions">
+                                        <i class="fas fa-times clear-btn" id="files-clear-student-btn" onclick="clearStudentSelection(event, 'files')" style="display: none;"></i>
+                                        <i class="fas fa-chevron-down arrow-icon"></i>
+                                    </div>
+                                </div>
+                                <div class="dropdown-menu-panel">
+                                    <div class="dropdown-search-box">
+                                        <i class="fas fa-search search-icon"></i>
+                                        <div class="t-clear" id="files-student-search-clear-wrapper">
+                                            <input type="text" id="files-student-search-input" placeholder="" onkeyup="filterStudentList('files')" onclick="event.stopPropagation()">
+                                            <div class="t-clear-mirror" aria-hidden="true"></div>
+                                            <div class="t-clear-placeholder" aria-hidden="true">พิมพ์เพื่อค้นหาชื่อหรือรหัส...</div>
+                                            <div class="t-clear-glow" aria-hidden="true"></div>
+                                            <button class="t-clear-btn" type="button" aria-label="Clear"><i class="fas fa-times-circle"></i></button>
+                                        </div>
+                                    </div>
+                                    <div class="dropdown-options-list" id="files-dropdown-options-list"></div>
+                                </div>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-tag"></i> ประเภทเอกสาร</label>
-                            <div class="select-wrapper">
-                                <select id="files-doc-type">
-                                    <option value="Homework">การบ้าน (Homework)</option>
-                                    <option value="Worksheet">ใบงาน (Worksheet)</option>
-                                    <option value="Exam">ข้อสอบ (Exam)</option>
-                                    <option value="Attendance">การเข้าเรียน (Attendance)</option>
-                                    <option value="Certificate">ใบรับรอง (Certificate)</option>
-                                    <option value="Portfolio">ผลงาน (Portfolio)</option>
-                                    <option value="Other">อื่น ๆ (Other)</option>
-                                </select>
+                        <div class="student-indicator empty" id="files-student-indicator">
+                            <i class="fas fa-info-circle"></i>
+                            <span>กรุณาเลือกนักเรียนจากรายชื่อด้านบนก่อนเริ่มบันทึกข้อมูล</span>
+                        </div>
+                    </div>
+
+                    <div class="admin-card">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-upload"></i></span>
+                            <div>
+                                <h3>อัปโหลดไฟล์นักเรียน</h3>
+                                <p>ไฟล์จะถูกเก็บในระบบคลาวด์และบันทึกประวัติการใช้งานอัตโนมัติ</p>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-paperclip"></i> ไฟล์</label>
-                            <input type="file" id="files-upload-input">
-                            <div class="form-hint">รองรับไฟล์ PDF, รูปภาพ และเอกสารทั่วไป</div>
+
+                        <div class="info-notice">
+                            <i class="fas fa-info-circle"></i>
+                            <div id="files-role-note-text">กำลังตรวจสอบสิทธิ์การใช้งาน...</div>
                         </div>
 
-                        <button class="btn btn-primary btn-submit" onclick="uploadStudentFile()" id="submit-file-upload-btn">
-                            <i class="fas fa-upload"></i> อัปโหลดไฟล์
-                        </button>
-                    </div>
-                </div>
+                        <div class="form-body">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div class="form-group">
+                                    <label><i class="fas fa-tag"></i> ประเภทเอกสาร</label>
+                                    <div class="select-wrapper">
+                                        <select id="files-doc-type">
+                                            <option value="Homework">การบ้าน (Homework)</option>
+                                            <option value="Worksheet">ใบงาน (Worksheet)</option>
+                                            <option value="Exam">ข้อสอบ (Exam)</option>
+                                            <option value="Attendance">การเข้าเรียน (Attendance)</option>
+                                            <option value="Certificate">ใบรับรอง (Certificate)</option>
+                                            <option value="Portfolio">ผลงาน (Portfolio)</option>
+                                            <option value="Other">อื่น ๆ (Other)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-paperclip"></i> ไฟล์</label>
+                                    <input type="file" id="files-upload-input">
+                                    <div class="form-hint">รองรับไฟล์ PDF, รูปภาพ และเอกสารทั่วไป</div>
+                                </div>
+                            </div>
 
-                <div class="admin-card">
-                    <div class="card-title-bar">
-                        <span class="card-icon"><i class="fas fa-folder-open"></i></span>
-                        <div>
-                            <h3>ไฟล์ทั้งหมด</h3>
-                            <p>รายการไฟล์ของนักเรียนที่เลือก</p>
+                            <div style="display: flex; justify-content: flex-end;">
+                                <button class="btn btn-primary" onclick="uploadStudentFile()" id="submit-file-upload-btn">
+                                    <i class="fas fa-upload"></i> อัปโหลดไฟล์
+                                </button>
+                            </div>
                         </div>
                     </div>
-                    <div class="form-body">
+
+                    <div class="admin-card" style="margin-top: 18px;">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-folder-open"></i></span>
+                            <div>
+                                <h3>ไฟล์ทั้งหมด</h3>
+                                <p>รายการไฟล์ของนักเรียนที่เลือก</p>
+                            </div>
+                        </div>
                         <div id="files-list-empty" class="form-hint">กรุณาเลือกนักเรียนเพื่อดูรายการไฟล์</div>
-                        <div id="files-list-container" style="display: none; overflow-x: auto;">
-                            <table style="width: 100%; border-collapse: collapse;">
-                                <thead>
-                                    <tr style="text-align: left; border-bottom: 1px solid var(--border-color);">
-                                        <th style="padding: 8px;">ไฟล์</th>
-                                        <th style="padding: 8px;">ประเภท</th>
-                                        <th style="padding: 8px;">อัปโหลดเมื่อ</th>
-                                        <th style="padding: 8px;">โดย</th>
-                                        <th style="padding: 8px;"></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="files-list-tbody"></tbody>
-                            </table>
+                        <div id="files-list-container" class="files-table" style="display: none;">
+                            <div class="files-table-head">
+                                <span>ไฟล์</span><span>ประเภท</span><span>อัปโหลดเมื่อ</span><span>โดย</span><span></span>
+                            </div>
+                            <div id="files-list-rows"></div>
                         </div>
                     </div>
                 </div>
+
+                <!-- ============ BOOKING ============ -->
+                <div id="screen-booking" class="tab-content" data-screen-panel="booking">
+                    <div class="booking-wrap">
+                        <div class="screen-header">
+                            <h1>จองเวลาเรียน</h1>
+                            <p>จองคลาสให้นักเรียนทีละขั้นตอน</p>
+                        </div>
+
+                        <div class="step-indicator" id="booking-step-indicator"></div>
+
+                        <!-- Step 1: student -->
+                        <div class="admin-card" id="booking-step-1">
+                            <div class="card-title-bar">
+                                <span class="card-icon"><i class="fas fa-user"></i></span>
+                                <div>
+                                    <h3>เลือกนักเรียน</h3>
+                                    <p>ค้นหาด้วยชื่อหรือรหัสนักเรียน</p>
+                                </div>
+                            </div>
+                            <div class="form-body">
+                                <div class="form-group" id="booking-picker-group">
+                                    <div class="custom-dropdown" id="booking-dropdown-container">
+                                        <div class="dropdown-trigger" onclick="toggleDropdown(event, 'booking')">
+                                            <span id="booking-selected-student-text">กำลังโหลดรายชื่อนักเรียน...</span>
+                                            <div class="dropdown-actions">
+                                                <i class="fas fa-times clear-btn" id="booking-clear-student-btn" onclick="clearStudentSelection(event, 'booking')" style="display: none;"></i>
+                                                <i class="fas fa-chevron-down arrow-icon"></i>
+                                            </div>
+                                        </div>
+                                        <div class="dropdown-menu-panel">
+                                            <div class="dropdown-search-box">
+                                                <i class="fas fa-search search-icon"></i>
+                                                <div class="t-clear" id="booking-student-search-clear-wrapper">
+                                                    <input type="text" id="booking-student-search-input" placeholder="" onkeyup="filterStudentList('booking')" onclick="event.stopPropagation()">
+                                                    <div class="t-clear-mirror" aria-hidden="true"></div>
+                                                    <div class="t-clear-placeholder" aria-hidden="true">พิมพ์เพื่อค้นหาชื่อหรือรหัส...</div>
+                                                    <div class="t-clear-glow" aria-hidden="true"></div>
+                                                    <button class="t-clear-btn" type="button" aria-label="Clear"><i class="fas fa-times-circle"></i></button>
+                                                </div>
+                                            </div>
+                                            <div class="dropdown-options-list" id="booking-dropdown-options-list"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="student-indicator empty" id="booking-student-indicator">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span>กรุณาเลือกนักเรียนก่อนไปขั้นตอนถัดไป</span>
+                                </div>
+                                <div class="wizard-footer end">
+                                    <button class="btn btn-primary" id="booking-next-1" onclick="bookingNext()" disabled>ถัดไป <i class="fas fa-arrow-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: date + slot -->
+                        <div class="admin-card" id="booking-step-2" style="display: none;">
+                            <div class="card-title-bar">
+                                <span class="card-icon"><i class="fas fa-calendar-day"></i></span>
+                                <div>
+                                    <h3>เลือกวันและเวลา</h3>
+                                    <p>ระบบจะตรวจสอบคิวว่างอีกครั้งเมื่อกดยืนยัน</p>
+                                </div>
+                            </div>
+                            <div class="form-body">
+                                <div class="form-group">
+                                    <label><i class="fas fa-calendar-day"></i> วันที่เรียน</label>
+                                    <input type="date" id="booking-date" onchange="onBookingDateChange()">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-clock"></i> ช่วงเวลาเรียน</label>
+                                    <div class="slot-grid" id="booking-slot-grid"></div>
+                                </div>
+                                <div class="wizard-footer">
+                                    <button class="btn btn-secondary" onclick="bookingBack()"><i class="fas fa-arrow-left"></i> ย้อนกลับ</button>
+                                    <button class="btn btn-primary" id="booking-next-2" onclick="bookingNext()" disabled>ถัดไป <i class="fas fa-arrow-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 3: confirm -->
+                        <div class="admin-card" id="booking-step-3" style="display: none;">
+                            <div class="card-title-bar">
+                                <span class="card-icon"><i class="fas fa-check-circle"></i></span>
+                                <div>
+                                    <h3>ยืนยันการจอง</h3>
+                                    <p>ตรวจสอบข้อมูลก่อนกดยืนยัน</p>
+                                </div>
+                            </div>
+                            <div class="form-body">
+                                <div class="summary-list" id="booking-summary"></div>
+                                <div class="wizard-footer">
+                                    <button class="btn btn-secondary" onclick="bookingBack()"><i class="fas fa-arrow-left"></i> ย้อนกลับ</button>
+                                    <button class="btn btn-primary" onclick="submitBooking()"><i class="fas fa-calendar-check"></i> ยืนยันการจอง</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </main>
-
-        <!-- Footer -->
-        <footer class="dashboard-footer">
-            <div class="footer-content">
-                &copy; 2026 LITALK Education. All rights reserved.
-            </div>
-        </footer>
     </div>
 
     <!-- Modals -->
@@ -2377,8 +3125,12 @@
                 </div>
             </div>
             <nav class="mobile-menu-nav">
-                <a href="index" class="active"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
-                <a href="booking"><i class="fas fa-calendar-alt"></i> Bookings</a>
+                <a href="javascript:void(0)" class="active" data-screen="dashboard" onclick="goScreen('dashboard')"><i class="fas fa-gauge-high"></i> Dashboard</a>
+                <a href="javascript:void(0)" data-screen="logs" onclick="goScreen('logs')"><i class="fas fa-book-open"></i> บันทึกการเรียน</a>
+                <a href="javascript:void(0)" data-screen="payments" onclick="goScreen('payments')"><i class="fas fa-money-bill-wave"></i> บันทึกการชำระเงิน</a>
+                <a href="javascript:void(0)" data-screen="create" onclick="goScreen('create')"><i class="fas fa-user-plus"></i> สร้างบัญชีนักเรียน</a>
+                <a href="javascript:void(0)" data-screen="files" onclick="goScreen('files')"><i class="fas fa-folder-open"></i> ไฟล์นักเรียน</a>
+                <a href="javascript:void(0)" data-screen="booking" onclick="goScreen('booking')"><i class="fas fa-calendar-check"></i> จองเวลาเรียน</a>
             </nav>
             <div class="mobile-menu-footer">
                 <div class="mobile-menu-email" id="mobile-menu-email">loading...</div>
@@ -2440,20 +3192,29 @@
             return auth0Client.getTokenSilently({ authorizationParams: { audience: filesApiAudience } });
         }
 
-        window.onload = async () => {
+        let appInitialized = false;
+        function initApp() {
+            if (appInitialized) return;
+            appInitialized = true;
+            const todayStr = new Date().toISOString().slice(0, 10);
+            document.getElementById('log-date').value = todayStr;
+            document.getElementById('pay-date').value = todayStr;
+            const minBookingDate = new Date();
+            minBookingDate.setDate(minBookingDate.getDate() + 1);
+            document.getElementById('booking-date').min = minBookingDate.toISOString().split('T')[0];
+            goScreen('dashboard');
+            loadStudentList();
+        }
 
+        window.onload = async () => {
 
             // Check if user has an active cookie session to immediately render authenticated UI
             const cachedEmail = getCookie('litalk_admin_email');
             if (cachedEmail) {
                 currentAdminEmail = cachedEmail;
                 document.getElementById('admin-display-email').innerText = currentAdminEmail;
-                const dashEmail = document.getElementById('admin-display-email-dash');
-                if (dashEmail) dashEmail.innerText = currentAdminEmail;
-                document.getElementById('admin-panel').style.display = 'block';
-                initTabPill();
-
-                loadStudentList();
+                document.getElementById('admin-panel').style.display = 'flex';
+                initApp();
             }
 
             if (location.search.includes("state=") && (location.search.includes("code=") || location.search.includes("error="))) {
@@ -2470,18 +3231,10 @@
                 setCookie('litalk_admin_email', currentAdminEmail, 7);
 
                 document.getElementById('admin-display-email').innerText = currentAdminEmail;
-                const dashEmail = document.getElementById('admin-display-email-dash');
-                if (dashEmail) dashEmail.innerText = currentAdminEmail;
 
-                document.getElementById('admin-panel').style.display = 'block';
+                document.getElementById('admin-panel').style.display = 'flex';
                 document.getElementById('login-section').style.display = 'none';
-                initTabPill();
-
-
-                // If list wasn't loaded because cookie wasn't present initially
-                if (!cachedEmail) {
-                    loadStudentList();
-                }
+                initApp();
             } else {
                 // If not authenticated and we aren't handling a callback, clear cookie and redirect/show login
                 if (!location.search.includes("state=")) {
@@ -2585,23 +3338,153 @@
             setTimeout(() => modal.classList.remove('is-closing'), closeMs);
         }
 
-        // Core Functions
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            
-            const tabButtons = document.querySelectorAll('.tab-btn');
-            tabButtons.forEach(btn => {
-                const isSelected = btn.id === 'tab-btn-' + tabName;
-                btn.setAttribute('aria-selected', isSelected ? 'true' : 'false');
-                if (isSelected) {
-                    moveTabPillTo(btn, true);
-                }
+        // ===== Screen router (sidebar SPA) =====
+        let currentScreen = 'dashboard';
+
+        function goScreen(screen) {
+            currentScreen = screen;
+
+            document.querySelectorAll('.tab-content[data-screen-panel]').forEach(el => el.classList.remove('active'));
+            const panel = document.getElementById('screen-' + screen);
+            if (panel) panel.classList.add('active');
+
+            document.querySelectorAll('.sidebar-nav-item').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-screen') === screen);
+            });
+            document.querySelectorAll('.mobile-menu-nav a').forEach(a => {
+                a.classList.toggle('active', a.getAttribute('data-screen') === screen);
             });
 
-            document.getElementById('tab-' + tabName).classList.add('active');
+            const main = document.querySelector('[data-main]');
+            if (main) main.scrollTop = 0;
+
+            if (screen === 'dashboard') {
+                renderDashboard();
+                requestAnimationFrame(() => moveTabPillTo(activeTab(), false));
+            }
+            if (screen === 'logs') {
+                requestAnimationFrame(updateMiniTabPill);
+            }
+            if (screen === 'files') {
+                syncPickerText('files');
+                loadFilesForSelectedStudent();
+            }
+            if (screen === 'booking') {
+                renderBookingStep();
+            }
+
+            closeMobileMenuIfOpen();
         }
 
-        // Tabs sliding orchestration
+        function closeMobileMenuIfOpen() {
+            const menu = document.getElementById('mobile-menu-overlay');
+            if (menu && menu.classList.contains('active')) closeMobileMenu();
+        }
+
+        // ===== Dashboard (placeholder data until a real aggregation
+        // endpoint exists in the GAS backend -- see README/GAS notes) =====
+        const DASH_STATS_BY_TIMEFRAME = {
+            today: { classes: '5', booked: '4', revenue: '฿7,700', sub: 'จาก 2 รายการวันนี้' },
+            week: { classes: '28', booked: '22', revenue: '฿46,400', sub: 'จาก 14 รายการสัปดาห์นี้' },
+            month: { classes: '112', booked: '96', revenue: '฿186,300', sub: 'จาก 58 รายการเดือนนี้' }
+        };
+        const DASH_TODAY_CLASSES = [
+            { time: '09:00', name: 'น้องมายด์ (พิมพ์ชนก)', course: 'Kids English Vol.3', done: true },
+            { time: '11:00', name: 'ปวีณา ศรีสุข', course: 'Business English B1', done: true },
+            { time: '14:00', name: 'น้องเจได (ภูมิ)', course: 'Kids English Vol.2', done: false },
+            { time: '16:00', name: 'สมชาย ดีเด่น', course: 'General English A2', done: false }
+        ];
+        const DASH_ALERTS = [
+            { icon: 'fas fa-triangle-exclamation', danger: true, text: 'สมชาย ดีเด่น ค้างชำระค่าเรียนรอบเดือนนี้', actionLabel: 'บันทึกการชำระเงิน', studentName: 'สมชาย ดีเด่น', screen: 'payments' },
+            { icon: 'fas fa-triangle-exclamation', danger: true, text: 'ธนกร วงศ์สวัสดิ์ ค้างชำระค่าเรียนรอบเดือนนี้', actionLabel: 'บันทึกการชำระเงิน', studentName: 'ธนกร วงศ์สวัสดิ์', screen: 'payments' },
+            { icon: 'far fa-sticky-note', danger: false, text: 'คลาสของ น้องเจได (ภูมิ) เมื่อวานยังไม่มีบันทึกการเรียน', actionLabel: 'บันทึกการเรียน', studentName: 'น้องเจได (ภูมิ)', screen: 'logs' }
+        ];
+        const DASH_RECENT_PAYMENTS = [
+            { name: 'ปวีณา ศรีสุข', method: 'โอนผ่านบัญชีธนาคาร', date: '2 ก.ค.', amount: '฿4,500' },
+            { name: 'อรทัย จันทร์เพ็ญ', method: 'พร้อมเพย์', date: '1 ก.ค.', amount: '฿3,200' },
+            { name: 'กิตติพงษ์ แก้วใส', method: 'เงินสด', date: '30 มิ.ย.', amount: '฿2,800' },
+            { name: 'ศิริพร ทองดี', method: 'พร้อมเพย์', date: '29 มิ.ย.', amount: '฿2,000' }
+        ];
+        let dashboardTimeframe = 'today';
+
+        function setDashboardTimeframe(id, evt) {
+            dashboardTimeframe = id;
+            document.querySelectorAll('#timeframe-tabs .tab-btn').forEach(btn => {
+                const isSelected = btn === evt.currentTarget;
+                btn.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+                if (isSelected) moveTabPillTo(btn, true);
+            });
+            renderDashboard();
+        }
+
+        function renderDashboard() {
+            document.getElementById('dash-today-label').textContent =
+                new Date().toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+            const stats = DASH_STATS_BY_TIMEFRAME[dashboardTimeframe];
+            const statCards = [
+                { label: 'คลาสเรียน', icon: 'fas fa-chalkboard-teacher', value: stats.classes, sub: 'คลาสที่สอนในช่วงนี้' },
+                { label: 'การจองล่วงหน้า', icon: 'fas fa-calendar-check', value: stats.booked, sub: 'คลาสที่จองไว้แล้ว' },
+                { label: 'รายรับ', icon: 'fas fa-money-bill-wave', value: stats.revenue, sub: stats.sub },
+                { label: 'ค้างชำระ', icon: 'fas fa-triangle-exclamation', value: String(DASH_ALERTS.filter(a => a.danger).length), sub: 'นักเรียนที่ต้องติดตาม' }
+            ];
+            document.getElementById('dash-stat-grid').innerHTML = statCards.map(c => `
+                <div class="stat-card">
+                    <div class="stat-card-top"><span class="stat-card-label">${c.label}</span><i class="${c.icon}"></i></div>
+                    <div class="stat-card-value">${c.value}</div>
+                    <div class="stat-card-sub">${c.sub}</div>
+                </div>`).join('');
+
+            document.getElementById('dash-today-classes').innerHTML = DASH_TODAY_CLASSES.map(row => `
+                <div class="class-row">
+                    <div class="class-time">${row.time}</div>
+                    <div class="class-info"><div class="name">${escapeHtml(row.name)}</div><div class="course">${escapeHtml(row.course)}</div></div>
+                    <span class="class-status ${row.done ? 'done' : 'pending'}"><i class="${row.done ? 'fas fa-check-circle' : 'far fa-clock'}"></i> ${row.done ? 'บันทึกแล้ว' : 'รอบันทึกผล'}</span>
+                    <button class="class-log-btn" onclick="goToStudentAndScreen('${escapeJs(row.name)}', 'logs')"><i class="fas fa-pen"></i> บันทึกผล</button>
+                </div>`).join('');
+
+            document.getElementById('dash-alerts-card').style.display = DASH_ALERTS.length ? '' : 'none';
+            document.getElementById('dash-alerts').innerHTML = DASH_ALERTS.map(a => `
+                <div class="alert-row">
+                    <i class="${a.icon}" style="color: ${a.danger ? 'var(--accent-danger)' : 'var(--text-muted)'};"></i>
+                    <div style="flex: 1; min-width: 0;">
+                        <div class="alert-text">${escapeHtml(a.text)}</div>
+                        <button class="alert-action" onclick="goToStudentAndScreen('${escapeJs(a.studentName)}', '${a.screen}')">${a.actionLabel} <i class="fas fa-arrow-right" style="font-size: 10px;"></i></button>
+                    </div>
+                </div>`).join('');
+
+            document.getElementById('dash-revenue-sub').textContent = 'รวม ' + stats.revenue;
+            document.getElementById('dash-recent-payments').innerHTML = DASH_RECENT_PAYMENTS.map(p => `
+                <div class="payment-row">
+                    <div class="payment-info"><div class="name">${escapeHtml(p.name)}</div><div class="meta">${escapeHtml(p.method)} · ${p.date}</div></div>
+                    <div class="amount">${p.amount}</div>
+                </div>`).join('');
+        }
+
+        // Best-effort deep link: if the (placeholder) dashboard row's student
+        // name matches a real loaded student, pre-select them; otherwise just
+        // navigate. Once real dashboard data is wired this always matches.
+        function goToStudentAndScreen(studentName, screen) {
+            const match = allStudentsData.find(s => s.name === studentName);
+            if (match) {
+                selectedStudentId = match.id;
+                updateSharedStudentIndicators();
+                ['logs', 'payments', 'files'].forEach(syncPickerText);
+            }
+            goScreen(screen);
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = String(str);
+            return div.innerHTML;
+        }
+
+        function escapeJs(str) {
+            return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        }
+
+        // Tabs sliding orchestration (reused for the dashboard timeframe switch)
         function moveTabPillTo(tab, animate) {
             const tabMenu = document.querySelector(".tab-menu");
             if (!tabMenu) return;
@@ -2628,13 +3511,6 @@
             return activeBtn || tabMenu.querySelector(".tab-btn");
         }
 
-        function initTabPill() {
-            const tab = activeTab();
-            if (tab) {
-                requestAnimationFrame(() => moveTabPillTo(tab, false));
-            }
-        }
-
         window.addEventListener("resize", () => {
             const tab = activeTab();
             if (tab) moveTabPillTo(tab, false);
@@ -2646,28 +3522,193 @@
             try {
                 const response = await fetch(`${gasAppUrl}?action=getAllStudents`, { method: 'GET', redirect: 'follow' });
                 const result = await response.json();
-                const textElement = document.getElementById('selected-student-text');
 
                 if (result.status === 'success' && result.data.length > 0) {
                     allStudentsData = result.data;
-                    renderStudentSelect(allStudentsData);
-                    renderFilesStudentSelect();
-
-                    const selectedValue = document.getElementById('select-student').value;
-                    if (!selectedValue) {
-                        textElement.innerText = '-- กรุณาเลือกนักเรียน --';
-                    } else {
-                        const student = allStudentsData.find(s => s.id === selectedValue);
-                        if (student) {
-                            textElement.innerText = `[${student.id}] ${student.name}`;
-                        }
-                    }
                 } else {
-                    textElement.innerText = '-- ยังไม่มีรายชื่อนักเรียนในระบบ --';
+                    allStudentsData = [];
                 }
             } catch (error) {
                 console.error('Error:', error);
-                document.getElementById('selected-student-text').innerText = 'โหลดข้อมูลล้มเหลว ตรวจสอบ URL ของ GAS';
+                allStudentsData = [];
+            }
+
+            PICKER_PREFIXES.forEach(prefix => {
+                renderStudentSelect(prefix, allStudentsData);
+                syncPickerText(prefix);
+            });
+        }
+
+        // ===== Shared searchable student dropdown =====
+        // Logs / Payments / Files share one selection (selectedStudentId);
+        // Booking keeps its own (selectedBookingStudentId). Each screen has
+        // its own DOM instance (prefix-scoped ids) so more than one can exist
+        // in the document at once even though only one is visible.
+        const PICKER_PREFIXES = ['logs', 'payments', 'files', 'booking'];
+        const PICKER_TARGETS = { logs: 'shared', payments: 'shared', files: 'shared', booking: 'booking' };
+
+        let selectedStudentId = '';
+        let selectedBookingStudentId = '';
+
+        function pickerTargetId(prefix) {
+            return PICKER_TARGETS[prefix] === 'booking' ? selectedBookingStudentId : selectedStudentId;
+        }
+
+        function renderStudentSelect(prefix, students) {
+            const listContainer = document.getElementById(prefix + '-dropdown-options-list');
+            if (!listContainer) return;
+            listContainer.innerHTML = '';
+
+            if (students.length === 0) {
+                listContainer.innerHTML = '<div class="dropdown-no-results">ไม่พบรายชื่อนักเรียน</div>';
+                return;
+            }
+
+            const selectedValue = pickerTargetId(prefix);
+            students.forEach(student => {
+                const optionEl = document.createElement('div');
+                optionEl.className = 'dropdown-option' + (student.id === selectedValue ? ' selected' : '');
+                optionEl.innerHTML = `<i class="far fa-user"></i> <span>[${escapeHtml(student.id)}] ${escapeHtml(student.name)}</span>`;
+                optionEl.onclick = () => selectDropdownOption(prefix, student.id, student.name);
+                listContainer.appendChild(optionEl);
+            });
+        }
+
+        function filterStudentList(prefix) {
+            const input = document.getElementById(prefix + '-student-search-input');
+            if (!input) return;
+            const query = input.value.toLowerCase();
+            const filtered = allStudentsData.filter(student =>
+                student.name.toLowerCase().includes(query) ||
+                student.id.toLowerCase().includes(query)
+            );
+            renderStudentSelect(prefix, filtered);
+        }
+
+        function syncPickerText(prefix) {
+            const textEl = document.getElementById(prefix + '-selected-student-text');
+            if (!textEl) return;
+            const clearBtn = document.getElementById(prefix + '-clear-student-btn');
+            const id = pickerTargetId(prefix);
+
+            if (!id) {
+                textEl.innerText = allStudentsData.length ? '-- ค้นหาหรือเลือกนักเรียน --' : '-- ยังไม่มีรายชื่อนักเรียนในระบบ --';
+                if (clearBtn) clearBtn.style.display = 'none';
+                return;
+            }
+            const student = allStudentsData.find(s => s.id === id);
+            if (student) {
+                textEl.innerText = `[${student.id}] ${student.name}`;
+                if (clearBtn) clearBtn.style.display = 'block';
+            }
+        }
+
+        // Custom dropdown interactions
+        function toggleDropdown(e, prefix) {
+            if (e) e.stopPropagation();
+            const container = document.getElementById(prefix + '-dropdown-container');
+            if (!container) return;
+
+            if (container.classList.contains('active')) {
+                closeDropdownByPrefix(prefix);
+                return;
+            }
+            document.querySelectorAll('.custom-dropdown.active').forEach(c => {
+                if (c !== container) closeDropdownByPrefix(c.id.replace('-dropdown-container', ''));
+            });
+
+            container.classList.remove('is-closing');
+            container.classList.add('active');
+            const searchInput = document.getElementById(prefix + '-student-search-input');
+            if (searchInput) searchInput.value = '';
+            renderStudentSelect(prefix, allStudentsData);
+            if (searchInput) searchInput.focus();
+        }
+
+        function closeDropdownByPrefix(prefix) {
+            const container = document.getElementById(prefix + '-dropdown-container');
+            if (container && container.classList.contains('active')) {
+                const closeMs = parseFloat(
+                    getComputedStyle(document.documentElement).getPropertyValue("--dropdown-close-dur")
+                ) || 150;
+                container.classList.remove('active');
+                container.classList.add('is-closing');
+                setTimeout(() => container.classList.remove('is-closing'), closeMs);
+            }
+        }
+
+        function selectDropdownOption(prefix, studentId, studentName) {
+            const target = PICKER_TARGETS[prefix];
+            if (target === 'booking') {
+                selectedBookingStudentId = studentId;
+            } else {
+                selectedStudentId = studentId;
+            }
+            PICKER_PREFIXES.filter(p => PICKER_TARGETS[p] === target).forEach(syncPickerText);
+            onStudentSelected(target);
+            closeDropdownByPrefix(prefix);
+        }
+
+        function clearStudentSelection(e, prefix) {
+            if (e) e.stopPropagation();
+            const target = PICKER_TARGETS[prefix];
+            if (target === 'booking') {
+                selectedBookingStudentId = '';
+            } else {
+                selectedStudentId = '';
+            }
+            PICKER_PREFIXES.filter(p => PICKER_TARGETS[p] === target).forEach(syncPickerText);
+            onStudentSelected(target);
+            closeDropdownByPrefix(prefix);
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            document.querySelectorAll('.custom-dropdown.active').forEach(container => {
+                if (!container.contains(e.target)) {
+                    closeDropdownByPrefix(container.id.replace('-dropdown-container', ''));
+                }
+            });
+        });
+
+        // Called whenever the shared (logs/payments/files) or booking
+        // student selection changes
+        function onStudentSelected(target) {
+            if (target === 'booking') {
+                updateBookingStudentIndicator();
+            } else {
+                updateSharedStudentIndicators();
+                if (currentScreen === 'files') loadFilesForSelectedStudent();
+            }
+        }
+
+        function updateSharedStudentIndicators() {
+            const student = allStudentsData.find(s => s.id === selectedStudentId) || null;
+
+            ['logs', 'payments'].forEach(prefix => {
+                const indicator = document.getElementById(prefix + '-student-indicator');
+                const wrapper = document.getElementById(prefix + '-form-wrapper');
+                if (!indicator) return;
+                if (student) {
+                    indicator.className = 'student-indicator selected';
+                    indicator.innerHTML = `<i class="fas fa-user-check"></i> <span>กำลังบันทึกให้: <strong>${escapeHtml(student.name)}</strong> (${escapeHtml(student.id)})</span>`;
+                    if (wrapper) wrapper.classList.remove('disabled');
+                } else {
+                    indicator.className = 'student-indicator empty';
+                    indicator.innerHTML = '<i class="fas fa-info-circle"></i> <span>กรุณาเลือกนักเรียนจากรายชื่อด้านบนก่อนเริ่มบันทึกข้อมูล</span>';
+                    if (wrapper) wrapper.classList.add('disabled');
+                }
+            });
+
+            const filesIndicator = document.getElementById('files-student-indicator');
+            if (filesIndicator) {
+                if (student) {
+                    filesIndicator.className = 'student-indicator selected';
+                    filesIndicator.innerHTML = `<i class="fas fa-user-check"></i> <span>กำลังจัดการไฟล์ของ: <strong>${escapeHtml(student.name)}</strong> (${escapeHtml(student.id)})</span>`;
+                } else {
+                    filesIndicator.className = 'student-indicator empty';
+                    filesIndicator.innerHTML = '<i class="fas fa-info-circle"></i> <span>กรุณาเลือกนักเรียนจากรายชื่อด้านบนก่อนเริ่มบันทึกข้อมูล</span>';
+                }
             }
         }
 
@@ -2687,34 +3728,30 @@
                 console.error('Error loading files API permissions:', error);
                 filesApiPermissions = [];
             }
+            updateFilesRoleNote();
             return filesApiPermissions;
         }
 
-        function renderFilesStudentSelect() {
-            const select = document.getElementById('files-student-select');
-            if (!select) return;
-            const currentValue = select.value;
-            select.innerHTML = '<option value="">-- กรุณาเลือกนักเรียน --</option>';
-            allStudentsData.forEach(student => {
-                const option = document.createElement('option');
-                option.value = student.id;
-                option.textContent = `[${student.id}] ${student.name}`;
-                select.appendChild(option);
-            });
-            if (currentValue) select.value = currentValue;
+        function updateFilesRoleNote() {
+            const el = document.getElementById('files-role-note-text');
+            if (!el || !filesApiPermissions) return;
+            el.textContent = filesApiPermissions.includes('files:delete')
+                ? 'สิทธิ์ปัจจุบัน: Admin — อัปโหลด ดาวน์โหลด และลบไฟล์ได้'
+                : 'สิทธิ์ปัจจุบัน: Teacher — อัปโหลดและดาวน์โหลดได้ แต่ลบไฟล์ไม่ได้';
         }
 
-        async function onFilesStudentSelected() {
-            const studentId = document.getElementById('files-student-select').value;
+        async function loadFilesForSelectedStudent() {
             const emptyEl = document.getElementById('files-list-empty');
             const containerEl = document.getElementById('files-list-container');
-            const tbody = document.getElementById('files-list-tbody');
+            const rowsEl = document.getElementById('files-list-rows');
 
-            if (!studentId) {
+            if (!filesApiPermissions) loadFilesPermissions();
+
+            if (!selectedStudentId) {
                 emptyEl.textContent = 'กรุณาเลือกนักเรียนเพื่อดูรายการไฟล์';
                 emptyEl.style.display = 'block';
                 containerEl.style.display = 'none';
-                tbody.innerHTML = '';
+                rowsEl.innerHTML = '';
                 return;
             }
 
@@ -2725,7 +3762,7 @@
             try {
                 const permissions = await loadFilesPermissions();
                 const token = await getFilesApiToken();
-                const response = await fetch(`${filesApiUrl}/students/${encodeURIComponent(studentId)}/files`, {
+                const response = await fetch(`${filesApiUrl}/students/${encodeURIComponent(selectedStudentId)}/files`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -2738,26 +3775,21 @@
                     return;
                 }
 
-                tbody.innerHTML = '';
                 const canDelete = permissions.includes('files:delete');
-                files.forEach(file => {
-                    const tr = document.createElement('tr');
-                    tr.style.borderBottom = '1px solid var(--border-color)';
-                    tr.innerHTML = `
-                        <td style="padding: 8px;">${file.filename}</td>
-                        <td style="padding: 8px;">${file.file_type}</td>
-                        <td style="padding: 8px;">${new Date(file.uploaded_at).toLocaleString('th-TH')}</td>
-                        <td style="padding: 8px;">${file.uploaded_by || '-'}</td>
-                        <td style="padding: 8px; white-space: nowrap;">
-                            <button class="btn btn-secondary" style="padding: 4px 10px;" onclick="downloadStudentFile(${file.id}, '${String(file.filename).replace(/'/g, "\\'")}')"><i class="fas fa-download"></i></button>
-                            ${canDelete ? `<button class="btn btn-danger" style="padding: 4px 10px; margin-left: 4px;" onclick="deleteStudentFile(${file.id})"><i class="fas fa-trash"></i></button>` : ''}
-                        </td>
-                    `;
-                    tbody.appendChild(tr);
-                });
+                rowsEl.innerHTML = files.map(file => `
+                    <div class="files-table-row">
+                        <span class="filename"><i class="fas fa-file-lines"></i>${escapeHtml(file.filename)}</span>
+                        <span class="file-type">${escapeHtml(file.file_type)}</span>
+                        <span class="uploaded-at">${escapeHtml(new Date(file.uploaded_at).toLocaleString('th-TH'))}</span>
+                        <span class="uploaded-by">${escapeHtml(file.uploaded_by || '-')}</span>
+                        <span class="file-actions">
+                            <button class="icon-btn" title="ดาวน์โหลด" onclick="downloadStudentFile(${file.id}, '${escapeJs(file.filename)}')"><i class="fas fa-download"></i></button>
+                            ${canDelete ? `<button class="icon-btn icon-btn-danger" title="ลบไฟล์" onclick="deleteStudentFile(${file.id})"><i class="fas fa-trash"></i></button>` : ''}
+                        </span>
+                    </div>`).join('');
 
                 emptyEl.style.display = 'none';
-                containerEl.style.display = 'block';
+                containerEl.style.display = 'flex';
             } catch (error) {
                 console.error('Error loading files:', error);
                 emptyEl.textContent = 'โหลดรายการไฟล์ล้มเหลว ตรวจสอบการตั้งค่า Worker API';
@@ -2767,13 +3799,12 @@
         }
 
         async function uploadStudentFile() {
-            const studentId = document.getElementById('files-student-select').value;
             const fileType = document.getElementById('files-doc-type').value;
             const fileInput = document.getElementById('files-upload-input');
             const file = fileInput.files[0];
 
-            if (!studentId) {
-                triggerFieldError('files-student-select', 'กรุณาเลือกนักเรียน');
+            if (!selectedStudentId) {
+                triggerFieldError('files-dropdown-container', 'กรุณาเลือกนักเรียนจากรายชื่อด้านบน');
                 return;
             }
             if (!file) {
@@ -2785,7 +3816,7 @@
             try {
                 const token = await getFilesApiToken();
                 const formData = new FormData();
-                formData.append('student_id', studentId);
+                formData.append('student_id', selectedStudentId);
                 formData.append('file_type', fileType);
                 formData.append('file', file);
 
@@ -2804,7 +3835,7 @@
 
                 fileInput.value = '';
                 showModal('อัปโหลดสำเร็จ', 'บันทึกไฟล์เรียบร้อยแล้ว', 'success');
-                onFilesStudentSelected();
+                loadFilesForSelectedStudent();
             } catch (error) {
                 hideLoading();
                 console.error('Error uploading file:', error);
@@ -2852,7 +3883,7 @@
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
                 showModal('ลบสำเร็จ', 'ลบไฟล์เรียบร้อยแล้ว', 'success');
-                onFilesStudentSelected();
+                loadFilesForSelectedStudent();
             } catch (error) {
                 hideLoading();
                 console.error('Error deleting file:', error);
@@ -2860,118 +3891,158 @@
             }
         }
 
-        function renderStudentSelect(students) {
-            const listContainer = document.getElementById('dropdown-options-list');
-            listContainer.innerHTML = '';
-            
-            if (students.length === 0) {
-                listContainer.innerHTML = '<div class="dropdown-no-results">ไม่พบรายชื่อนักเรียน</div>';
-                return;
-            }
+        // ===== Booking wizard (3 steps) =====
+        let bookingStep = 1;
+        let bookingDate = '';
+        let bookingSlot = null;
+        const BOOKING_SLOTS = ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '19:00'];
 
-            const selectedValue = document.getElementById('select-student').value;
-
-            students.forEach(student => {
-                const optionEl = document.createElement('div');
-                optionEl.className = 'dropdown-option';
-                if (student.id === selectedValue) {
-                    optionEl.classList.add('selected');
+        function updateBookingStudentIndicator() {
+            const student = allStudentsData.find(s => s.id === selectedBookingStudentId) || null;
+            const indicator = document.getElementById('booking-student-indicator');
+            if (indicator) {
+                if (student) {
+                    indicator.className = 'student-indicator selected';
+                    indicator.innerHTML = `<i class="fas fa-user-check"></i> <span>เลือกแล้ว: <strong>${escapeHtml(student.name)}</strong></span>`;
+                } else {
+                    indicator.className = 'student-indicator empty';
+                    indicator.innerHTML = '<i class="fas fa-info-circle"></i> <span>กรุณาเลือกนักเรียนก่อนไปขั้นตอนถัดไป</span>';
                 }
-                optionEl.innerHTML = `<i class="far fa-user"></i> <span>[${student.id}] ${student.name}</span>`;
-                optionEl.onclick = () => selectDropdownOption(student.id, student.name);
-                listContainer.appendChild(optionEl);
-            });
+            }
+            const next1 = document.getElementById('booking-next-1');
+            if (next1) next1.disabled = !student;
         }
 
-        function filterStudentList() {
-            const query = document.getElementById('student-search-input').value.toLowerCase();
-            const filtered = allStudentsData.filter(student =>
-                student.name.toLowerCase().includes(query) ||
-                student.id.toLowerCase().includes(query)
-            );
-            renderStudentSelect(filtered);
+        function renderBookingSteps() {
+            const defs = [{ n: 1, label: 'เลือกนักเรียน' }, { n: 2, label: 'เลือกวันเวลา' }, { n: 3, label: 'ยืนยัน' }];
+            document.getElementById('booking-step-indicator').innerHTML = defs.map(d => {
+                const done = bookingStep > d.n;
+                const active = bookingStep === d.n;
+                const circleContent = done ? '<i class="fas fa-check" style="font-size: 10px;"></i>' : String(d.n);
+                const line = d.n < 3 ? '<span class="step-line"></span>' : '';
+                return `<div class="step-item">
+                    <span class="step-circle ${(done || active) ? 'active' : ''}">${circleContent}</span>
+                    <span class="step-label ${active ? 'active' : ''}">${d.label}</span>
+                    ${line}
+                </div>`;
+            }).join('');
         }
 
-        // Custom dropdown interactions
-        function toggleDropdown(e) {
-            if (e) e.stopPropagation();
-            const container = document.getElementById('student-dropdown-container');
-            const isActive = container.classList.contains('active');
-            
-            if (isActive) {
-                closeDropdown();
-            } else {
-                container.classList.remove('is-closing');
-                container.classList.add('active');
-                document.getElementById('student-search-input').value = '';
-                renderStudentSelect(allStudentsData);
-                document.getElementById('student-search-input').focus();
+        function renderBookingStep() {
+            renderBookingSteps();
+            document.getElementById('booking-step-1').style.display = bookingStep === 1 ? '' : 'none';
+            document.getElementById('booking-step-2').style.display = bookingStep === 2 ? '' : 'none';
+            document.getElementById('booking-step-3').style.display = bookingStep === 3 ? '' : 'none';
+            if (bookingStep === 2) renderBookingSlots();
+            if (bookingStep === 3) renderBookingSummary();
+        }
+
+        function renderBookingSlots() {
+            const grid = document.getElementById('booking-slot-grid');
+            // Note: the GAS `createBooking` action checks the calendar for
+            // conflicts server-side and rejects overlapping slots; there is
+            // no read-only availability endpoint yet, so every slot renders
+            // as selectable and a taken slot surfaces as an error on submit.
+            grid.innerHTML = BOOKING_SLOTS.map(t => {
+                const h = Number(t.split(':')[0]);
+                const end = String(h + 1).padStart(2, '0') + ':00';
+                const selected = bookingSlot === t;
+                return `<button class="slot-btn ${selected ? 'selected' : ''}" onclick="pickBookingSlot('${t}')">${t} - ${end}</button>`;
+            }).join('');
+            updateBookingNext2();
+        }
+
+        function pickBookingSlot(t) {
+            bookingSlot = t;
+            renderBookingSlots();
+        }
+
+        function onBookingDateChange() {
+            bookingDate = document.getElementById('booking-date').value;
+            updateBookingNext2();
+        }
+
+        function updateBookingNext2() {
+            const btn = document.getElementById('booking-next-2');
+            if (btn) btn.disabled = !bookingDate || !bookingSlot;
+        }
+
+        function renderBookingSummary() {
+            const student = allStudentsData.find(s => s.id === selectedBookingStudentId) || null;
+            const dateText = bookingDate
+                ? new Date(bookingDate + 'T00:00:00').toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                : '-';
+            const slotText = bookingSlot ? bookingSlot + ' - ' + String(Number(bookingSlot.split(':')[0]) + 1).padStart(2, '0') + ':00 น.' : '-';
+            const rows = [
+                { icon: 'fas fa-user', label: 'นักเรียน', value: student ? student.name : '-' },
+                { icon: 'fas fa-calendar-day', label: 'วันที่เรียน', value: dateText },
+                { icon: 'fas fa-clock', label: 'เวลา', value: slotText }
+            ];
+            document.getElementById('booking-summary').innerHTML = rows.map(r => `
+                <div class="summary-row">
+                    <span class="label"><i class="${r.icon}"></i>${r.label}</span>
+                    <span class="value">${escapeHtml(r.value)}</span>
+                </div>`).join('');
+        }
+
+        function bookingNext() {
+            if (bookingStep === 1 && !selectedBookingStudentId) return;
+            if (bookingStep === 2 && (!bookingDate || !bookingSlot)) return;
+            bookingStep = Math.min(3, bookingStep + 1);
+            renderBookingStep();
+        }
+
+        function bookingBack() {
+            bookingStep = Math.max(1, bookingStep - 1);
+            renderBookingStep();
+        }
+
+        async function submitBooking() {
+            const student = allStudentsData.find(s => s.id === selectedBookingStudentId) || null;
+            if (!student || !bookingDate || !bookingSlot) return;
+
+            const payload = {
+                studentId: student.id,
+                studentName: student.name,
+                bookingDate: bookingDate,
+                bookingTime: bookingSlot,
+                notes: ''
+            };
+
+            showLoading();
+            try {
+                const response = await fetch(gasAppUrl, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'createBooking', adminEmail: currentAdminEmail || 'admin', payload: payload })
+                });
+
+                const result = await response.json();
+                hideLoading();
+
+                if (result.status === 'success') {
+                    showModal('จองเวลาเรียนสำเร็จ', result.message, 'success');
+                    resetBookingWizard();
+                } else {
+                    showModal('ไม่สามารถดำเนินการได้', result.message, 'error');
+                }
+            } catch (error) {
+                console.error(error);
+                hideLoading();
+                showModal('ข้อผิดพลาดการเชื่อมต่อ', 'ระบบตรวจพบความขัดข้องในการเชื่อมต่อฐานข้อมูล กรุณาตรวจสอบ Console Log', 'error');
             }
         }
 
-        function closeDropdown() {
-            const container = document.getElementById('student-dropdown-container');
-            if (container && container.classList.contains('active')) {
-                const closeMs = parseFloat(
-                    getComputedStyle(document.documentElement).getPropertyValue("--dropdown-close-dur")
-                ) || 150;
-                container.classList.remove('active');
-                container.classList.add('is-closing');
-                setTimeout(() => container.classList.remove('is-closing'), closeMs);
-            }
-        }
-
-        function selectDropdownOption(studentId, studentName) {
-            document.getElementById('select-student').value = studentId;
-            document.getElementById('selected-student-text').innerText = `[${studentId}] ${studentName}`;
-            document.getElementById('clear-student-btn').style.display = 'block';
-            onStudentSelected();
-            closeDropdown();
-        }
-
-        function clearStudentSelection(e) {
-            if (e) e.stopPropagation();
-            document.getElementById('select-student').value = '';
-            document.getElementById('selected-student-text').innerText = '-- กรุณาเลือกนักเรียน --';
-            document.getElementById('clear-student-btn').style.display = 'none';
-            onStudentSelected();
-            closeDropdown();
-        }
-
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function(e) {
-            const container = document.getElementById('student-dropdown-container');
-            if (container && !container.contains(e.target)) {
-                closeDropdown();
-            }
-        });
-
-        // Called when a student is selected from the dropdown
-        function onStudentSelected() {
-            const selectedId = document.getElementById('select-student').value;
-            const indicator = document.getElementById('student-indicator');
-            const formWrapper = document.getElementById('form-cards-wrapper');
-
-            if (selectedId) {
-                // Find student name
-                const student = allStudentsData.find(s => s.id === selectedId);
-                const studentName = student ? student.name : selectedId;
-
-                indicator.className = 'student-indicator selected';
-                indicator.innerHTML = `<i class="fas fa-user-check"></i> <span>กำลังบันทึกให้: <strong>${studentName}</strong> (${selectedId})</span>`;
-
-                formWrapper.classList.remove('disabled');
-            } else {
-                indicator.className = 'student-indicator empty';
-                indicator.innerHTML = '<i class="fas fa-info-circle"></i> <span>กรุณาเลือกนักเรียนจากรายชื่อด้านบนก่อนเริ่มบันทึกข้อมูล</span>';
-
-                formWrapper.classList.add('disabled');
-            }
-        }
-
-        // Legacy compatibility
-        function autoFillStudentId() {
-            onStudentSelected();
+        function resetBookingWizard() {
+            bookingStep = 1;
+            bookingDate = '';
+            bookingSlot = null;
+            selectedBookingStudentId = '';
+            document.getElementById('booking-date').value = '';
+            syncPickerText('booking');
+            updateBookingStudentIndicator();
+            renderBookingStep();
         }
 
         function triggerFieldError(fieldId, errorMessage) {
@@ -3037,36 +4108,46 @@
 
             // Validate Forms
             if (actionType === 'createStudent') {
-                payload = { name: document.getElementById('new-name').value, course: document.getElementById('new-course').value };
+                payload = {
+                    name: document.getElementById('new-name').value,
+                    nickname: document.getElementById('new-nickname').value,
+                    email: document.getElementById('new-email').value,
+                    phone: document.getElementById('new-phone').value,
+                    course: document.getElementById('new-course').value
+                };
                 if (!payload.name) {
                     triggerFieldError('new-name', 'กรุณากรอกชื่อและนามสกุล');
                     return;
                 }
                 if (!payload.course) {
-                    triggerFieldError('new-course', 'กรุณากรอกคอร์สเรียน');
+                    triggerFieldError('new-course', 'กรุณาเลือกคอร์สเรียน');
                     return;
                 }
             } else if (actionType === 'addStudyLog') {
-                const studentId = document.getElementById('select-student').value;
-                payload = { studentId: studentId, feedback: document.getElementById('log-feedback').value, video: document.getElementById('log-video').value };
+                payload = {
+                    studentId: selectedStudentId,
+                    date: document.getElementById('log-date').value,
+                    feedback: document.getElementById('log-feedback').value,
+                    video: document.getElementById('log-video').value
+                };
                 if (!payload.studentId) {
-                    triggerFieldError('student-dropdown-container', 'กรุณาเลือกนักเรียนจากรายชื่อด้านบน');
+                    triggerFieldError('logs-dropdown-container', 'กรุณาเลือกนักเรียนจากรายชื่อด้านบน');
                     return;
                 }
                 if (!payload.feedback) {
-                    triggerFieldError('log-feedback', 'กรุณากรอก Feedback การเรียนการสอน');
+                    triggerFieldError('log-feedback', 'กรุณากรอกฟีดแบ็กการเรียน');
                     return;
                 }
             } else if (actionType === 'addPayment') {
-                const studentId = document.getElementById('select-student').value;
                 payload = {
-                    studentId: studentId,
+                    studentId: selectedStudentId,
                     method: document.getElementById('pay-method').value,
                     total: document.getElementById('pay-total').value,
+                    date: document.getElementById('pay-date').value,
                     proof: document.getElementById('pay-proof').value
                 };
                 if (!payload.studentId) {
-                    triggerFieldError('student-dropdown-container', 'กรุณาเลือกนักเรียนจากรายชื่อด้านบน');
+                    triggerFieldError('payments-dropdown-container', 'กรุณาเลือกนักเรียนจากรายชื่อด้านบน');
                     return;
                 }
                 if (!payload.total) {
@@ -3095,8 +4176,10 @@
                     // เปิด Web Modal แจ้งเตือนความสำเร็จ
                     if (actionType === 'createStudent') {
                         showModal('สร้างบัญชีสำเร็จ', result.message, 'success');
-                        document.getElementById('new-name').value = '';
-                        document.getElementById('new-course').value = '';
+                        ['new-name', 'new-nickname', 'new-email', 'new-phone', 'new-course'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) el.value = '';
+                        });
                         loadStudentList();
                     } else {
                         showModal('บันทึกสำเร็จ', result.message, 'success');
@@ -3163,6 +4246,7 @@
             document.documentElement.setAttribute('data-theme', nextTheme);
             localStorage.setItem('theme', nextTheme);
             updateThemeToggleIcon(nextTheme);
+            updateThemeLogos(nextTheme);
         }
 
         function updateThemeToggleIcon(theme) {
@@ -3172,12 +4256,22 @@
             if (mobileSwap) mobileSwap.setAttribute('data-state', theme === 'dark' ? 'dark' : 'light');
         }
 
+        // The sidebar logo follows the manual theme toggle directly (not the
+        // OS prefers-color-scheme media query, which the shared .logo-img
+        // filter relies on and would otherwise drift out of sync with a
+        // manually-picked theme).
+        function updateThemeLogos(theme) {
+            const src = theme === 'dark' ? '../img/LITALK-White.png' : '../img/LITALK-Black.png';
+            document.querySelectorAll('.theme-logo').forEach(img => { img.src = src; });
+        }
+
         // Auto-load saved theme on load
         (function() {
             const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
             document.documentElement.setAttribute('data-theme', savedTheme);
             window.addEventListener('load', () => {
                 updateThemeToggleIcon(savedTheme);
+                updateThemeLogos(savedTheme);
                 updateMiniTabPill();
             });
             window.addEventListener('resize', () => {
@@ -3283,8 +4377,8 @@
                     phold.style.opacity = "0.9";
                     phold.style.filter = `blur(${blur}px)`;
 
-                    if (typeof filterStudentList === "function") {
-                        filterStudentList();
+                    if (typeof filterStudentList === "function" && wrap.id.endsWith('-student-search-clear-wrapper')) {
+                        filterStudentList(wrap.id.replace('-student-search-clear-wrapper', ''));
                     }
 
                     const t0 = performance.now();
