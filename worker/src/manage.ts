@@ -371,6 +371,19 @@ manage.post('/schedules/:id/cancel', requirePermission('data:write'), async (c) 
 
 // ===== Teacher visibility management (admin only) =====
 
+// The identities the Worker has actually seen (from the audit log), so the
+// admin can assign visibility to exactly the string a teacher's requests
+// carry. If the Auth0 email Action is not configured these are `auth0|...`
+// subs, not emails — assignments must then use the sub.
+manage.get('/staff-identities', requireAdmin, async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT user_email AS identity, MAX(created_at) AS lastSeen, COUNT(*) AS actions
+     FROM audit_logs WHERE user_email IS NOT NULL AND user_email != ''
+     GROUP BY user_email ORDER BY lastSeen DESC LIMIT 25`,
+  ).all();
+  return c.json(results ?? []);
+});
+
 manage.get('/teacher-assignments', requireAdmin, async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT teacher_email AS teacher, student_id AS studentId FROM teacher_students ORDER BY teacher_email, student_id`,
@@ -385,10 +398,14 @@ manage.get('/teacher-assignments', requireAdmin, async (c) => {
 });
 
 // Replaces a teacher's whole assignment set. An empty list removes the
-// restriction (the teacher goes back to seeing every student).
+// restriction (the teacher goes back to seeing every student). The key is
+// the identity the teacher's requests carry: their email when the Auth0
+// email Action is configured, otherwise their `auth0|...` sub.
 manage.put('/teacher-assignments/:teacher', requireAdmin, async (c) => {
   const teacher = decodeURIComponent(c.req.param('teacher') ?? '').trim().toLowerCase();
-  if (!teacher || !teacher.includes('@')) return c.json({ error: 'Invalid teacher email' }, 400);
+  if (teacher.length < 3 || /\s/.test(teacher) || (!teacher.includes('@') && !teacher.includes('|'))) {
+    return c.json({ error: 'Invalid teacher identity (expected an email or an auth0|... sub)' }, 400);
+  }
 
   const body = await c.req.json<{ studentIds?: string[] }>();
   const ids = Array.isArray(body.studentIds)

@@ -27,9 +27,17 @@ export async function verifyAuth(c: Context<AppBindings>, next: Next) {
       audience: c.env.AUTH0_AUDIENCE,
     });
 
+    // Identity resolution order: the namespaced claim added by the Auth0
+    // Action (README step 5) → a standard `email` claim if present → the
+    // Auth0 sub. Teacher-visibility rows are matched against this value, so
+    // when no email claim exists the admin must assign by the sub instead
+    // (the access screen lists the identities actually seen).
     const user: AuthUser = {
       sub: payload.sub as string,
-      email: (payload[c.env.AUTH0_EMAIL_CLAIM] as string | undefined) ?? (payload.sub as string),
+      email:
+        (payload[c.env.AUTH0_EMAIL_CLAIM] as string | undefined) ??
+        (payload.email as string | undefined) ??
+        (payload.sub as string),
       permissions: (payload.permissions as string[] | undefined) ?? [],
     };
     c.set('user', user);

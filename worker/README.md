@@ -39,9 +39,10 @@ access token instead:
    - `Teacher` → `files:read`, `files:write`, `data:read`, `data:write`
    Then assign the appropriate role to each staff user (**User Management →
    Users → [user] → Roles**).
-5. (Optional but recommended) Add an Auth0 Action (Login Flow) that copies
-   the user's email into a namespaced access-token claim, since access
-   tokens don't include `email` by default:
+5. (Strongly recommended — required for teacher-visibility rules keyed by
+   email) Add an Auth0 Action (Login Flow) that copies the user's email
+   into a namespaced access-token claim, since access tokens don't include
+   `email` by default:
    ```js
    exports.onExecutePostLogin = async (event, api) => {
      api.accessToken.setCustomClaim('https://admin.litalkeducation.com/email', event.user.email);
@@ -204,7 +205,8 @@ permissions scoped to this account.
 | POST   | `/schedules/:id/reject`  | admin          | Rejects with an optional reason                |
 | POST   | `/schedules/:id/cancel`  | `data:write`   | Teacher cancels own pending; admin any pending/approved |
 | GET    | `/teacher-assignments`   | admin          | Per-teacher visible-student lists              |
-| PUT    | `/teacher-assignments/:email` | admin     | Replaces a teacher's visible-student set (empty = unrestricted) |
+| PUT    | `/teacher-assignments/:identity` | admin  | Replaces a teacher's visible-student set (empty = unrestricted) |
+| GET    | `/staff-identities`      | admin          | Identities recently seen in the audit log (for assigning visibility) |
 | POST   | `/study-logs`            | `data:write`   | `{ studentId, date, feedback, video }` |
 | POST   | `/payments`              | `data:write`   | Manual payment record              |
 | POST   | `/bookings`              | `data:write`   | 409 if the date+time slot is taken |
@@ -235,13 +237,24 @@ permissions scoped to this account.
 
 ## Teacher visibility
 
-`teacher_students` maps a teacher's login email to the students they may
-see. A teacher with **no** rows sees everyone (default); once the admin
-assigns students, `/students`, `/student-check/:id`, the dashboard's
-per-student lists, and the create endpoints (`/study-logs`, `/payments`,
-`/bookings`, `/schedules`) are restricted to that set. `/earnings` also
-gains an `assigned` block (this month's payments from exactly those
-students) so a restricted teacher can verify their income.
+`teacher_students` maps a teacher's **request identity** to the students
+they may see. A teacher with **no** rows sees everyone (default); once the
+admin assigns students, `/students`, `/student-check/:id`, the dashboard's
+per-student lists, the file routes, and the create endpoints
+(`/study-logs`, `/payments`, `/bookings`, `/schedules`) are restricted to
+that set. `/earnings` also gains an `assigned` block (this month's payments
+from exactly those students) so a restricted teacher can verify their
+income.
+
+**Identity matching (important):** the Worker identifies each request by
+the namespaced email claim from the Auth0 Action in step 1.5, falling back
+to a standard `email` claim, then to the Auth0 `sub` (`auth0|...`). The
+assignment key must equal that identity, or the teacher silently keeps
+full visibility. If the Action is not configured, assign by the teacher's
+sub instead — `GET /staff-identities` (surfaced on the admin's access
+screen) lists the identities actually seen, and the access screen warns
+when the current token carries no email. Setting up the Action from step
+1.5 is strongly recommended so assignments can use plain emails.
 
 ## Scope / security notes
 

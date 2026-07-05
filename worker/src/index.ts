@@ -4,7 +4,12 @@ import type { AppBindings } from './types';
 import { verifyAuth, requirePermission } from './auth';
 import { DOCUMENT_TYPES, extname, insertFileWithUniqueName, logAudit, todayCode } from './db';
 import core, { bangkokToday } from './core';
-import manage, { activateSchedule, activateApprovedSchedulesForStudent } from './manage';
+import manage, {
+  activateSchedule,
+  activateApprovedSchedulesForStudent,
+  visibleStudentIds,
+  canSeeStudent,
+} from './manage';
 import { verifyStripeSignature } from './stripe';
 
 const app = new Hono<AppBindings>();
@@ -127,6 +132,8 @@ app.get('/me', (c) => c.json(c.get('user')));
 app.get('/students/:id/files', requirePermission('files:read'), async (c) => {
   const studentId = c.req.param('id');
   if (!studentId) return c.json({ error: 'Missing student id' }, 400);
+  const visible = await visibleStudentIds(c.env.DB, c.get('user'));
+  if (!canSeeStudent(visible, studentId)) return c.json({ error: 'Forbidden' }, 403);
   const { results } = await c.env.DB.prepare(
     `SELECT id, filename, file_type, uploaded_at, uploaded_by, size, mime_type
      FROM student_files WHERE student_id = ? AND deleted_at IS NULL ORDER BY uploaded_at DESC`,
@@ -152,6 +159,8 @@ app.post('/upload', requirePermission('files:write'), async (c) => {
   }
 
   const user = c.get('user');
+  const visible = await visibleStudentIds(c.env.DB, user);
+  if (!canSeeStudent(visible, studentId)) return c.json({ error: 'Forbidden' }, 403);
   const bytes = new Uint8Array(await file.arrayBuffer());
   const { id, filename, r2Key } = await insertFileWithUniqueName(c.env.DB, studentId, todayCode(), extname(file.name), {
     originalFilename: file.name,
@@ -178,6 +187,9 @@ app.get('/files/:fileId', requirePermission('files:read'), async (c) => {
 
   if (!row) return c.json({ error: 'Not found' }, 404);
 
+  const visible = await visibleStudentIds(c.env.DB, c.get('user'));
+  if (!canSeeStudent(visible, row.student_id)) return c.json({ error: 'Forbidden' }, 403);
+
   const object = await c.env.BUCKET.get(row.r2_key);
   if (!object) return c.json({ error: 'File missing in storage' }, 404);
 
@@ -199,6 +211,13 @@ app.patch('/files/:fileId', requirePermission('files:write'), async (c) => {
   if (!body.file_type || !DOCUMENT_TYPES.includes(body.file_type as (typeof DOCUMENT_TYPES)[number])) {
     return c.json({ error: 'Invalid file_type' }, 400);
   }
+
+  const fileRow = await c.env.DB.prepare(`SELECT student_id FROM student_files WHERE id = ? AND deleted_at IS NULL`)
+    .bind(fileId)
+    .first<{ student_id: string }>();
+  if (!fileRow) return c.json({ error: 'Not found' }, 404);
+  const visible = await visibleStudentIds(c.env.DB, c.get('user'));
+  if (!canSeeStudent(visible, fileRow.student_id)) return c.json({ error: 'Forbidden' }, 403);
 
   const result = await c.env.DB.prepare(`UPDATE student_files SET file_type = ? WHERE id = ? AND deleted_at IS NULL`)
     .bind(body.file_type, fileId)
