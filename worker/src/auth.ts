@@ -49,3 +49,14 @@ export function requirePermission(permission: string) {
     await next();
   };
 }
+
+// In the Auth0 setup (worker/README.md step 1) only the Admin role holds
+// `files:delete`, so it doubles as the admin marker for admin-only routes
+// without needing a new Auth0 permission rollout.
+export const ADMIN_PERMISSION = 'files:delete';
+
+export function isAdmin(user: AuthUser): boolean {
+  return user.permissions.includes(ADMIN_PERMISSION);
+}
+
+export const requireAdmin = requirePermission(ADMIN_PERMISSION);

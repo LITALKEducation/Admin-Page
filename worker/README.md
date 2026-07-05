@@ -194,8 +194,17 @@ permissions scoped to this account.
 | GET    | `/files/:fileId`         | `files:read`   | Streams the file from R2           |
 | PATCH  | `/files/:fileId`         | `files:write`  | Body: `{ "file_type": "..." }`     |
 | DELETE | `/files/:fileId`         | `files:delete` | Soft-deletes (D1) + deletes from R2 |
-| GET    | `/students`              | `data:read`    | All students (id, name, contact, course) |
+| GET    | `/students`              | `data:read`    | Non-deleted students, filtered by teacher visibility |
 | POST   | `/students`              | `data:write`   | Creates student (+ Auth0 login if configured) |
+| DELETE | `/students/:id`          | admin          | Soft-deletes the student in-app; Auth0 login untouched |
+| GET    | `/student-check/:id`     | `data:read`    | Check screen data: payment status, study days, logs, schedules |
+| POST   | `/schedules`             | `data:write`   | Teacher submits a monthly schedule (sessions + rate) |
+| GET    | `/schedules?status=`     | `data:read`    | Teachers see own submissions; admins see all |
+| POST   | `/schedules/:id/approve` | admin          | Approves + creates the parent's Stripe payment link |
+| POST   | `/schedules/:id/reject`  | admin          | Rejects with an optional reason                |
+| POST   | `/schedules/:id/cancel`  | `data:write`   | Teacher cancels own pending; admin any pending/approved |
+| GET    | `/teacher-assignments`   | admin          | Per-teacher visible-student lists              |
+| PUT    | `/teacher-assignments/:email` | admin     | Replaces a teacher's visible-student set (empty = unrestricted) |
 | POST   | `/study-logs`            | `data:write`   | `{ studentId, date, feedback, video }` |
 | POST   | `/payments`              | `data:write`   | Manual payment record              |
 | POST   | `/bookings`              | `data:write`   | 409 if the date+time slot is taken |
@@ -211,9 +220,38 @@ permissions scoped to this account.
 `file_type` must be one of: `Homework`, `Worksheet`, `Exam`, `Attendance`,
 `Certificate`, `Portfolio`, `Other`.
 
+## Monthly schedule lifecycle
+
+1. A teacher submits a month's sessions for a student (`POST /schedules`,
+   status `pending`). Total = rate per session × session count.
+2. An admin approves it. If Stripe is configured this also creates a payment
+   link (metadata carries `schedule_id`) that the admin forwards to the
+   parent; status becomes `approved`.
+3. A successful payment — the Stripe webhook for that link, any Stripe link
+   for the student, or a manual `POST /payments` record — activates the
+   schedule immediately: every session is inserted into `bookings`
+   (`INSERT OR IGNORE`, so already-taken slots are skipped) and the status
+   becomes `active`.
+
+## Teacher visibility
+
+`teacher_students` maps a teacher's login email to the students they may
+see. A teacher with **no** rows sees everyone (default); once the admin
+assigns students, `/students`, `/student-check/:id`, the dashboard's
+per-student lists, and the create endpoints (`/study-logs`, `/payments`,
+`/bookings`, `/schedules`) are restricted to that set. `/earnings` also
+gains an `assigned` block (this month's payments from exactly those
+students) so a restricted teacher can verify their income.
+
 ## Scope / security notes
 
 - Staff routes require an Auth0 access token with the listed permission.
+- "admin" in the table above means the `files:delete` permission, which only
+  the Admin role holds in the Auth0 setup from step 1 — it doubles as the
+  admin marker so no new Auth0 permission rollout is needed.
+- `DELETE /students/:id` soft-deletes (sets `deleted_at`) and cancels the
+  student's future bookings; study logs, payments, and files are kept, and
+  the student's Auth0 login account is deliberately **not** deleted.
 - `GET /portal/:studentId` is **public by student id**, mirroring the GAS
   endpoint it replaces (the student site "logs in" client-side only). It
   exposes the same data the old Sheet endpoint did: name, course, study
