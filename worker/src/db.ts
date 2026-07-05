@@ -70,6 +70,20 @@ export async function insertFileWithUniqueName(
   throw new Error(`Could not generate a unique filename for student ${studentId} after ${MAX_ATTEMPTS} attempts`);
 }
 
+// Upserts the staff directory row for a signed-in user (identity → display
+// name + admin flag), touching last_seen. Called from verifyAuth so names
+// stay current without a separate registration step.
+export async function recordStaff(db: D1Database, user: AuthUser): Promise<void> {
+  const isAdmin = user.permissions.includes('files:delete') ? 1 : 0;
+  await db
+    .prepare(
+      `INSERT INTO staff (identity, name, is_admin, last_seen) VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(identity) DO UPDATE SET name = excluded.name, is_admin = excluded.is_admin, last_seen = CURRENT_TIMESTAMP`,
+    )
+    .bind(user.email, user.name, isAdmin)
+    .run();
+}
+
 export async function logAudit(
   db: D1Database,
   user: AuthUser | null,

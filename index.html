@@ -2429,6 +2429,56 @@
         .timeline-feedback h4 {
             font-size: 1.0rem;
         }
+
+        /* Weekly teaching summary grid (dashboard) */
+        .week-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .week-day {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            min-width: 0;
+        }
+        .week-day-head {
+            background: var(--bg-tertiary);
+            padding: 6px 8px;
+            font-size: var(--text-sm);
+            font-weight: var(--weight-semibold);
+            display: flex;
+            justify-content: space-between;
+            gap: 4px;
+        }
+        .week-day-head span { color: var(--text-muted); font-weight: var(--weight-medium); }
+        .week-day-body { padding: 6px; display: flex; flex-direction: column; gap: 4px; min-height: 44px; }
+        .week-slot {
+            font-size: var(--text-xs);
+            background: var(--badge-bg);
+            color: var(--badge-text);
+            border-radius: var(--radius-sm);
+            padding: 3px 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .week-empty { font-size: var(--text-xs); color: var(--text-muted); text-align: center; }
+        @media (max-width: 700px) {
+            .week-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        /* Simple data table (bookings, finance transactions) */
+        .data-table { width: 100%; border-collapse: collapse; font-size: var(--text-base-sm); }
+        .data-table th, .data-table td {
+            text-align: left;
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+        .data-table th { color: var(--text-muted); font-weight: var(--weight-semibold); }
+        .data-table tbody tr:hover { background: var(--bg-tertiary); }
+        .table-scroll { overflow-x: auto; }
     </style>
 </head>
 
@@ -2526,7 +2576,7 @@
                 <button class="sidebar-nav-item" data-screen="payments" onclick="goScreen('payments')">
                     <i class="fas fa-money-bill-wave"></i> <span>บันทึกการชำระเงิน</span>
                 </button>
-                <button class="sidebar-nav-item" data-screen="create" onclick="goScreen('create')">
+                <button class="sidebar-nav-item" data-screen="create" data-admin-only style="display: none;" onclick="goScreen('create')">
                     <i class="fas fa-user-plus"></i> <span>สร้างบัญชีนักเรียน</span>
                 </button>
                 <button class="sidebar-nav-item" data-screen="files" onclick="goScreen('files')">
@@ -2540,6 +2590,9 @@
                 </button>
                 <button class="sidebar-nav-item" data-screen="schedule" onclick="goScreen('schedule')">
                     <i class="fas fa-calendar-days"></i> <span>ตารางเรียนรายเดือน</span>
+                </button>
+                <button class="sidebar-nav-item" data-screen="finance" data-admin-only style="display: none;" onclick="goScreen('finance')">
+                    <i class="fas fa-chart-line"></i> <span>สรุปการเงิน</span>
                 </button>
                 <button class="sidebar-nav-item" data-screen="access" data-admin-only style="display: none;" onclick="goScreen('access')">
                     <i class="fas fa-user-shield"></i> <span>สิทธิ์การมองเห็น</span>
@@ -2574,6 +2627,16 @@
                 </button>
             </div>
 
+            <!-- Shown to a teacher who has no assigned students yet -->
+            <div id="teacher-empty-state" style="display: none; min-height: 60vh; align-items: center; justify-content: center; padding: 40px;">
+                <div class="admin-card" style="max-width: 460px; text-align: center;">
+                    <div class="modal-icon info" style="margin: 0 auto 16px;"><i class="fas fa-user-clock"></i></div>
+                    <h3 style="margin-bottom: 8px;">ยังไม่มีนักเรียนในความดูแลของคุณ</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 8px;">โปรดติดต่อเจ้าหน้าที่ผู้ดูแลระบบเพื่อกำหนดนักเรียนที่คุณรับผิดชอบ จากนั้นเมนูต่าง ๆ จะแสดงขึ้นให้ใช้งาน</p>
+                    <p id="teacher-empty-identity" class="form-hint" style="font-family: monospace;"></p>
+                </div>
+            </div>
+
             <div class="dashboard-content">
 
                 <!-- ============ DASHBOARD ============ -->
@@ -2588,10 +2651,23 @@
                             <button class="tab-btn" role="tab" aria-selected="true" onclick="setDashboardTimeframe('today', event)">วันนี้</button>
                             <button class="tab-btn" role="tab" aria-selected="false" onclick="setDashboardTimeframe('week', event)">สัปดาห์นี้</button>
                             <button class="tab-btn" role="tab" aria-selected="false" onclick="setDashboardTimeframe('month', event)">เดือนนี้</button>
+                            <button class="tab-btn" role="tab" aria-selected="false" onclick="setDashboardTimeframe('year', event)">ปีนี้</button>
                         </div>
                     </div>
 
                     <div class="stat-grid" id="dash-stat-grid"></div>
+
+                    <!-- Teacher weekly teaching summary -->
+                    <div class="admin-card" id="dash-week-card" style="margin-bottom: 20px;">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-calendar-week"></i></span>
+                            <div>
+                                <h3>ตารางสอนสัปดาห์นี้</h3>
+                                <p id="dash-week-sub">คาบเรียนที่จองไว้ในสัปดาห์นี้</p>
+                            </div>
+                        </div>
+                        <div id="dash-week-grid" class="week-grid"></div>
+                    </div>
 
                     <div class="dashboard-grid">
                         <div class="admin-card">
@@ -2617,7 +2693,7 @@
                                 <div class="form-body">
                                     <button class="btn btn-primary" style="width: 100%;" onclick="goScreen('logs')"><i class="fas fa-book-open"></i> บันทึกการเรียน</button>
                                     <button class="btn btn-secondary" style="width: 100%;" onclick="goScreen('payments')"><i class="fas fa-money-bill-wave"></i> บันทึกการชำระเงิน</button>
-                                    <button class="btn btn-secondary" style="width: 100%;" onclick="goScreen('create')"><i class="fas fa-user-plus"></i> สร้างบัญชีนักเรียน</button>
+                                    <button class="btn btn-secondary" data-admin-only style="width: 100%; display: none;" onclick="goScreen('create')"><i class="fas fa-user-plus"></i> สร้างบัญชีนักเรียน</button>
                                     <button class="btn btn-secondary" style="width: 100%;" onclick="goScreen('booking')"><i class="fas fa-calendar-check"></i> จองเวลาเรียน</button>
                                 </div>
                             </div>
@@ -2725,6 +2801,11 @@
                                     <div id="log-feedback-preview" class="markdown-preview timeline-feedback"
                                         style="display: none;"></div>
                                     <div class="form-hint">สรุปสิ่งที่เรียน จุดแข็ง และสิ่งที่ควรฝึกเพิ่ม · รองรับ Markdown เช่น **ตัวหนา**, *เอียง*, - รายการ</div>
+                                </div>
+
+                                <div id="log-edit-banner" class="info-notice" style="display: none; align-items: center; justify-content: space-between;">
+                                    <span><i class="fas fa-pen"></i> กำลังแก้ไขบันทึกการเรียนเดิม</span>
+                                    <button class="btn btn-secondary" style="padding: 4px 10px;" onclick="cancelStudyLogEdit()">ยกเลิกการแก้ไข</button>
                                 </div>
 
                                 <div style="display: flex; justify-content: flex-end;">
@@ -2837,8 +2918,8 @@
                         </div>
                     </div>
 
-                    <!-- ลิงก์ชำระเงิน Stripe -->
-                    <div class="admin-card" style="margin-top: 24px;">
+                    <!-- ลิงก์ชำระเงิน Stripe (admin only) -->
+                    <div class="admin-card" data-admin-only style="margin-top: 24px; display: none;">
                         <div class="card-title-bar">
                             <span class="card-icon"><i class="fab fa-stripe-s"></i></span>
                             <div>
@@ -3145,6 +3226,20 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Booked classes table -->
+                        <div class="admin-card" style="margin-top: 24px;">
+                            <div class="card-title-bar">
+                                <span class="card-icon"><i class="fas fa-table-list"></i></span>
+                                <div>
+                                    <h3>ตารางการจองที่กำลังจะถึง</h3>
+                                    <p>รายการวันและเวลาที่จองเรียนไว้</p>
+                                </div>
+                            </div>
+                            <div class="table-scroll" id="booking-table-wrap">
+                                <div class="form-hint">กำลังโหลดข้อมูล...</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -3337,8 +3432,9 @@
                                     <i class="fas fa-calculator"></i>
                                     <div><strong>ยอดรวมค่าเรียน:</strong> <span id="sched-total">฿0 (0 ครั้ง)</span></div>
                                 </div>
-                                <div style="display: flex; justify-content: flex-end;">
-                                    <button class="btn btn-primary" onclick="submitSchedule()"><i class="fas fa-paper-plane"></i> ส่งให้แอดมินอนุมัติ</button>
+                                <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                                    <button class="btn btn-secondary" id="sched-cancel-edit-btn" style="display: none;" onclick="resetScheduleForm()"><i class="fas fa-xmark"></i> ยกเลิกการแก้ไข</button>
+                                    <button class="btn btn-primary" id="sched-submit-btn" onclick="submitSchedule()"><i class="fas fa-paper-plane"></i> ส่งให้แอดมินอนุมัติ</button>
                                 </div>
                             </div>
                         </div>
@@ -3353,6 +3449,56 @@
                             </div>
                         </div>
                         <div class="row-list" id="schedule-list">
+                            <div class="form-hint">กำลังโหลดข้อมูล...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============ FINANCE (ADMIN) ============ -->
+                <div id="screen-finance" class="tab-content" data-screen-panel="finance">
+                    <div class="dashboard-top">
+                        <div class="screen-header">
+                            <h1>สรุปการเงิน</h1>
+                            <p>ภาพรวมรายรับ ธุรกรรมทั้งหมด และรายได้ของครูแต่ละคน</p>
+                        </div>
+                        <div class="form-group" style="margin: 0; min-width: 160px;">
+                            <input type="month" id="finance-month" onchange="loadFinance()">
+                        </div>
+                    </div>
+
+                    <div class="stat-grid" id="finance-stat-grid"></div>
+
+                    <div class="admin-card" style="margin-top: 20px;">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-chalkboard-user"></i></span>
+                            <div>
+                                <h3>รายได้ตามครู</h3>
+                                <p>รายรับเดือนนี้จากนักเรียนที่ครูแต่ละคนรับผิดชอบ</p>
+                            </div>
+                        </div>
+                        <div class="row-list tight" id="finance-by-teacher"></div>
+                    </div>
+
+                    <div class="admin-card" style="margin-top: 20px;">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-user-pen"></i></span>
+                            <div>
+                                <h3>รายได้ตามผู้บันทึก</h3>
+                                <p>ยอดที่แต่ละบัญชีเป็นผู้บันทึก/รับชำระ</p>
+                            </div>
+                        </div>
+                        <div class="row-list tight" id="finance-by-recorder"></div>
+                    </div>
+
+                    <div class="admin-card" style="margin-top: 20px;">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-receipt"></i></span>
+                            <div>
+                                <h3>ธุรกรรมทั้งหมด</h3>
+                                <p>รายการชำระเงินทุกรายการในเดือนนี้</p>
+                            </div>
+                        </div>
+                        <div class="table-scroll" id="finance-transactions">
                             <div class="form-hint">กำลังโหลดข้อมูล...</div>
                         </div>
                     </div>
@@ -3449,11 +3595,12 @@
                 <a href="javascript:void(0)" class="active" data-screen="dashboard" onclick="goScreen('dashboard')"><i class="fas fa-gauge-high"></i> Dashboard</a>
                 <a href="javascript:void(0)" data-screen="logs" onclick="goScreen('logs')"><i class="fas fa-book-open"></i> บันทึกการเรียน</a>
                 <a href="javascript:void(0)" data-screen="payments" onclick="goScreen('payments')"><i class="fas fa-money-bill-wave"></i> บันทึกการชำระเงิน</a>
-                <a href="javascript:void(0)" data-screen="create" onclick="goScreen('create')"><i class="fas fa-user-plus"></i> สร้างบัญชีนักเรียน</a>
+                <a href="javascript:void(0)" data-screen="create" data-admin-only style="display: none;" onclick="goScreen('create')"><i class="fas fa-user-plus"></i> สร้างบัญชีนักเรียน</a>
                 <a href="javascript:void(0)" data-screen="files" onclick="goScreen('files')"><i class="fas fa-folder-open"></i> ไฟล์นักเรียน</a>
                 <a href="javascript:void(0)" data-screen="booking" onclick="goScreen('booking')"><i class="fas fa-calendar-check"></i> จองเวลาเรียน</a>
                 <a href="javascript:void(0)" data-screen="check" onclick="goScreen('check')"><i class="fas fa-clipboard-check"></i> ตรวจสอบนักเรียน</a>
                 <a href="javascript:void(0)" data-screen="schedule" onclick="goScreen('schedule')"><i class="fas fa-calendar-days"></i> ตารางเรียนรายเดือน</a>
+                <a href="javascript:void(0)" data-screen="finance" data-admin-only style="display: none;" onclick="goScreen('finance')"><i class="fas fa-chart-line"></i> สรุปการเงิน</a>
                 <a href="javascript:void(0)" data-screen="access" data-admin-only style="display: none;" onclick="goScreen('access')"><i class="fas fa-user-shield"></i> สิทธิ์การมองเห็น</a>
             </nav>
             <div class="mobile-menu-footer">
@@ -3534,15 +3681,21 @@
             minBookingDate.setDate(minBookingDate.getDate() + 1);
             document.getElementById('booking-date').min = minBookingDate.toISOString().split('T')[0];
             goScreen('dashboard');
-            loadFilesPermissions().then(updateAdminUI);
+            await loadFilesPermissions();
+            updateAdminUI();
             await loadStudentList();
+            applyRoleGating();
             applyDeepLink();
+        }
+
+        function isAdminUser() {
+            return Array.isArray(filesApiPermissions) && filesApiPermissions.includes('files:delete');
         }
 
         // Elements marked data-admin-only stay hidden unless the token holds
         // the admin marker permission (files:delete — only the Admin role has it).
         function updateAdminUI() {
-            const admin = Array.isArray(filesApiPermissions) && filesApiPermissions.includes('files:delete');
+            const admin = isAdminUser();
             document.querySelectorAll('[data-admin-only]').forEach(el => {
                 el.style.display = admin ? '' : 'none';
             });
@@ -3551,9 +3704,28 @@
             if (currentScreen === 'schedule') loadSchedules();
         }
 
+        // A non-admin teacher with zero assigned students sees no menus — just
+        // a notice to contact staff. Admins (and teachers with students) get
+        // the normal app.
+        function applyRoleGating() {
+            const gated = !isAdminUser() && !studentListLoadFailed && allStudentsData.length === 0;
+            const empty = document.getElementById('teacher-empty-state');
+            const content = document.querySelector('.dashboard-content');
+            const nav = document.querySelector('.sidebar-nav');
+            const mobileNav = document.querySelector('.mobile-menu-nav');
+            if (empty) empty.style.display = gated ? 'flex' : 'none';
+            if (content) content.style.display = gated ? 'none' : '';
+            if (nav) nav.style.visibility = gated ? 'hidden' : '';
+            if (mobileNav) mobileNav.style.display = gated ? 'none' : '';
+            if (gated) {
+                const idEl = document.getElementById('teacher-empty-identity');
+                if (idEl && filesApiMe) idEl.textContent = 'บัญชีของคุณ: ' + (filesApiMe.email || filesApiMe.name || '');
+            }
+        }
+
         // Supports shareable links like ?screen=logs&student=litalk12345
         // (e.g. the "คัดลอกลิงก์ Study Log" button on the check screen).
-        const DEEP_LINK_SCREENS = ['dashboard', 'logs', 'payments', 'create', 'files', 'booking', 'check', 'schedule', 'access'];
+        const DEEP_LINK_SCREENS = ['dashboard', 'logs', 'payments', 'create', 'files', 'booking', 'check', 'schedule', 'finance', 'access'];
         function applyDeepLink() {
             const params = new URLSearchParams(window.location.search);
             const student = params.get('student');
@@ -3737,6 +3909,7 @@
             }
             if (screen === 'booking') {
                 renderBookingStep();
+                loadBookingTable();
             }
             if (screen === 'check') {
                 syncPickerText('check');
@@ -3746,6 +3919,9 @@
                 syncPickerText('schedule');
                 if (!schedSessions.length) addScheduleSession();
                 loadSchedules();
+            }
+            if (screen === 'finance') {
+                loadFinance();
             }
             if (screen === 'access') {
                 loadTeacherAssignments();
@@ -3852,6 +4028,36 @@
                     <div class="payment-info"><div class="name">${escapeHtml(p.name)}</div><div class="meta">${escapeHtml(p.method || '-')} · ${escapeHtml(formatShortThaiDate(p.dateYMD))}</div></div>
                     <div class="amount">${formatBaht(p.total)}</div>
                 </div>`).join('') : '<div class="form-hint">ยังไม่มีรายการชำระเงิน</div>';
+
+            renderWeekSummary();
+        }
+
+        // Teacher weekly teaching summary: this week's booked classes grouped
+        // by day (Mon–Sun).
+        function renderWeekSummary() {
+            const grid = document.getElementById('dash-week-grid');
+            if (!grid) return;
+            const week = (dashboardData && dashboardData.weekClasses) || [];
+            const start = dashboardData && dashboardData.weekStart;
+            document.getElementById('dash-week-sub').textContent =
+                week.length ? `${week.length} คาบเรียนในสัปดาห์นี้` : 'ยังไม่มีคาบเรียนที่จองไว้ในสัปดาห์นี้';
+
+            const days = [];
+            const base = start ? new Date(start + 'T00:00:00') : new Date();
+            const DOW = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(base.getTime() + i * 86400000);
+                const ymd = d.toISOString().slice(0, 10);
+                const items = week.filter(w => w.date === ymd).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+                days.push(`
+                    <div class="week-day">
+                        <div class="week-day-head">${DOW[i]} <span>${d.getDate()}/${d.getMonth() + 1}</span></div>
+                        <div class="week-day-body">
+                            ${items.length ? items.map(it => `<div class="week-slot"><b>${escapeHtml(it.time)}</b> ${escapeHtml(it.name)}</div>`).join('') : '<div class="week-empty">—</div>'}
+                        </div>
+                    </div>`);
+            }
+            grid.innerHTML = days.join('');
         }
 
         function formatBaht(n) {
@@ -4190,6 +4396,7 @@
                         <span class="uploaded-by">${escapeHtml(file.uploaded_by || '-')}</span>
                         <span class="file-actions">
                             <button class="icon-btn" title="ดาวน์โหลด" onclick="downloadStudentFile(${file.id}, '${escapeJs(file.filename)}')"><i class="fas fa-download"></i></button>
+                            <button class="icon-btn" title="คัดลอกลิงก์สาธารณะ" onclick="copyPublicFileLink(${file.id}, this)"><i class="fas fa-link"></i></button>
                             ${canDelete ? `<button class="icon-btn icon-btn-danger" title="ลบไฟล์" onclick="deleteStudentFile(${file.id})"><i class="fas fa-trash"></i></button>` : ''}
                         </span>
                     </div>`).join('');
@@ -4246,6 +4453,27 @@
                 hideLoading();
                 console.error('Error uploading file:', error);
                 showModal('อัปโหลดล้มเหลว', error.message || 'เกิดข้อผิดพลาดในการอัปโหลดไฟล์', 'error');
+            }
+        }
+
+        // Mint (or fetch) a shareable public link for a file and copy it.
+        async function copyPublicFileLink(fileId, btn) {
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            try {
+                const response = await apiFetch(`/files/${fileId}/public-link`, { method: 'POST' });
+                const result = await response.json();
+                if (!response.ok || !result.ok) throw new Error(result.error || 'failed');
+                await navigator.clipboard.writeText(result.url).catch(() => {});
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-check"></i>';
+                    setTimeout(() => { btn.innerHTML = orig; }, 1400);
+                }
+                showModal('คัดลอกลิงก์สาธารณะแล้ว', 'ใครก็ตามที่มีลิงก์นี้จะเปิดไฟล์ได้:\n' + result.url, 'success');
+            } catch (error) {
+                if (btn) btn.innerHTML = orig;
+                console.error('copyPublicFileLink:', error);
+                showModal('สร้างลิงก์ไม่สำเร็จ', 'ไม่สามารถสร้างลิงก์สาธารณะได้ กรุณาลองใหม่อีกครั้ง', 'error');
             }
         }
 
@@ -4338,7 +4566,8 @@
             approved: 'อนุมัติแล้ว - รอชำระเงิน',
             active: 'กำลังใช้งาน',
             rejected: 'ถูกปฏิเสธ',
-            cancelled: 'ยกเลิกแล้ว'
+            cancelled: 'ยกเลิกแล้ว',
+            revise: 'ขอให้ปรับปรุง'
         };
 
         function renderStudentCheck() {
@@ -4350,12 +4579,16 @@
                 `[${s.id}] · ${s.course || 'ไม่ระบุคอร์ส'}${s.phone ? ' · ' + s.phone : ''}${s.email ? ' · ' + s.email : ''}`;
 
             const p = d.payment || {};
+            const admin = isAdminUser();
             const monthLabel = new Date(d.month + '-01T00:00:00').toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
             const statusEl = document.getElementById('check-payment-status');
+            const creditLine = (d.creditBalance && d.creditBalance > 0)
+                ? `<div class="student-indicator selected" style="margin-top: 8px;"><i class="fas fa-piggy-bank"></i> <span>เครดิตคงเหลือ <strong>${d.creditBalance}</strong> ชั่วโมง (จะถูกใช้ก่อนในตารางเรียนเดือนถัดไป)</span></div>`
+                : '';
             if (p.paidThisMonth) {
-                statusEl.innerHTML = `<div class="student-indicator selected"><i class="fas fa-check-circle"></i> <span>ชำระเงินแล้วในเดือน${monthLabel} รวม <strong>${formatBaht(p.monthTotal)}</strong></span></div>`;
+                statusEl.innerHTML = `<div class="student-indicator selected"><i class="fas fa-check-circle"></i> <span>ชำระเงินแล้วในเดือน${monthLabel} รวม <strong>${formatBaht(p.monthTotal)}</strong></span></div>${creditLine}`;
             } else {
-                statusEl.innerHTML = `<div class="student-indicator empty"><i class="fas fa-triangle-exclamation"></i> <span>ยังไม่มีการชำระเงินในเดือน${monthLabel}</span></div>`;
+                statusEl.innerHTML = `<div class="student-indicator empty"><i class="fas fa-triangle-exclamation"></i> <span>ยังไม่มีการชำระเงินในเดือน${monthLabel}</span></div>${creditLine}`;
             }
 
             let detail = '';
@@ -4363,6 +4596,7 @@
                 detail += `<div class="payment-row">
                     <div class="payment-info"><div class="name">ชำระล่าสุด</div><div class="meta">${escapeHtml(p.last.method || '-')} · ${escapeHtml(formatShortThaiDate(p.last.date))}</div></div>
                     <div class="amount">${formatBaht(p.last.amount)}</div>
+                    ${admin ? `<button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="editPayment(${p.last.id}, ${p.last.amount})" title="แก้ไขจำนวนเงิน"><i class="fas fa-pen"></i></button>` : ''}
                 </div>`;
             }
             (p.pendingLinks || []).forEach(l => {
@@ -4398,9 +4632,69 @@
                     <i class="far fa-sticky-note" style="color: var(--text-muted);"></i>
                     <div style="flex: 1; min-width: 0;">
                         <div class="alert-text"><strong>${escapeHtml(formatShortThaiDate(l.date))}</strong> · ${escapeHtml((l.feedback || '').slice(0, 120))}${(l.feedback || '').length > 120 ? '…' : ''}</div>
-                        ${l.video ? `<a href="${escapeHtml(l.video)}" target="_blank" class="alert-action">ดูวิดีโอย้อนหลัง <i class="fas fa-arrow-up-right-from-square" style="font-size: 10px;"></i></a>` : ''}
+                        <div style="display: flex; gap: 12px; align-items: center; margin-top: 2px;">
+                            ${l.video ? `<a href="${escapeHtml(l.video)}" target="_blank" class="alert-action">ดูวิดีโอย้อนหลัง <i class="fas fa-arrow-up-right-from-square" style="font-size: 10px;"></i></a>` : ''}
+                            <button class="alert-action" style="border: none; background: none; cursor: pointer;" onclick="editStudyLog(${l.id})"><i class="fas fa-pen" style="font-size: 10px;"></i> แก้ไข</button>
+                        </div>
                     </div>
                 </div>`).join('') : '<div class="form-hint">ยังไม่มี Study Log</div>';
+        }
+
+        // Edit an existing study log: jump to the logs screen with the rich
+        // editor pre-filled, and switch its submit to update instead of create.
+        let editingLogId = null;
+
+        function editStudyLog(logId) {
+            const log = (checkData && (checkData.recentLogs || []).find(l => l.id === logId));
+            if (!log) return;
+            editingLogId = logId;
+            goToStudentAndScreen(checkData.student.id, 'logs');
+            document.getElementById('log-date').value = log.date || '';
+            document.getElementById('log-video').value = log.video || '';
+            document.getElementById('log-feedback').value = log.feedback || '';
+            switchTextareaTab('write');
+            updateStudyLogEditBanner();
+            document.getElementById('log-feedback').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function cancelStudyLogEdit() {
+            editingLogId = null;
+            document.getElementById('log-feedback').value = '';
+            document.getElementById('log-video').value = '';
+            updateStudyLogEditBanner();
+        }
+
+        function updateStudyLogEditBanner() {
+            const banner = document.getElementById('log-edit-banner');
+            const btn = document.getElementById('submit-study-log-btn');
+            if (banner) banner.style.display = editingLogId ? 'flex' : 'none';
+            if (btn) btn.innerHTML = editingLogId
+                ? '<i class="fas fa-save"></i> บันทึกการแก้ไข'
+                : '<i class="fas fa-save"></i> บันทึกข้อมูลการเรียน';
+        }
+
+        // Admin: correct a recorded payment's amount.
+        async function editPayment(paymentId, currentAmount) {
+            const input = prompt('แก้ไขจำนวนเงิน (บาท):', String(currentAmount || ''));
+            if (input === null) return;
+            const amount = Number(input);
+            if (!amount || amount <= 0) { showModal('จำนวนเงินไม่ถูกต้อง', 'กรุณากรอกจำนวนเงินให้ถูกต้อง', 'error'); return; }
+            showLoading();
+            try {
+                const response = await apiFetch(`/payments/${paymentId}`, { method: 'PATCH', body: JSON.stringify({ total: amount }) });
+                const result = await response.json();
+                hideLoading();
+                if (response.ok && result.ok) {
+                    showModal('แก้ไขสำเร็จ', result.message, 'success');
+                    loadStudentCheck();
+                } else {
+                    showModal('แก้ไขไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            } catch (error) {
+                hideLoading();
+                console.error('editPayment:', error);
+                showModal('ข้อผิดพลาดการเชื่อมต่อ', 'ไม่สามารถแก้ไขได้ กรุณาลองใหม่อีกครั้ง', 'error');
+            }
         }
 
         function goCheckStudyLog() {
@@ -4425,6 +4719,7 @@
                     <div class="payment-row">
                         <div class="payment-info"><div class="name"><i class="fas fa-file-lines"></i> ${escapeHtml(f.filename)}</div><div class="meta">${escapeHtml(f.file_type)} · ${escapeHtml(f.uploaded_by || '-')}</div></div>
                         <button class="btn btn-secondary" style="padding: 6px 10px;" onclick="downloadStudentFile(${f.id}, '${escapeJs(f.filename)}')" title="ดาวน์โหลด"><i class="fas fa-download"></i></button>
+                        <button class="btn btn-secondary" style="margin-left: 6px; padding: 6px 10px;" onclick="copyPublicFileLink(${f.id}, this)" title="คัดลอกลิงก์สาธารณะ"><i class="fas fa-link"></i></button>
                     </div>`).join('') : '<div class="form-hint">ยังไม่มีไฟล์ของนักเรียนคนนี้</div>';
             } catch (error) {
                 console.error('loadCheckFiles:', error);
@@ -4514,7 +4809,19 @@
         }
 
         function addScheduleSession() {
-            schedSessions.push({ date: '', time: '09:00' });
+            // New rows inherit the previous row's time so the teacher can build
+            // a recurring weekly slot quickly without re-picking the time.
+            const lastTime = schedSessions.length ? schedSessions[schedSessions.length - 1].time : '09:00';
+            schedSessions.push({ date: '', time: lastTime });
+            renderScheduleSessions();
+        }
+
+        // Copy a session's time into a new row (requirement: duplicate the
+        // teaching time with one button instead of re-selecting it).
+        function copyScheduleSession(index) {
+            const src = schedSessions[index];
+            if (!src) return;
+            schedSessions.splice(index + 1, 0, { date: '', time: src.time });
             renderScheduleSessions();
         }
 
@@ -4527,13 +4834,14 @@
             const list = document.getElementById('sched-session-list');
             const range = schedMonthRange();
             list.innerHTML = schedSessions.map((s, i) => `
-                <div style="display: grid; grid-template-columns: 1fr 130px 40px; gap: 8px; align-items: center;">
+                <div style="display: grid; grid-template-columns: 1fr 120px 40px 40px; gap: 8px; align-items: center;">
                     <input type="date" value="${escapeHtml(s.date)}" ${range ? `min="${range.min}" max="${range.max}"` : ''} onchange="schedSessions[${i}].date = this.value; updateSchedTotal()">
                     <div class="select-wrapper">
                         <select onchange="schedSessions[${i}].time = this.value">
                             ${BOOKING_SLOTS.map(t => `<option value="${t}" ${s.time === t ? 'selected' : ''}>${t}</option>`).join('')}
                         </select>
                     </div>
+                    <button class="btn btn-secondary" style="padding: 8px 10px;" onclick="copyScheduleSession(${i})" title="คัดลอกเวลานี้เป็นคาบใหม่"><i class="fas fa-copy"></i></button>
                     <button class="btn btn-danger" style="padding: 8px 10px;" onclick="removeScheduleSession(${i})" title="ลบคาบนี้"><i class="fas fa-trash"></i></button>
                 </div>`).join('');
             updateSchedTotal();
@@ -4543,6 +4851,46 @@
             const rate = Number(document.getElementById('sched-rate').value) || 0;
             const count = schedSessions.filter(s => s.date).length;
             document.getElementById('sched-total').textContent = `${formatBaht(rate * count)} (${count} ครั้ง × ${formatBaht(rate)})`;
+        }
+
+        let editingScheduleId = null;
+
+        function updateScheduleSubmitLabel() {
+            const btn = document.getElementById('sched-submit-btn');
+            if (!btn) return;
+            btn.innerHTML = editingScheduleId
+                ? '<i class="fas fa-paper-plane"></i> บันทึกและส่งอนุมัติอีกครั้ง'
+                : '<i class="fas fa-paper-plane"></i> ส่งให้แอดมินอนุมัติ';
+            const cancelBtn = document.getElementById('sched-cancel-edit-btn');
+            if (cancelBtn) cancelBtn.style.display = editingScheduleId ? '' : 'none';
+        }
+
+        function resetScheduleForm() {
+            editingScheduleId = null;
+            schedSessions = [];
+            addScheduleSession();
+            document.getElementById('sched-rate').value = '';
+            document.getElementById('sched-note').value = '';
+            updateScheduleSubmitLabel();
+        }
+
+        // Load an editable schedule (pending / rejected / revise) into the
+        // builder so the teacher can adjust and resubmit instead of rebuilding.
+        function editSchedule(id) {
+            const r = schedulesData.find(x => x.id === id);
+            if (!r) return;
+            editingScheduleId = id;
+            selectedStudentId = r.studentId;
+            PICKER_PREFIXES.filter(p => PICKER_TARGETS[p] === 'shared').forEach(syncPickerText);
+            updateSharedStudentIndicators();
+            document.getElementById('sched-month').value = r.month;
+            document.getElementById('sched-rate').value = r.rate;
+            document.getElementById('sched-note').value = r.note || '';
+            schedSessions = (r.sessions || []).map(s => ({ date: s.date, time: s.time }));
+            if (!schedSessions.length) schedSessions.push({ date: '', time: '09:00' });
+            renderScheduleSessions();
+            updateScheduleSubmitLabel();
+            document.getElementById('screen-schedule').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         async function submitSchedule() {
@@ -4570,26 +4918,25 @@
                 return;
             }
 
+            const editing = editingScheduleId;
+            const payload = {
+                studentId: selectedStudentId,
+                month: range.month,
+                ratePerSession: rate,
+                note: document.getElementById('sched-note').value,
+                sessions: sessions.map(s => ({ date: s.date, time: s.time }))
+            };
+
             showLoading();
             try {
-                const response = await apiFetch('/schedules', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        studentId: selectedStudentId,
-                        month: range.month,
-                        ratePerSession: rate,
-                        note: document.getElementById('sched-note').value,
-                        sessions: sessions.map(s => ({ date: s.date, time: s.time }))
-                    })
-                });
+                const response = editing
+                    ? await apiFetch(`/schedules/${editing}`, { method: 'PATCH', body: JSON.stringify(payload) })
+                    : await apiFetch('/schedules', { method: 'POST', body: JSON.stringify(payload) });
                 const result = await response.json();
                 hideLoading();
                 if (response.ok && result.ok) {
-                    showModal('ส่งตารางเรียนสำเร็จ', result.message, 'success');
-                    schedSessions = [];
-                    addScheduleSession();
-                    document.getElementById('sched-rate').value = '';
-                    document.getElementById('sched-note').value = '';
+                    showModal(editing ? 'บันทึกตารางเรียนสำเร็จ' : 'ส่งตารางเรียนสำเร็จ', result.message, 'success');
+                    resetScheduleForm();
                     loadSchedules();
                 } else {
                     showModal('ส่งตารางเรียนไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
@@ -4601,14 +4948,17 @@
             }
         }
 
+        let schedulesData = [];
+
         async function loadSchedules() {
             const list = document.getElementById('schedule-list');
             try {
                 const response = await apiFetch('/schedules');
                 const rows = await response.json();
                 if (!response.ok) throw new Error(rows.error || 'load failed');
-                const admin = Array.isArray(filesApiPermissions) && filesApiPermissions.includes('files:delete');
-                list.innerHTML = rows.length ? rows.map(r => renderScheduleRow(r, admin)).join('') : '<div class="form-hint">ยังไม่มีตารางเรียนรายเดือน</div>';
+                schedulesData = Array.isArray(rows) ? rows : [];
+                const admin = isAdminUser();
+                list.innerHTML = schedulesData.length ? schedulesData.map(r => renderScheduleRow(r, admin)).join('') : '<div class="form-hint">ยังไม่มีตารางเรียนรายเดือน</div>';
             } catch (error) {
                 console.error('loadSchedules:', error);
                 list.innerHTML = '<div class="form-hint">โหลดรายการตารางเรียนไม่สำเร็จ</div>';
@@ -4617,12 +4967,23 @@
 
         function renderScheduleRow(r, admin) {
             const sessions = (r.sessions || []).map(s => `${formatShortThaiDate(s.date)} ${s.time}`).join(' · ');
-            const statusColor = r.status === 'active' ? 'var(--accent-success)' : (r.status === 'rejected' || r.status === 'cancelled') ? 'var(--accent-danger)' : 'var(--text-muted)';
+            const statusColor = r.status === 'active' ? 'var(--accent-success)' : (r.status === 'rejected' || r.status === 'cancelled') ? 'var(--accent-danger)' : (r.status === 'revise' ? 'var(--accent-danger)' : 'var(--text-muted)');
+            const mine = filesApiMe && (r.createdBy || '').toLowerCase() === (filesApiMe.email || '').toLowerCase();
             let buttons = '';
             if (admin && r.status === 'pending') {
                 buttons += `<button class="btn btn-success" style="padding: 6px 10px;" onclick="approveSchedule(${r.id})"><i class="fas fa-check"></i> อนุมัติ</button>
+                            <button class="btn btn-secondary" style="padding: 6px 10px;" onclick="reviseSchedule(${r.id})"><i class="fas fa-rotate-left"></i> ขอให้ปรับปรุง</button>
                             <button class="btn btn-danger" style="padding: 6px 10px;" onclick="rejectSchedule(${r.id})"><i class="fas fa-xmark"></i> ปฏิเสธ</button>`;
-            } else if (!admin && r.status === 'pending') {
+            }
+            // Owner (or admin) can edit + resubmit an editable schedule.
+            if ((admin || mine) && ['pending', 'rejected', 'revise'].includes(r.status)) {
+                buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="editSchedule(${r.id})"><i class="fas fa-pen"></i> แก้ไข/ส่งใหม่</button>`;
+            }
+            // Admin can adjust an already-paid schedule's hours (reductions become credit).
+            if (admin && ['approved', 'active'].includes(r.status)) {
+                buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="editSchedule(${r.id})"><i class="fas fa-pen"></i> แก้ไขตาราง</button>`;
+            }
+            if ((admin || mine) && ['pending', 'rejected', 'revise'].includes(r.status)) {
                 buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="cancelSchedule(${r.id})"><i class="fas fa-ban"></i> ยกเลิก</button>`;
             }
             if (admin && r.status === 'approved') {
@@ -4631,21 +4992,44 @@
             if (r.paymentUrl && r.status === 'approved') {
                 buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(r.paymentUrl)}', this)" title="คัดลอกลิงก์ชำระเงินสำหรับผู้ปกครอง"><i class="fas fa-copy"></i> ลิงก์ชำระเงิน</button>`;
             }
+            const creditNote = r.creditsApplied > 0 ? ` <span style="color: var(--accent-success);">(ใช้เครดิต ${r.creditsApplied} ชม.)</span>` : '';
             return `
                 <div class="alert-row" style="align-items: flex-start;">
                     <i class="fas fa-calendar-days" style="color: ${statusColor}; margin-top: 3px;"></i>
                     <div style="flex: 1; min-width: 0;">
                         <div class="alert-text">
-                            <strong>${escapeHtml(r.studentName)}</strong> · เดือน ${escapeHtml(r.month)} · ${r.sessionCount} ครั้ง × ${formatBaht(r.rate)} = <strong>${formatBaht(r.total)}</strong>
+                            <strong>${escapeHtml(r.studentName)}</strong> · เดือน ${escapeHtml(r.month)} · ${r.sessionCount} ครั้ง × ${formatBaht(r.rate)} = <strong>${formatBaht(r.total)}</strong>${creditNote}
                             <span style="color: ${statusColor};"> — ${escapeHtml(SCHEDULE_STATUS_LABEL[r.status] || r.status)}</span>
                         </div>
                         <div class="alert-text" style="color: var(--text-muted); font-size: 12px;">${escapeHtml(sessions)}</div>
                         ${r.note ? `<div class="alert-text" style="color: var(--text-muted); font-size: 12px;">หมายเหตุ: ${escapeHtml(r.note)}</div>` : ''}
+                        ${r.reviseNote ? `<div class="alert-text" style="color: var(--accent-danger); font-size: 12px;">แอดมินขอให้ปรับปรุง: ${escapeHtml(r.reviseNote)}</div>` : ''}
                         ${r.rejectReason ? `<div class="alert-text" style="color: var(--accent-danger); font-size: 12px;">เหตุผลที่ปฏิเสธ: ${escapeHtml(r.rejectReason)}</div>` : ''}
-                        <div class="alert-text" style="color: var(--text-muted); font-size: 12px;">ส่งโดย ${escapeHtml(r.createdBy || '-')}${r.approvedBy ? ' · ตรวจโดย ' + escapeHtml(r.approvedBy) : ''}</div>
+                        <div class="alert-text" style="color: var(--text-muted); font-size: 12px;">ส่งโดย ${escapeHtml(r.createdByName || r.createdBy || '-')}${r.approvedBy ? ' · ตรวจโดย ' + escapeHtml(r.approvedBy) : ''}</div>
                         ${buttons ? `<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">${buttons}</div>` : ''}
                     </div>
                 </div>`;
+        }
+
+        async function reviseSchedule(id) {
+            const note = prompt('ข้อความถึงครู (บอกว่าต้องปรับปรุงอะไร):');
+            if (note === null) return;
+            showLoading();
+            try {
+                const response = await apiFetch(`/schedules/${id}/revise`, { method: 'POST', body: JSON.stringify({ note }) });
+                const result = await response.json();
+                hideLoading();
+                if (response.ok && result.ok) {
+                    showModal('ส่งกลับให้ปรับปรุงแล้ว', result.message, 'success');
+                    loadSchedules();
+                } else {
+                    showModal('ทำรายการไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            } catch (error) {
+                hideLoading();
+                console.error('reviseSchedule:', error);
+                showModal('ข้อผิดพลาดการเชื่อมต่อ', 'ทำรายการไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', 'error');
+            }
         }
 
         async function approveSchedule(id) {
@@ -4738,7 +5122,7 @@
                 const rows = await response.json();
                 if (!response.ok || !Array.isArray(rows) || !rows.length) { chipsEl.innerHTML = ''; return; }
                 chipsEl.innerHTML = '<div class="form-hint" style="width: 100%;">บัญชีที่ใช้งานระบบล่าสุด (คลิกเพื่อเลือก):</div>' + rows.map(r => `
-                    <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="editTeacherAccess('${escapeJs(r.identity)}')" title="ใช้งานล่าสุด ${escapeHtml(r.lastSeen || '')}">${escapeHtml(r.identity)}</button>`).join('');
+                    <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="editTeacherAccess('${escapeJs(r.identity)}')" title="${escapeHtml(r.identity)} · ใช้งานล่าสุด ${escapeHtml(r.lastSeen || '')}">${escapeHtml(r.name || r.identity)}${r.isAdmin ? ' (แอดมิน)' : ''}</button>`).join('');
             } catch (error) {
                 console.error('loadAccessDiagnostics:', error);
                 chipsEl.innerHTML = '';
@@ -4767,11 +5151,11 @@
             listEl.innerHTML = teacherAssignments.length ? teacherAssignments.map(t => `
                 <div class="payment-row">
                     <div class="payment-info">
-                        <div class="name">${escapeHtml(t.teacher)}</div>
-                        <div class="meta">เห็นนักเรียน ${t.studentIds.length} คน: ${escapeHtml(t.studentIds.slice(0, 6).join(', '))}${t.studentIds.length > 6 ? '…' : ''}</div>
+                        <div class="name">${escapeHtml(t.teacherName || t.teacher)}</div>
+                        <div class="meta">${(t.teacherName && t.teacherName !== t.teacher) ? escapeHtml(t.teacher) + ' · ' : ''}เห็นนักเรียน ${t.studentIds.length} คน: ${escapeHtml(t.studentIds.slice(0, 6).join(', '))}${t.studentIds.length > 6 ? '…' : ''}</div>
                     </div>
                     <button class="btn btn-secondary" style="padding: 6px 10px;" onclick="editTeacherAccess('${escapeJs(t.teacher)}')"><i class="fas fa-pen"></i> แก้ไข</button>
-                </div>`).join('') : '<div class="form-hint">ยังไม่มีการจำกัดสิทธิ์ — ครูทุกคนเห็นนักเรียนทุกคน</div>';
+                </div>`).join('') : '<div class="form-hint">ยังไม่มีการจำกัดสิทธิ์ — ครูที่ยังไม่ถูกกำหนดนักเรียนจะไม่เห็นเมนูใด ๆ</div>';
 
             loadAccessForTeacher();
         }
@@ -4983,6 +5367,100 @@
             renderBookingStep();
         }
 
+        // Upcoming bookings table shown on the booking screen.
+        async function loadBookingTable() {
+            const wrap = document.getElementById('booking-table-wrap');
+            if (!wrap) return;
+            wrap.innerHTML = '<div class="form-hint">กำลังโหลดข้อมูล...</div>';
+            try {
+                const response = await apiFetch('/bookings');
+                const rows = await response.json();
+                if (!response.ok) throw new Error(rows.error || 'load failed');
+                if (!Array.isArray(rows) || !rows.length) {
+                    wrap.innerHTML = '<div class="form-hint">ยังไม่มีการจองเวลาเรียนที่กำลังจะถึง</div>';
+                    return;
+                }
+                wrap.innerHTML = `
+                    <table class="data-table">
+                        <thead><tr><th>วันที่</th><th>เวลา</th><th>นักเรียน</th><th>คอร์ส</th></tr></thead>
+                        <tbody>
+                            ${rows.map(b => `
+                                <tr>
+                                    <td>${escapeHtml(new Date(b.date + 'T00:00:00').toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' }))}</td>
+                                    <td>${escapeHtml(b.time)}</td>
+                                    <td>${escapeHtml(b.studentName)}</td>
+                                    <td>${escapeHtml(b.course || '-')}</td>
+                                </tr>`).join('')}
+                        </tbody>
+                    </table>`;
+            } catch (error) {
+                console.error('loadBookingTable:', error);
+                wrap.innerHTML = '<div class="form-hint">โหลดตารางการจองไม่สำเร็จ</div>';
+            }
+        }
+
+        // ===== Finance overview (admin) =====
+        const FINANCE_SOURCE_LABEL = { manual: 'บันทึกเอง', stripe: 'Stripe' };
+
+        async function loadFinance() {
+            const monthInput = document.getElementById('finance-month');
+            if (monthInput && !monthInput.value) monthInput.value = new Date().toISOString().slice(0, 7);
+            const month = monthInput ? monthInput.value : '';
+            const statGrid = document.getElementById('finance-stat-grid');
+            const byTeacher = document.getElementById('finance-by-teacher');
+            const byRecorder = document.getElementById('finance-by-recorder');
+            const txWrap = document.getElementById('finance-transactions');
+            statGrid.innerHTML = '<div class="form-hint">กำลังโหลดข้อมูล...</div>';
+            try {
+                const response = await apiFetch(`/finance?month=${encodeURIComponent(month)}`);
+                const f = await response.json();
+                if (!response.ok) throw new Error(f.error || 'load failed');
+
+                statGrid.innerHTML = [
+                    { label: 'รายรับรวม', icon: 'fas fa-coins', value: formatBaht(f.total), sub: `${f.count} รายการ` },
+                    { label: 'บันทึกเอง', icon: 'fas fa-money-bill', value: formatBaht(f.manualTotal), sub: 'เงินสด/โอน' },
+                    { label: 'ผ่าน Stripe', icon: 'fab fa-stripe-s', value: formatBaht(f.stripeTotal), sub: 'ออนไลน์' },
+                    { label: 'ลิงก์รอชำระ', icon: 'fas fa-hourglass-half', value: formatBaht(f.pendingLinks.total), sub: `${f.pendingLinks.count} ลิงก์` }
+                ].map(c => `
+                    <div class="stat-card">
+                        <div class="stat-card-top"><span class="stat-card-label">${c.label}</span><i class="${c.icon}"></i></div>
+                        <div class="stat-card-value">${c.value}</div>
+                        <div class="stat-card-sub">${escapeHtml(c.sub)}</div>
+                    </div>`).join('');
+
+                byTeacher.innerHTML = (f.byTeacher && f.byTeacher.length) ? f.byTeacher.map(t => `
+                    <div class="payment-row">
+                        <div class="payment-info"><div class="name">${escapeHtml(t.teacherName || t.teacher)}</div><div class="meta">${t.students} นักเรียน · ${t.count} รายการ</div></div>
+                        <div class="amount">${formatBaht(t.total)}</div>
+                    </div>`).join('') : '<div class="form-hint">ยังไม่มีการกำหนดนักเรียนให้ครู</div>';
+
+                byRecorder.innerHTML = (f.byRecorder && f.byRecorder.length) ? f.byRecorder.map(r => `
+                    <div class="payment-row">
+                        <div class="payment-info"><div class="name">${escapeHtml(r.name || r.identity)}</div><div class="meta">${r.count} รายการ</div></div>
+                        <div class="amount">${formatBaht(r.total)}</div>
+                    </div>`).join('') : '<div class="form-hint">ไม่มีข้อมูล</div>';
+
+                const tx = f.transactions || [];
+                txWrap.innerHTML = tx.length ? `
+                    <table class="data-table">
+                        <thead><tr><th>วันที่</th><th>นักเรียน/ลูกค้า</th><th>ช่องทาง</th><th>ผู้บันทึก</th><th style="text-align:right;">จำนวน</th></tr></thead>
+                        <tbody>
+                            ${tx.map(t => `
+                                <tr>
+                                    <td>${escapeHtml(formatShortThaiDate(t.date))}</td>
+                                    <td>${escapeHtml(t.studentName)}</td>
+                                    <td>${escapeHtml(t.method || FINANCE_SOURCE_LABEL[t.source] || t.source)}</td>
+                                    <td>${escapeHtml(t.recordedBy || '-')}</td>
+                                    <td style="text-align:right;">${formatBaht(t.amount)}</td>
+                                </tr>`).join('')}
+                        </tbody>
+                    </table>` : '<div class="form-hint">ไม่มีธุรกรรมในเดือนนี้</div>';
+            } catch (error) {
+                console.error('loadFinance:', error);
+                statGrid.innerHTML = '<div class="form-hint">โหลดข้อมูลการเงินไม่สำเร็จ (เฉพาะแอดมิน)</div>';
+            }
+        }
+
         function triggerFieldError(fieldId, errorMessage) {
             const field = document.getElementById(fieldId);
             if (!field) return;
@@ -5099,11 +5577,14 @@
 
             const ACTION_ENDPOINTS = { createStudent: '/students', addStudyLog: '/study-logs', addPayment: '/payments' };
 
+            // Editing an existing study log updates it in place (PATCH) instead
+            // of creating a new one.
+            const isLogEdit = actionType === 'addStudyLog' && editingLogId;
+
             try {
-                const response = await apiFetch(ACTION_ENDPOINTS[actionType], {
-                    method: 'POST',
-                    body: JSON.stringify(payload)
-                });
+                const response = isLogEdit
+                    ? await apiFetch(`/study-logs/${editingLogId}`, { method: 'PATCH', body: JSON.stringify(payload) })
+                    : await apiFetch(ACTION_ENDPOINTS[actionType], { method: 'POST', body: JSON.stringify(payload) });
 
                 const result = await response.json();
 
@@ -5129,6 +5610,8 @@
                         const previewEl = document.getElementById('log-feedback-preview');
                         if (previewEl) previewEl.innerHTML = '';
                         switchTextareaTab('write');
+                        editingLogId = null;
+                        updateStudyLogEditBanner();
                     }
                     if (actionType === 'addPayment') {
                         document.getElementById('pay-total').value = '';
@@ -5155,10 +5638,26 @@
                 const response = await apiFetch('/earnings');
                 const e = await response.json();
                 if (!response.ok) throw new Error(e.error || 'load failed');
+
+                // Teachers get a restricted view: only the combined income of
+                // the students they are responsible for, plus what they logged.
+                if (e.restricted) {
+                    const trows = [
+                        { icon: 'fas fa-user-graduate', label: 'รายได้รวมจากนักเรียนของฉัน', value: formatBaht(e.assigned.total), meta: `${e.assigned.count} รายการ · ${e.studentCount} คน` },
+                        { icon: 'fas fa-user-check', label: 'ที่ฉันบันทึกเอง', value: formatBaht(e.mine.total), meta: `${e.mine.count} รายการ` }
+                    ];
+                    body.innerHTML = trows.map(r => `
+                        <div class="payment-row">
+                            <div class="payment-info"><div class="name"><i class="${r.icon}"></i> ${r.label}</div><div class="meta">${escapeHtml(r.meta)}</div></div>
+                            <div class="amount">${r.value}</div>
+                        </div>`).join('') +
+                        '<div class="form-hint" style="margin-top: 8px;">ยอดนี้คือรายรับรวมของนักเรียนที่คุณรับผิดชอบในเดือนนี้</div>';
+                    return;
+                }
+
                 const rows = [
                     { icon: 'fas fa-coins', label: 'รวมทั้งหมด', value: formatBaht(e.total), meta: `${e.count} รายการ` },
                     { icon: 'fas fa-user-check', label: 'บันทึกโดยฉัน', value: formatBaht(e.mine.total), meta: `${e.mine.count} รายการ` },
-                    ...(e.assigned ? [{ icon: 'fas fa-user-graduate', label: 'จากนักเรียนที่ฉันรับผิดชอบ', value: formatBaht(e.assigned.total), meta: `${e.assigned.count} รายการ` }] : []),
                     { icon: 'fab fa-stripe-s', label: 'ผ่าน Stripe', value: formatBaht(e.stripeTotal), meta: `บันทึกเอง ${formatBaht(e.manualTotal)}` },
                     { icon: 'fas fa-hourglass-half', label: 'รอชำระจากลิงก์ที่เปิดอยู่', value: formatBaht(e.pendingLinks.total), meta: `${e.pendingLinks.count} ลิงก์` }
                 ];

@@ -196,25 +196,34 @@ permissions scoped to this account.
 | PATCH  | `/files/:fileId`         | `files:write`  | Body: `{ "file_type": "..." }`     |
 | DELETE | `/files/:fileId`         | `files:delete` | Soft-deletes (D1) + deletes from R2 |
 | GET    | `/students`              | `data:read`    | Non-deleted students, filtered by teacher visibility |
-| POST   | `/students`              | `data:write`   | Creates student (+ Auth0 login if configured) |
+| POST   | `/students`              | admin          | Creates student (+ Auth0 login if configured) |
 | DELETE | `/students/:id`          | admin          | Soft-deletes the student in-app; Auth0 login untouched |
-| GET    | `/student-check/:id`     | `data:read`    | Check screen data: payment status, study days, logs, schedules |
-| POST   | `/schedules`             | `data:write`   | Teacher submits a monthly schedule (sessions + rate) |
+| GET    | `/student-check/:id`     | `data:read`    | Check screen data: payment, study days, logs, schedules, credit balance |
+| POST   | `/schedules`             | `data:write`   | Teacher submits a monthly schedule (credits applied first) |
 | GET    | `/schedules?status=`     | `data:read`    | Teachers see own submissions; admins see all |
+| PATCH  | `/schedules/:id`         | `data:write`   | Owner/admin edits pending/rejected/revise (re-prices, resubmits); admin edits paid schedule's hours (reductions → credit) |
 | POST   | `/schedules/:id/approve` | admin          | Approves + creates the parent's Stripe payment link |
 | POST   | `/schedules/:id/reject`  | admin          | Rejects with an optional reason                |
-| POST   | `/schedules/:id/cancel`  | `data:write`   | Teacher cancels own pending; admin any pending/approved |
-| GET    | `/teacher-assignments`   | admin          | Per-teacher visible-student lists              |
-| PUT    | `/teacher-assignments/:identity` | admin  | Replaces a teacher's visible-student set (empty = unrestricted) |
-| GET    | `/staff-identities`      | admin          | Identities recently seen in the audit log (for assigning visibility) |
+| POST   | `/schedules/:id/revise`  | admin          | Asks the teacher to revise (status `revise`) instead of rejecting |
+| POST   | `/schedules/:id/cancel`  | `data:write`   | Teacher cancels own; admin any not-yet-paid       |
+| GET    | `/teacher-assignments`   | admin          | Per-teacher visible-student lists (with names)  |
+| PUT    | `/teacher-assignments/:identity` | admin  | Replaces a teacher's visible-student set (empty = sees nothing) |
+| GET    | `/staff-identities`      | admin          | Known login identities + display names (for assigning visibility) |
+| GET    | `/finance?month=`        | admin          | All transactions + per-teacher & per-recorder income |
 | POST   | `/study-logs`            | `data:write`   | `{ studentId, date, feedback, video }` |
+| GET    | `/students/:id/study-logs` | `data:read`  | A student's study logs (for editing) |
+| PATCH  | `/study-logs/:id`        | `data:write`   | Edit an existing study log         |
 | POST   | `/payments`              | `data:write`   | Manual payment record              |
+| PATCH  | `/payments/:id`          | admin          | Correct a payment's amount/method/date |
 | POST   | `/bookings`              | `data:write`   | 409 if the date+time slot is taken |
-| GET    | `/dashboard?range=`      | `data:read`    | `today` \| `week` \| `month` aggregation |
-| GET    | `/earnings?month=`       | `data:read`    | Monthly totals, per-teacher breakdown, pending links |
-| POST   | `/payment-links`         | `data:write`   | Creates a Stripe payment link      |
+| GET    | `/bookings?from=`        | `data:read`    | Upcoming bookings (visibility-filtered) |
+| GET    | `/dashboard?range=`      | `data:read`    | `today` \| `week` \| `month` \| `year`; includes weekly classes |
+| GET    | `/earnings?month=`       | `data:read`    | Admin: full totals. Teacher: assigned-students total only |
+| POST   | `/payment-links`         | admin          | Creates a Stripe payment link      |
 | GET    | `/payment-links`         | `data:read`    | Last 30 links with status          |
 | POST   | `/payment-links/:id/deactivate` | `data:write` | Disables an active link     |
+| POST   | `/files/:fileId/public-link` | `files:write` | Mint/return a shareable public download link |
+| GET    | `/public/files/:token`   | (public)       | Streams a file by its public token |
 | POST   | `/import`                | `data:write`   | One-time Sheet migration (see above) |
 | POST   | `/stripe/webhook`        | (Stripe signature) | Records paid checkout sessions |
 | GET    | `/portal/:studentId`     | (public)       | Student portal data for litalkeducation.com |
@@ -238,13 +247,33 @@ permissions scoped to this account.
 ## Teacher visibility
 
 `teacher_students` maps a teacher's **request identity** to the students
-they may see. A teacher with **no** rows sees everyone (default); once the
-admin assigns students, `/students`, `/student-check/:id`, the dashboard's
-per-student lists, the file routes, and the create endpoints
-(`/study-logs`, `/payments`, `/bookings`, `/schedules`) are restricted to
-that set. `/earnings` also gains an `assigned` block (this month's payments
-from exactly those students) so a restricted teacher can verify their
-income.
+they may see. A non-admin teacher sees **only** their assigned students —
+including **none**: a teacher with no rows sees nothing, and the admin UI
+shows them a "contact staff" empty state with no menus. Once assigned,
+`/students`, `/student-check/:id`, the dashboard's per-student lists, the
+file routes, and the create/edit endpoints (`/study-logs`, `/payments`,
+`/bookings`, `/schedules`) are restricted to that set. `/earnings` returns
+a teacher only the combined income of their assigned students (never the
+school-wide total). Admins are always unrestricted.
+
+Teachers cannot create students or bill through Stripe — `POST /students`
+and `POST /payment-links` are admin-only.
+
+## Class-hour credits
+
+When an admin trims a paid schedule's hours (`PATCH /schedules/:id`), the
+removed sessions become credit in `student_credits` (1 credit = 1 hour). A
+student's balance is applied automatically the next time a schedule is
+built for them: credit covers sessions first, and only the remainder is
+charged. Reserved credit is released if a schedule is edited, rejected, or
+cancelled before it is paid.
+
+## Staff names
+
+`staff` maps each login identity to a display name (captured from the
+token on every authenticated request via `recordStaff`). The admin UI shows
+names instead of raw `auth0|...` subs in the visibility, schedule, and
+finance screens.
 
 **Identity matching (important):** the Worker identifies each request by
 the namespaced email claim from the Auth0 Action in step 1.5, falling back

@@ -16,6 +16,7 @@ bucket_name = "files-litalk"
 AUTH0_DOMAIN = "litalkeducation.us.auth0.com"
 AUTH0_AUDIENCE = "https://admin.litalkeducation.com/files-api" # Auth0 API ID 6a475ce71d0772bca086a160
 AUTH0_EMAIL_CLAIM = "https://admin.litalkeducation.com/email" # namespaced claim added by an Auth0 Action; falls back to `sub` if absent
+AUTH0_NAME_CLAIM = "https://admin.litalkeducation.com/name"   # namespaced display-name claim; falls back to name/nickname/email
 # Comma-separated: admin panel + public student site (both call this Worker)
 ALLOWED_ORIGIN = "https://admin.litalkeducation.com,https://litalkeducation.com,https://www.litalkeducation.com"
 

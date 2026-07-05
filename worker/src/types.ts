@@ -4,6 +4,7 @@ export interface Env {
   AUTH0_DOMAIN: string;
   AUTH0_AUDIENCE: string;
   AUTH0_EMAIL_CLAIM: string;
+  AUTH0_NAME_CLAIM: string;
   ALLOWED_ORIGIN: string;
   STUDENT_EMAIL_DOMAIN: string;
   AUTH0_DB_CONNECTION: string;
@@ -17,6 +18,8 @@ export interface Env {
 export interface AuthUser {
   sub: string;
   email: string;
+  // Human display name from the token when available, else the email/sub.
+  name: string;
   permissions: string[];
 }
 
