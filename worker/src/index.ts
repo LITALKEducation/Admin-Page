@@ -4,6 +4,7 @@ import type { AppBindings } from './types';
 import { verifyAuth, requirePermission } from './auth';
 import { DOCUMENT_TYPES, extname, insertFileWithUniqueName, logAudit, todayCode } from './db';
 import core, { bangkokToday } from './core';
+import manage, { activateSchedule, activateApprovedSchedulesForStudent } from './manage';
 import { verifyStripeSignature } from './stripe';
 
 const app = new Hono<AppBindings>();
@@ -11,7 +12,7 @@ const app = new Hono<AppBindings>();
 // ALLOWED_ORIGIN is a comma-separated list (admin panel + student site).
 app.use('*', async (c, next) => cors({
   origin: c.env.ALLOWED_ORIGIN.split(',').map((o) => o.trim()),
-  allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Authorization', 'Content-Type'],
 })(c, next));
 
@@ -62,6 +63,13 @@ app.post('/stripe/webhook', async (c) => {
           .bind(session.payment_link)
           .run();
       }
+      // A successful payment starts the approved monthly schedule right away.
+      const scheduleId = Number(meta.schedule_id);
+      if (Number.isFinite(scheduleId) && scheduleId > 0) {
+        await activateSchedule(c.env.DB, scheduleId);
+      } else if (meta.student_id) {
+        await activateApprovedSchedulesForStudent(c.env.DB, meta.student_id);
+      }
       await logAudit(c.env.DB, null, 'STRIPE_PAYMENT', meta.student_id || null, session.id, true);
     }
   }
@@ -76,7 +84,7 @@ app.post('/stripe/webhook', async (c) => {
 app.get('/portal/:studentId', async (c) => {
   const studentId = c.req.param('studentId');
   // NOCASE: the id comes from the Auth0 email local part, which is lowercased.
-  const student = await c.env.DB.prepare(`SELECT id, name, course FROM students WHERE id = ? COLLATE NOCASE`)
+  const student = await c.env.DB.prepare(`SELECT id, name, course FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`)
     .bind(studentId)
     .first<{ id: string; name: string; course: string | null }>();
   if (!student) {
@@ -112,6 +120,7 @@ app.get('/portal/:studentId', async (c) => {
 app.use('*', verifyAuth);
 
 app.route('/', core);
+app.route('/', manage);
 
 app.get('/me', (c) => c.json(c.get('user')));
 
