@@ -3,16 +3,114 @@ import { cors } from 'hono/cors';
 import type { AppBindings } from './types';
 import { verifyAuth, requirePermission } from './auth';
 import { DOCUMENT_TYPES, extname, insertFileWithUniqueName, logAudit, todayCode } from './db';
+import core, { bangkokToday } from './core';
+import { verifyStripeSignature } from './stripe';
 
 const app = new Hono<AppBindings>();
 
+// ALLOWED_ORIGIN is a comma-separated list (admin panel + student site).
 app.use('*', async (c, next) => cors({
-  origin: c.env.ALLOWED_ORIGIN,
+  origin: c.env.ALLOWED_ORIGIN.split(',').map((o) => o.trim()),
   allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Authorization', 'Content-Type'],
 })(c, next));
 
+// ===== Public routes (registered before verifyAuth) =====
+
+// Stripe calls this with a signature header, not a Bearer token.
+app.post('/stripe/webhook', async (c) => {
+  if (!c.env.STRIPE_WEBHOOK_SECRET) return c.json({ error: 'Webhook not configured' }, 503);
+
+  const payload = await c.req.text();
+  const valid = await verifyStripeSignature(payload, c.req.header('Stripe-Signature'), c.env.STRIPE_WEBHOOK_SECRET);
+  if (!valid) return c.json({ error: 'Invalid signature' }, 400);
+
+  const event = JSON.parse(payload) as {
+    type: string;
+    data: {
+      object: {
+        id: string;
+        payment_link?: string | null;
+        payment_status?: string;
+        amount_total?: number | null;
+        metadata?: Record<string, string>;
+      };
+    };
+  };
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    if (session.payment_status === 'paid' && session.amount_total) {
+      const meta = session.metadata ?? {};
+      // UNIQUE(stripe_session_id) makes redelivered webhooks a no-op.
+      await c.env.DB.prepare(
+        `INSERT OR IGNORE INTO payments
+           (student_id, amount, method, paid_date, source, stripe_payment_link_id, stripe_session_id, recorded_by)
+         VALUES (?, ?, 'Stripe', ?, 'stripe', ?, ?, ?)`,
+      )
+        .bind(
+          meta.student_id || null,
+          session.amount_total / 100,
+          bangkokToday(),
+          session.payment_link ?? null,
+          session.id,
+          meta.created_by || null,
+        )
+        .run();
+      if (session.payment_link) {
+        await c.env.DB.prepare(`UPDATE payment_links SET status = 'paid' WHERE stripe_payment_link_id = ?`)
+          .bind(session.payment_link)
+          .run();
+      }
+      await logAudit(c.env.DB, null, 'STRIPE_PAYMENT', meta.student_id || null, session.id, true);
+    }
+  }
+
+  return c.json({ received: true });
+});
+
+// Student portal data for the public website (litalkeducation.com/student.html).
+// Deliberately unauthenticated and keyed by student id — this mirrors the GAS
+// endpoint it replaces (the student site "logs in" client-side only), so it
+// exposes exactly the same data the old Sheet endpoint did.
+app.get('/portal/:studentId', async (c) => {
+  const studentId = c.req.param('studentId');
+  const student = await c.env.DB.prepare(`SELECT id, name, course FROM students WHERE id = ?`)
+    .bind(studentId)
+    .first<{ id: string; name: string; course: string | null }>();
+  if (!student) {
+    return c.json({ status: 'error', message: 'ไม่พบข้อมูลนักเรียนรหัสนี้ในระบบ' }, 404);
+  }
+
+  const [logs, pays] = await c.env.DB.batch([
+    c.env.DB.prepare(
+      `SELECT log_date AS timestamp, feedback, video_url AS video FROM study_logs WHERE student_id = ? ORDER BY log_date DESC, id DESC`,
+    ).bind(studentId),
+    c.env.DB.prepare(
+      `SELECT paid_date AS timestamp, method, amount AS total, proof_url AS proof FROM payments WHERE student_id = ? ORDER BY paid_date DESC, id DESC`,
+    ).bind(studentId),
+  ]);
+
+  const payments = (pays.results ?? []) as Array<{ timestamp: string }>;
+  return c.json({
+    status: 'success',
+    data: {
+      info: {
+        name: student.name,
+        course: student.course ?? '-',
+        lastPaid: payments[0]?.timestamp ?? '-',
+      },
+      studyLogs: logs.results ?? [],
+      payments,
+    },
+  });
+});
+
+// ===== Authenticated routes =====
+
 app.use('*', verifyAuth);
+
+app.route('/', core);
 
 app.get('/me', (c) => c.json(c.get('user')));
 
