@@ -22,7 +22,7 @@ ALLOWED_ORIGIN = "https://admin.litalkeducation.com,https://litalkeducation.com,
 # Login email for an auto-created student account is <studentId>@<this domain>.
 # MUST match the convention the old GAS backend used (the student site derives
 # the student id from the email's local part).
-STUDENT_EMAIL_DOMAIN = "student.litalkeducation.com"
+STUDENT_EMAIL_DOMAIN = "litalkeducation.com"
 AUTH0_DB_CONNECTION = "LITALK-Student"
 
 # Secrets, NOT vars — set them with `npx wrangler secret put <NAME>`:
