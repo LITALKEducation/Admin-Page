@@ -40,9 +40,11 @@ core.post('/students', requirePermission('data:write'), async (c) => {
   if (!body.course || typeof body.course !== 'string') return c.json({ error: 'Missing course' }, 400);
 
   const user = c.get('user');
-  // Friendly unique id (LT-xxxxxx); retry on the rare collision.
+  // Ids follow the existing sheet convention (e.g. litalk10387): lowercase,
+  // since they double as the Auth0 login email's local part. Retry on the
+  // rare collision.
   for (let attempt = 0; attempt < 20; attempt++) {
-    const id = 'LT-' + String(Math.floor(100000 + Math.random() * 900000));
+    const id = 'litalk' + String(Math.floor(10000 + Math.random() * 90000));
     try {
       await c.env.DB.prepare(
         `INSERT INTO students (id, name, nickname, email, phone, course, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,

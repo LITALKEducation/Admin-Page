@@ -75,7 +75,8 @@ app.post('/stripe/webhook', async (c) => {
 // exposes exactly the same data the old Sheet endpoint did.
 app.get('/portal/:studentId', async (c) => {
   const studentId = c.req.param('studentId');
-  const student = await c.env.DB.prepare(`SELECT id, name, course FROM students WHERE id = ?`)
+  // NOCASE: the id comes from the Auth0 email local part, which is lowercased.
+  const student = await c.env.DB.prepare(`SELECT id, name, course FROM students WHERE id = ? COLLATE NOCASE`)
     .bind(studentId)
     .first<{ id: string; name: string; course: string | null }>();
   if (!student) {
@@ -85,10 +86,10 @@ app.get('/portal/:studentId', async (c) => {
   const [logs, pays] = await c.env.DB.batch([
     c.env.DB.prepare(
       `SELECT log_date AS timestamp, feedback, video_url AS video FROM study_logs WHERE student_id = ? ORDER BY log_date DESC, id DESC`,
-    ).bind(studentId),
+    ).bind(student.id),
     c.env.DB.prepare(
       `SELECT paid_date AS timestamp, method, amount AS total, proof_url AS proof FROM payments WHERE student_id = ? ORDER BY paid_date DESC, id DESC`,
-    ).bind(studentId),
+    ).bind(student.id),
   ]);
 
   const payments = (pays.results ?? []) as Array<{ timestamp: string }>;
