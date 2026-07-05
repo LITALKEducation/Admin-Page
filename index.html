@@ -3373,17 +3373,19 @@
                                 <p>ครูที่ไม่ถูกจำกัดสิทธิ์จะเห็นนักเรียนทุกคน (ค่าเริ่มต้น)</p>
                             </div>
                         </div>
+                        <div id="access-identity-note" class="info-notice" style="display: none;"></div>
                         <div class="form-body">
                             <div class="form-group">
-                                <label><i class="fas fa-envelope"></i> อีเมลครู</label>
-                                <input type="email" id="access-teacher-email" list="access-teacher-datalist" placeholder="teacher@example.com" onchange="loadAccessForTeacher()">
+                                <label><i class="fas fa-envelope"></i> บัญชีครู (อีเมลที่ใช้เข้าสู่ระบบ)</label>
+                                <input type="text" id="access-teacher-email" list="access-teacher-datalist" placeholder="teacher@example.com" onchange="loadAccessForTeacher()">
                                 <datalist id="access-teacher-datalist"></datalist>
-                                <div class="form-hint">ต้องเป็นอีเมลเดียวกับบัญชีที่ครูใช้เข้าสู่ระบบ</div>
+                                <div class="form-hint">ต้องตรงกับตัวตนที่ระบบเห็นตอนครูเข้าสู่ระบบ — เลือกจาก "บัญชีที่ใช้งานระบบล่าสุด" ด้านล่างเพื่อความแม่นยำ</div>
+                                <div id="access-identity-list" style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px;"></div>
                             </div>
                             <div class="form-group">
                                 <label><i class="fas fa-users"></i> นักเรียนที่ครูคนนี้เห็นได้</label>
                                 <div id="access-student-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; max-height: 320px; overflow-y: auto; padding: 4px;"></div>
-                                <div class="form-hint">ไม่เลือกเลย = ครูคนนี้เห็นนักเรียนทุกคน</div>
+                                <div class="form-hint">ไม่เลือกเลย = ครูคนนี้เห็นนักเรียนทุกคน · สิทธิ์มีผลเมื่อครูรีเฟรชหน้าเว็บหรือเข้าสู่ระบบใหม่</div>
                             </div>
                             <div style="display: flex; justify-content: flex-end;">
                                 <button class="btn btn-primary" onclick="saveTeacherAssignments()"><i class="fas fa-save"></i> บันทึกสิทธิ์</button>
@@ -4117,6 +4119,7 @@
         // ===== Student Files (Cloudflare Worker + D1 + R2) =====
 
         let filesApiPermissions = null;
+        let filesApiMe = null;
 
         async function loadFilesPermissions() {
             if (filesApiPermissions) return filesApiPermissions;
@@ -4125,6 +4128,7 @@
                 const response = await fetch(`${filesApiUrl}/me`, { headers: { Authorization: `Bearer ${token}` } });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const me = await response.json();
+                filesApiMe = me;
                 filesApiPermissions = me.permissions || [];
             } catch (error) {
                 console.error('Error loading files API permissions:', error);
@@ -4712,7 +4716,37 @@
 
         let teacherAssignments = [];
 
+        // The visibility match uses the identity inside each request's access
+        // token. If the Auth0 email Action isn't set up, that identity is an
+        // "auth0|..." sub instead of an email — surface it so assignments can
+        // still be made against the right string.
+        async function loadAccessDiagnostics() {
+            const noteEl = document.getElementById('access-identity-note');
+            try { await loadFilesPermissions(); } catch (e) { /* note stays hidden */ }
+            if (filesApiMe && noteEl) {
+                const identity = filesApiMe.email || '';
+                const looksLikeEmail = identity.includes('@');
+                noteEl.style.display = '';
+                noteEl.innerHTML = looksLikeEmail
+                    ? `<i class="fas fa-circle-info"></i><div>ระบบระบุตัวตนของคุณเป็น <strong>${escapeHtml(identity)}</strong> — การจำกัดสิทธิ์จับคู่กับอีเมลลักษณะนี้ของครูแต่ละคน</div>`
+                    : `<i class="fas fa-triangle-exclamation" style="color: var(--accent-danger);"></i><div><strong>สำคัญ:</strong> access token ไม่มีอีเมล (ระบบเห็นบัญชีคุณเป็น <strong>${escapeHtml(identity)}</strong>) ถ้ากำหนดสิทธิ์ด้วย "อีเมล" ระบบจะจับคู่ครูไม่ได้ และครูจะยังเห็นนักเรียนทุกคน — ให้เลือกบัญชีของครูจากรายการด้านล่างแทน หรือเพิ่ม Auth0 Action ตาม worker/README.md ขั้นตอนที่ 5 เพื่อใส่อีเมลลงใน token</div>`;
+            }
+
+            const chipsEl = document.getElementById('access-identity-list');
+            try {
+                const response = await apiFetch('/staff-identities');
+                const rows = await response.json();
+                if (!response.ok || !Array.isArray(rows) || !rows.length) { chipsEl.innerHTML = ''; return; }
+                chipsEl.innerHTML = '<div class="form-hint" style="width: 100%;">บัญชีที่ใช้งานระบบล่าสุด (คลิกเพื่อเลือก):</div>' + rows.map(r => `
+                    <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="editTeacherAccess('${escapeJs(r.identity)}')" title="ใช้งานล่าสุด ${escapeHtml(r.lastSeen || '')}">${escapeHtml(r.identity)}</button>`).join('');
+            } catch (error) {
+                console.error('loadAccessDiagnostics:', error);
+                chipsEl.innerHTML = '';
+            }
+        }
+
         async function loadTeacherAssignments() {
+            loadAccessDiagnostics();
             const listEl = document.getElementById('access-current-list');
             try {
                 const response = await apiFetch('/teacher-assignments');
@@ -4768,8 +4802,10 @@
 
         async function saveTeacherAssignments() {
             const email = document.getElementById('access-teacher-email').value.trim().toLowerCase();
-            if (!email || !email.includes('@')) {
-                triggerFieldError('access-teacher-email', 'กรุณากรอกอีเมลครูให้ถูกต้อง');
+            // Accept an email or an auth0|... sub — must match what the
+            // Worker sees in the teacher's token (see loadAccessDiagnostics).
+            if (email.length < 3 || /\s/.test(email) || (!email.includes('@') && !email.includes('|'))) {
+                triggerFieldError('access-teacher-email', 'กรุณากรอกอีเมลครู หรือเลือกบัญชีจากรายการ');
                 return;
             }
             const studentIds = [...document.querySelectorAll('#access-student-list input[type="checkbox"]:checked')].map(cb => cb.value);
