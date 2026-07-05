@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { AppBindings } from './types';
-import { requirePermission } from './auth';
+import { requirePermission, requireAdmin, isAdmin } from './auth';
 import { logAudit } from './db';
 import { createStripePaymentLink, deactivateStripePaymentLink, StripeError } from './stripe';
 import { createStudentAuth0User } from './auth0mgmt';
@@ -23,7 +23,8 @@ core.get('/students', requirePermission('data:read'), async (c) => {
   return c.json(rows);
 });
 
-core.post('/students', requirePermission('data:write'), async (c) => {
+// Admin-only: teachers cannot create student accounts.
+core.post('/students', requireAdmin, async (c) => {
   const body = await c.req.json<{ name?: string; nickname?: string; email?: string; phone?: string; course?: string }>();
   if (!body.name || typeof body.name !== 'string') return c.json({ error: 'Missing name' }, 400);
   if (!body.course || typeof body.course !== 'string') return c.json({ error: 'Missing course' }, 400);
@@ -81,6 +82,46 @@ core.post('/study-logs', requirePermission('data:write'), async (c) => {
   return c.json({ ok: true, message: 'บันทึกการเรียนสำเร็จ' });
 });
 
+// List a student's study logs (for viewing / picking one to edit).
+core.get('/students/:id/study-logs', requirePermission('data:read'), async (c) => {
+  const studentId = c.req.param('id');
+  if (!studentId) return c.json({ error: 'Missing student id' }, 400);
+  const visible = await visibleStudentIds(c.env.DB, c.get('user'));
+  if (!canSeeStudent(visible, studentId)) return c.json({ error: 'Forbidden' }, 403);
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, log_date AS date, feedback, video_url AS video, created_by AS createdBy, created_at AS createdAt
+     FROM study_logs WHERE student_id = ? ORDER BY log_date DESC, id DESC LIMIT 100`,
+  )
+    .bind(studentId)
+    .all();
+  return c.json(results ?? []);
+});
+
+// Edit an existing study log (teachers may edit logs of students they can see).
+core.patch('/study-logs/:id', requirePermission('data:write'), async (c) => {
+  const id = Number(c.req.param('id'));
+  const body = await c.req.json<{ date?: string; feedback?: string; video?: string }>();
+  if (!body.feedback || typeof body.feedback !== 'string') return c.json({ error: 'Missing feedback' }, 400);
+
+  const log = await c.env.DB.prepare(`SELECT student_id AS studentId FROM study_logs WHERE id = ?`)
+    .bind(id)
+    .first<{ studentId: string }>();
+  if (!log) return c.json({ error: 'ไม่พบบันทึกการเรียน' }, 404);
+
+  const user = c.get('user');
+  const visible = await visibleStudentIds(c.env.DB, user);
+  if (!canSeeStudent(visible, log.studentId)) return c.json({ error: 'Forbidden' }, 403);
+
+  const logDate = isYmd(body.date) ? body.date : undefined;
+  await c.env.DB.prepare(
+    `UPDATE study_logs SET feedback = ?, video_url = ?, log_date = COALESCE(?, log_date) WHERE id = ?`,
+  )
+    .bind(body.feedback, body.video ?? null, logDate ?? null, id)
+    .run();
+  await logAudit(c.env.DB, user, 'EDIT_STUDY_LOG', log.studentId, String(id), true);
+  return c.json({ ok: true, message: 'แก้ไขบันทึกการเรียนสำเร็จ' });
+});
+
 // ===== Payments (manual record) =====
 
 core.post('/payments', requirePermission('data:write'), async (c) => {
@@ -108,6 +149,28 @@ core.post('/payments', requirePermission('data:write'), async (c) => {
   let message = 'บันทึกการชำระเงินสำเร็จ';
   if (activated > 0) message += ' — ตารางเรียนที่อนุมัติไว้เริ่มทำงานแล้ว';
   return c.json({ ok: true, message });
+});
+
+// Admin-only: correct a recorded payment's amount / method / date.
+core.patch('/payments/:id', requireAdmin, async (c) => {
+  const id = Number(c.req.param('id'));
+  const body = await c.req.json<{ total?: number | string; method?: string; date?: string }>();
+  const amount = Number(body.total);
+  if (!Number.isFinite(amount) || amount <= 0) return c.json({ error: 'Invalid amount' }, 400);
+
+  const existing = await c.env.DB.prepare(`SELECT id, student_id AS studentId FROM payments WHERE id = ?`)
+    .bind(id)
+    .first<{ id: number; studentId: string | null }>();
+  if (!existing) return c.json({ error: 'ไม่พบรายการชำระเงิน' }, 404);
+
+  const paidDate = isYmd(body.date) ? body.date : undefined;
+  await c.env.DB.prepare(
+    `UPDATE payments SET amount = ?, method = COALESCE(?, method), paid_date = COALESCE(?, paid_date) WHERE id = ?`,
+  )
+    .bind(amount, body.method ?? null, paidDate ?? null, id)
+    .run();
+  await logAudit(c.env.DB, c.get('user'), 'EDIT_PAYMENT', existing.studentId, String(id), true);
+  return c.json({ ok: true, message: 'แก้ไขรายการชำระเงินสำเร็จ' });
 });
 
 // ===== Bookings =====
@@ -145,10 +208,26 @@ core.get('/dashboard', requirePermission('data:read'), async (c) => {
   const range = c.req.query('range') ?? 'today';
   const today = bangkokToday();
   const month = bangkokMonth();
-  const start = range === 'week' ? daysAgo(6) : range === 'month' ? `${month}-01` : today;
-  const revenueLabel = range === 'week' ? 'รายรับ 7 วันล่าสุด' : range === 'month' ? 'รายรับเดือนนี้' : 'รายรับวันนี้';
+  const year = today.slice(0, 4);
+  const start =
+    range === 'week' ? daysAgo(6) : range === 'month' ? `${month}-01` : range === 'year' ? `${year}-01-01` : today;
+  const revenueLabel =
+    range === 'week'
+      ? 'รายรับ 7 วันล่าสุด'
+      : range === 'month'
+        ? 'รายรับเดือนนี้'
+        : range === 'year'
+          ? 'รายรับปีนี้'
+          : 'รายรับวันนี้';
 
-  const [classes, booked, revenue, unpaidRows, todayClasses, recentPayments] = await c.env.DB.batch([
+  // This week's teaching schedule (Mon–Sun containing today), for the
+  // teacher weekly-summary card.
+  const dow = new Date(today + 'T00:00:00Z').getUTCDay(); // 0=Sun
+  const mondayOffset = (dow + 6) % 7;
+  const weekStart = daysAgo(mondayOffset);
+  const weekEnd = new Date(new Date(weekStart + 'T00:00:00Z').getTime() + 6 * 86400_000).toISOString().slice(0, 10);
+
+  const [classes, booked, revenue, unpaidRows, todayClasses, recentPayments, weekRows] = await c.env.DB.batch([
     c.env.DB.prepare(`SELECT COUNT(*) AS n FROM study_logs WHERE log_date BETWEEN ? AND ?`).bind(start, today),
     c.env.DB.prepare(`SELECT COUNT(*) AS n FROM bookings WHERE booking_date >= ? AND status = 'booked'`).bind(today),
     c.env.DB.prepare(`SELECT COALESCE(SUM(amount), 0) AS n FROM payments WHERE paid_date BETWEEN ? AND ?`).bind(start, today),
@@ -175,6 +254,13 @@ core.get('/dashboard', requirePermission('data:read'), async (c) => {
        LEFT JOIN payment_links pl ON pl.stripe_payment_link_id = p.stripe_payment_link_id
        ORDER BY p.paid_date DESC, p.id DESC LIMIT 5`,
     ),
+    c.env.DB.prepare(
+      `SELECT b.booking_date AS date, b.booking_time AS time, COALESCE(s.name, b.student_id) AS name,
+              s.course AS course, b.student_id AS studentId
+       FROM bookings b LEFT JOIN students s ON s.id = b.student_id
+       WHERE b.booking_date BETWEEN ? AND ? AND b.status = 'booked'
+       ORDER BY b.booking_date, b.booking_time`,
+    ).bind(weekStart, weekEnd),
   ]);
 
   // Restricted teachers only see their assigned students in the per-student
@@ -185,6 +271,7 @@ core.get('/dashboard', requirePermission('data:read'), async (c) => {
   const recentRows = ((recentPayments.results ?? []) as Array<{ studentId: string | null }>).filter(
     (r) => visible === null || (r.studentId !== null && visible.has(r.studentId)),
   );
+  const weekClasses = ((weekRows.results ?? []) as Array<{ studentId: string }>).filter((r) => canSeeStudent(visible, r.studentId));
   return c.json({
     stats: {
       classes: (classes.results?.[0] as { n: number }).n,
@@ -194,6 +281,9 @@ core.get('/dashboard', requirePermission('data:read'), async (c) => {
       unpaid: unpaid.length,
     },
     todayClasses: todayRows,
+    weekClasses,
+    weekStart,
+    weekEnd,
     alerts: unpaid.slice(0, 5).map((u) => ({
       type: 'unpaid',
       studentId: u.id,
@@ -210,6 +300,37 @@ core.get('/dashboard', requirePermission('data:read'), async (c) => {
 core.get('/earnings', requirePermission('data:read'), async (c) => {
   const month = c.req.query('month') && /^\d{4}-\d{2}$/.test(c.req.query('month')!) ? c.req.query('month')! : bangkokMonth();
   const user = c.get('user');
+  const visible = await visibleStudentIds(c.env.DB, user);
+
+  // Teachers see ONLY the combined income of their assigned students — not
+  // the school-wide total or the per-user breakdown.
+  if (visible !== null) {
+    const ids = [...visible];
+    let assignedTotal = 0;
+    let assignedCount = 0;
+    if (ids.length) {
+      const row = await c.env.DB.prepare(
+        `SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM payments
+         WHERE paid_date LIKE ? || '%' AND student_id IN (${ids.map(() => '?').join(',')})`,
+      )
+        .bind(month, ...ids)
+        .first<{ total: number; count: number }>();
+      assignedTotal = row?.total ?? 0;
+      assignedCount = row?.count ?? 0;
+    }
+    const mineRow = await c.env.DB.prepare(
+      `SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM payments WHERE paid_date LIKE ? || '%' AND recorded_by = ? COLLATE NOCASE`,
+    )
+      .bind(month, user.email)
+      .first<{ total: number; count: number }>();
+    return c.json({
+      restricted: true,
+      month,
+      assigned: { total: assignedTotal, count: assignedCount },
+      studentCount: ids.length,
+      mine: { total: mineRow?.total ?? 0, count: mineRow?.count ?? 0 },
+    });
+  }
 
   const [totals, byUser, bySource, pending] = await c.env.DB.batch([
     c.env.DB.prepare(`SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM payments WHERE paid_date LIKE ? || '%'`).bind(month),
@@ -227,23 +348,8 @@ core.get('/earnings', requirePermission('data:read'), async (c) => {
   const sourceRows = (bySource.results ?? []) as Array<{ source: string; total: number }>;
   const mine = byUserRows.find((r) => r.email === user.email);
 
-  // For a teacher with admin-assigned students, also report the month's
-  // payments from exactly those students so they can verify their income.
-  let assigned: { total: number; count: number } | null = null;
-  const visible = await visibleStudentIds(c.env.DB, user);
-  if (visible !== null && visible.size > 0) {
-    const ids = [...visible];
-    const row = await c.env.DB.prepare(
-      `SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM payments
-       WHERE paid_date LIKE ? || '%' AND student_id IN (${ids.map(() => '?').join(',')})`,
-    )
-      .bind(month, ...ids)
-      .first<{ total: number; count: number }>();
-    assigned = { total: row?.total ?? 0, count: row?.count ?? 0 };
-  }
-
   return c.json({
-    assigned,
+    restricted: false,
     month,
     total: (totals.results?.[0] as { total: number }).total,
     count: (totals.results?.[0] as { count: number }).count,
@@ -257,7 +363,8 @@ core.get('/earnings', requirePermission('data:read'), async (c) => {
 
 // ===== Stripe payment links =====
 
-core.post('/payment-links', requirePermission('data:write'), async (c) => {
+// Admin-only: teachers cannot bill through Stripe.
+core.post('/payment-links', requireAdmin, async (c) => {
   if (!c.env.STRIPE_SECRET_KEY) return c.json({ error: 'Stripe is not configured (missing STRIPE_SECRET_KEY secret)' }, 503);
 
   const body = await c.req.json<{ studentId?: string; customerName?: string; amount?: number | string; description?: string }>();

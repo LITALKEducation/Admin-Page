@@ -1,7 +1,7 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { Context, Next } from 'hono';
 import type { AppBindings, AuthUser } from './types';
-import { logAudit } from './db';
+import { logAudit, recordStaff } from './db';
 
 let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 let jwksDomain: string | null = null;
@@ -32,15 +32,27 @@ export async function verifyAuth(c: Context<AppBindings>, next: Next) {
     // Auth0 sub. Teacher-visibility rows are matched against this value, so
     // when no email claim exists the admin must assign by the sub instead
     // (the access screen lists the identities actually seen).
+    const email =
+      (payload[c.env.AUTH0_EMAIL_CLAIM] as string | undefined) ??
+      (payload.email as string | undefined) ??
+      (payload.sub as string);
     const user: AuthUser = {
       sub: payload.sub as string,
-      email:
-        (payload[c.env.AUTH0_EMAIL_CLAIM] as string | undefined) ??
-        (payload.email as string | undefined) ??
-        (payload.sub as string),
+      email,
+      // Display name from the namespaced claim (README step 5) or a standard
+      // name/nickname claim; falls back to the email/sub so the UI never
+      // shows an empty label.
+      name:
+        (payload[c.env.AUTH0_NAME_CLAIM] as string | undefined) ??
+        (payload.name as string | undefined) ??
+        (payload.nickname as string | undefined) ??
+        email,
       permissions: (payload.permissions as string[] | undefined) ?? [],
     };
     c.set('user', user);
+    // Best-effort staff directory upsert so the admin UI can show names
+    // instead of raw auth0|... subs. Never blocks the request.
+    await recordStaff(c.env.DB, user).catch(() => {});
     await next();
   } catch {
     return c.json({ error: 'Unauthorized' }, 401);

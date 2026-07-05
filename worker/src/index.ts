@@ -120,6 +120,30 @@ app.get('/portal/:studentId', async (c) => {
   });
 });
 
+// Public file download by opaque token (shareable link). No auth: the token
+// is the capability. Only files with a token set are reachable this way.
+app.get('/public/files/:token', async (c) => {
+  const token = c.req.param('token');
+  if (!token) return c.json({ error: 'Not found' }, 404);
+  const row = await c.env.DB.prepare(
+    `SELECT r2_key, filename, mime_type FROM student_files WHERE public_token = ? AND deleted_at IS NULL`,
+  )
+    .bind(token)
+    .first<{ r2_key: string; filename: string; mime_type: string }>();
+  if (!row) return c.json({ error: 'Not found' }, 404);
+
+  const object = await c.env.BUCKET.get(row.r2_key);
+  if (!object) return c.json({ error: 'File missing in storage' }, 404);
+
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': row.mime_type || 'application/octet-stream',
+      'Content-Disposition': `inline; filename="${row.filename}"`,
+      'Cache-Control': 'private, max-age=300',
+    },
+  });
+});
+
 // ===== Authenticated routes =====
 
 app.use('*', verifyAuth);
@@ -227,6 +251,30 @@ app.patch('/files/:fileId', requirePermission('files:write'), async (c) => {
 
   await logAudit(c.env.DB, c.get('user'), 'UPDATE', null, fileId, true);
   return c.json({ ok: true });
+});
+
+// Mint (or return the existing) public share link for a file.
+app.post('/files/:fileId/public-link', requirePermission('files:write'), async (c) => {
+  const fileId = c.req.param('fileId');
+  if (!fileId) return c.json({ error: 'Not found' }, 404);
+  const row = await c.env.DB.prepare(
+    `SELECT public_token AS token, student_id AS studentId FROM student_files WHERE id = ? AND deleted_at IS NULL`,
+  )
+    .bind(fileId)
+    .first<{ token: string | null; studentId: string }>();
+  if (!row) return c.json({ error: 'Not found' }, 404);
+
+  const visible = await visibleStudentIds(c.env.DB, c.get('user'));
+  if (!canSeeStudent(visible, row.studentId)) return c.json({ error: 'Forbidden' }, 403);
+
+  let token = row.token;
+  if (!token) {
+    token = crypto.randomUUID().replace(/-/g, '');
+    await c.env.DB.prepare(`UPDATE student_files SET public_token = ? WHERE id = ?`).bind(token, fileId).run();
+    await logAudit(c.env.DB, c.get('user'), 'CREATE_PUBLIC_LINK', row.studentId, fileId, true);
+  }
+  const url = `${new URL(c.req.url).origin}/public/files/${token}`;
+  return c.json({ ok: true, token, url });
 });
 
 app.delete('/files/:fileId', requirePermission('files:delete'), async (c) => {
