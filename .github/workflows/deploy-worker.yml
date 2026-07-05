@@ -21,6 +21,19 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm run typecheck
+      # Apply pending D1 migrations BEFORE deploying: the new Worker code
+      # assumes the new schema, so deploying first breaks the live API
+      # (e.g. /students failing on a column that doesn't exist yet).
+      # The bootstrap INSERT marks the migrations that were originally
+      # applied by hand (see worker/README.md) so `migrations apply`
+      # doesn't try to re-run them against existing tables; it's a no-op
+      # when they are already tracked.
+      - name: Apply D1 migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          npx wrangler d1 execute litalk --remote --command "CREATE TABLE IF NOT EXISTS d1_migrations(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP NOT NULL DEFAULT current_timestamp); INSERT OR IGNORE INTO d1_migrations (name) VALUES ('0001_init.sql'), ('0002_core.sql');"
+          npx wrangler d1 migrations apply litalk --remote
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

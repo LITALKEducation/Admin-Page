@@ -3917,14 +3917,18 @@
         });
 
         let allStudentsData = [];
+        let studentListLoadFailed = false;
 
         async function loadStudentList() {
             try {
                 const response = await apiFetch('/students');
                 const result = await response.json();
-                allStudentsData = response.ok && Array.isArray(result) ? result : [];
+                studentListLoadFailed = !(response.ok && Array.isArray(result));
+                allStudentsData = studentListLoadFailed ? [] : result;
+                if (studentListLoadFailed) console.error('getStudents error:', result && result.error);
             } catch (error) {
                 console.error('Error:', error);
+                studentListLoadFailed = true;
                 allStudentsData = [];
             }
 
@@ -3987,7 +3991,9 @@
             const id = pickerTargetId(prefix);
 
             if (!id) {
-                textEl.innerText = allStudentsData.length ? '-- ค้นหาหรือเลือกนักเรียน --' : '-- ยังไม่มีรายชื่อนักเรียนในระบบ --';
+                textEl.innerText = allStudentsData.length
+                    ? '-- ค้นหาหรือเลือกนักเรียน --'
+                    : (studentListLoadFailed ? 'โหลดรายชื่อนักเรียนไม่สำเร็จ — กรุณารีเฟรชหน้า' : '-- ยังไม่มีรายชื่อนักเรียนในระบบ --');
                 if (clearBtn) clearBtn.style.display = 'none';
                 return;
             }
