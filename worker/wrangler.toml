@@ -16,4 +16,15 @@ bucket_name = "files-litalk"
 AUTH0_DOMAIN = "litalkeducation.us.auth0.com"
 AUTH0_AUDIENCE = "https://admin.litalkeducation.com/files-api" # Auth0 API ID 6a475ce71d0772bca086a160
 AUTH0_EMAIL_CLAIM = "https://admin.litalkeducation.com/email" # namespaced claim added by an Auth0 Action; falls back to `sub` if absent
-ALLOWED_ORIGIN = "https://admin.litalkeducation.com"
+# Comma-separated: admin panel + public student site (both call this Worker)
+ALLOWED_ORIGIN = "https://admin.litalkeducation.com,https://litalkeducation.com,https://www.litalkeducation.com"
+
+# Login email for an auto-created student account is <studentId>@<this domain>.
+# MUST match the convention the old GAS backend used (the student site derives
+# the student id from the email's local part).
+STUDENT_EMAIL_DOMAIN = "student.litalkeducation.com"
+AUTH0_DB_CONNECTION = "LITALK-Student"
+
+# Secrets, NOT vars — set them with `npx wrangler secret put <NAME>`:
+#   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET        (Stripe payment links)
+#   AUTH0_MGMT_CLIENT_ID, AUTH0_MGMT_CLIENT_SECRET  (auto-create student logins)

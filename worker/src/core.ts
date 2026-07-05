@@ -1,0 +1,365 @@
+import { Hono } from 'hono';
+import type { AppBindings } from './types';
+import { requirePermission } from './auth';
+import { logAudit } from './db';
+import { createStripePaymentLink, deactivateStripePaymentLink, StripeError } from './stripe';
+import { createStudentAuth0User } from './auth0mgmt';
+
+// All dates are stored/compared as YYYY-MM-DD strings in Thailand time
+// (UTC+7, no DST), matching how the school actually operates.
+export function bangkokToday(): string {
+  return new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+}
+
+export function bangkokMonth(): string {
+  return bangkokToday().slice(0, 7); // YYYY-MM
+}
+
+function daysAgo(n: number): string {
+  return new Date(Date.now() + 7 * 3600_000 - n * 86400_000).toISOString().slice(0, 10);
+}
+
+function isYmd(s: unknown): s is string {
+  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+const core = new Hono<AppBindings>();
+
+// ===== Students =====
+
+core.get('/students', requirePermission('data:read'), async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, name, nickname, email, phone, course FROM students ORDER BY name`,
+  ).all();
+  return c.json(results);
+});
+
+core.post('/students', requirePermission('data:write'), async (c) => {
+  const body = await c.req.json<{ name?: string; nickname?: string; email?: string; phone?: string; course?: string }>();
+  if (!body.name || typeof body.name !== 'string') return c.json({ error: 'Missing name' }, 400);
+  if (!body.course || typeof body.course !== 'string') return c.json({ error: 'Missing course' }, 400);
+
+  const user = c.get('user');
+  // Ids follow the existing sheet convention (e.g. litalk10387): lowercase,
+  // since they double as the Auth0 login email's local part. Retry on the
+  // rare collision.
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const id = 'litalk' + String(Math.floor(10000 + Math.random() * 90000));
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO students (id, name, nickname, email, phone, course, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+        .bind(id, body.name, body.nickname ?? null, body.email ?? null, body.phone ?? null, body.course, user.email)
+        .run();
+      await logAudit(c.env.DB, user, 'CREATE_STUDENT', id, null, true);
+
+      // Auto-create the student's Auth0 login (parity with the old GAS flow).
+      let message = `สร้างบัญชีนักเรียนสำเร็จ (รหัส ${id})`;
+      if (c.env.AUTH0_MGMT_CLIENT_ID && c.env.AUTH0_MGMT_CLIENT_SECRET) {
+        try {
+          const creds = await createStudentAuth0User(c.env, id, body.name);
+          message += ` — บัญชีเข้าสู่ระบบ: ${creds.email} รหัสผ่านชั่วคราว: ${creds.password}`;
+        } catch (err) {
+          message += ` — แต่สร้างบัญชีเข้าสู่ระบบไม่สำเร็จ (${err instanceof Error ? err.message : 'Auth0 error'}) กรุณาสร้างใน Auth0 เอง`;
+        }
+      }
+      return c.json({ ok: true, id, message });
+    } catch (err) {
+      if (String(err).includes('UNIQUE')) continue;
+      throw err;
+    }
+  }
+  return c.json({ error: 'Could not generate a unique student id' }, 500);
+});
+
+// ===== Study logs =====
+
+core.post('/study-logs', requirePermission('data:write'), async (c) => {
+  const body = await c.req.json<{ studentId?: string; date?: string; feedback?: string; video?: string }>();
+  if (!body.studentId) return c.json({ error: 'Missing studentId' }, 400);
+  if (!body.feedback) return c.json({ error: 'Missing feedback' }, 400);
+  const logDate = isYmd(body.date) ? body.date : bangkokToday();
+
+  const user = c.get('user');
+  await c.env.DB.prepare(
+    `INSERT INTO study_logs (student_id, log_date, feedback, video_url, created_by) VALUES (?, ?, ?, ?, ?)`,
+  )
+    .bind(body.studentId, logDate, body.feedback, body.video ?? null, user.email)
+    .run();
+  await logAudit(c.env.DB, user, 'ADD_STUDY_LOG', body.studentId, null, true);
+  return c.json({ ok: true, message: 'บันทึกการเรียนสำเร็จ' });
+});
+
+// ===== Payments (manual record) =====
+
+core.post('/payments', requirePermission('data:write'), async (c) => {
+  const body = await c.req.json<{ studentId?: string; total?: number | string; method?: string; date?: string; proof?: string }>();
+  const amount = Number(body.total);
+  if (!body.studentId) return c.json({ error: 'Missing studentId' }, 400);
+  if (!Number.isFinite(amount) || amount <= 0) return c.json({ error: 'Invalid amount' }, 400);
+  const paidDate = isYmd(body.date) ? body.date : bangkokToday();
+
+  const user = c.get('user');
+  await c.env.DB.prepare(
+    `INSERT INTO payments (student_id, amount, method, paid_date, proof_url, source, recorded_by)
+     VALUES (?, ?, ?, ?, ?, 'manual', ?)`,
+  )
+    .bind(body.studentId, amount, body.method ?? null, paidDate, body.proof ?? null, user.email)
+    .run();
+  await logAudit(c.env.DB, user, 'ADD_PAYMENT', body.studentId, null, true);
+  return c.json({ ok: true, message: 'บันทึกการชำระเงินสำเร็จ' });
+});
+
+// ===== Bookings =====
+
+core.post('/bookings', requirePermission('data:write'), async (c) => {
+  const body = await c.req.json<{ studentId?: string; bookingDate?: string; bookingTime?: string; notes?: string }>();
+  if (!body.studentId) return c.json({ error: 'Missing studentId' }, 400);
+  if (!isYmd(body.bookingDate)) return c.json({ error: 'Invalid bookingDate' }, 400);
+  if (typeof body.bookingTime !== 'string' || !/^\d{2}:\d{2}$/.test(body.bookingTime)) {
+    return c.json({ error: 'Invalid bookingTime' }, 400);
+  }
+
+  const user = c.get('user');
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO bookings (student_id, booking_date, booking_time, notes, created_by) VALUES (?, ?, ?, ?, ?)`,
+    )
+      .bind(body.studentId, body.bookingDate, body.bookingTime, body.notes ?? null, user.email)
+      .run();
+  } catch (err) {
+    if (String(err).includes('UNIQUE')) {
+      return c.json({ error: 'ช่วงเวลานี้ถูกจองแล้ว กรุณาเลือกเวลาอื่น' }, 409);
+    }
+    throw err;
+  }
+  await logAudit(c.env.DB, user, 'CREATE_BOOKING', body.studentId, null, true);
+  return c.json({ ok: true, message: `จองเวลาเรียนวันที่ ${body.bookingDate} เวลา ${body.bookingTime} สำเร็จ` });
+});
+
+// ===== Dashboard =====
+
+core.get('/dashboard', requirePermission('data:read'), async (c) => {
+  const range = c.req.query('range') ?? 'today';
+  const today = bangkokToday();
+  const month = bangkokMonth();
+  const start = range === 'week' ? daysAgo(6) : range === 'month' ? `${month}-01` : today;
+  const revenueLabel = range === 'week' ? 'รายรับ 7 วันล่าสุด' : range === 'month' ? 'รายรับเดือนนี้' : 'รายรับวันนี้';
+
+  const [classes, booked, revenue, unpaidRows, todayClasses, recentPayments] = await c.env.DB.batch([
+    c.env.DB.prepare(`SELECT COUNT(*) AS n FROM study_logs WHERE log_date BETWEEN ? AND ?`).bind(start, today),
+    c.env.DB.prepare(`SELECT COUNT(*) AS n FROM bookings WHERE booking_date >= ? AND status = 'booked'`).bind(today),
+    c.env.DB.prepare(`SELECT COALESCE(SUM(amount), 0) AS n FROM payments WHERE paid_date BETWEEN ? AND ?`).bind(start, today),
+    // "Unpaid" = studied this month but no payment recorded this month.
+    c.env.DB.prepare(
+      `SELECT DISTINCT l.student_id AS id, COALESCE(s.name, l.student_id) AS name
+       FROM study_logs l LEFT JOIN students s ON s.id = l.student_id
+       WHERE l.log_date LIKE ? || '%'
+         AND l.student_id NOT IN (SELECT student_id FROM payments WHERE student_id IS NOT NULL AND paid_date LIKE ? || '%')
+       LIMIT 20`,
+    ).bind(month, month),
+    c.env.DB.prepare(
+      `SELECT b.booking_time AS time, COALESCE(s.name, b.student_id) AS name, s.course AS course, b.student_id AS studentId,
+              EXISTS(SELECT 1 FROM study_logs l WHERE l.student_id = b.student_id AND l.log_date = ?) AS done
+       FROM bookings b LEFT JOIN students s ON s.id = b.student_id
+       WHERE b.booking_date = ? AND b.status = 'booked'
+       ORDER BY b.booking_time`,
+    ).bind(today, today),
+    c.env.DB.prepare(
+      `SELECT COALESCE(s.name, pl.customer_name, p.student_id, 'ลูกค้า') AS name, p.method AS method,
+              p.paid_date AS dateYMD, p.amount AS total
+       FROM payments p
+       LEFT JOIN students s ON s.id = p.student_id
+       LEFT JOIN payment_links pl ON pl.stripe_payment_link_id = p.stripe_payment_link_id
+       ORDER BY p.paid_date DESC, p.id DESC LIMIT 5`,
+    ),
+  ]);
+
+  const unpaid = (unpaidRows.results ?? []) as Array<{ id: string; name: string }>;
+  return c.json({
+    stats: {
+      classes: (classes.results?.[0] as { n: number }).n,
+      booked: (booked.results?.[0] as { n: number }).n,
+      revenue: (revenue.results?.[0] as { n: number }).n,
+      revenueLabel,
+      unpaid: unpaid.length,
+    },
+    todayClasses: todayClasses.results ?? [],
+    alerts: unpaid.slice(0, 5).map((u) => ({
+      type: 'unpaid',
+      studentId: u.id,
+      text: `${u.name} ยังไม่มีการบันทึกชำระเงินในเดือนนี้`,
+      actionLabel: 'บันทึกการชำระเงิน',
+      screen: 'payments',
+    })),
+    recentPayments: recentPayments.results ?? [],
+  });
+});
+
+// ===== Monthly earnings ("what will I get this month") =====
+
+core.get('/earnings', requirePermission('data:read'), async (c) => {
+  const month = c.req.query('month') && /^\d{4}-\d{2}$/.test(c.req.query('month')!) ? c.req.query('month')! : bangkokMonth();
+  const user = c.get('user');
+
+  const [totals, byUser, bySource, pending] = await c.env.DB.batch([
+    c.env.DB.prepare(`SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM payments WHERE paid_date LIKE ? || '%'`).bind(month),
+    c.env.DB.prepare(
+      `SELECT COALESCE(recorded_by, '-') AS email, COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count
+       FROM payments WHERE paid_date LIKE ? || '%' GROUP BY recorded_by ORDER BY total DESC`,
+    ).bind(month),
+    c.env.DB.prepare(
+      `SELECT source, COALESCE(SUM(amount), 0) AS total FROM payments WHERE paid_date LIKE ? || '%' GROUP BY source`,
+    ).bind(month),
+    c.env.DB.prepare(`SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM payment_links WHERE status = 'active'`),
+  ]);
+
+  const byUserRows = (byUser.results ?? []) as Array<{ email: string; total: number; count: number }>;
+  const sourceRows = (bySource.results ?? []) as Array<{ source: string; total: number }>;
+  const mine = byUserRows.find((r) => r.email === user.email);
+  return c.json({
+    month,
+    total: (totals.results?.[0] as { total: number }).total,
+    count: (totals.results?.[0] as { count: number }).count,
+    manualTotal: sourceRows.find((r) => r.source === 'manual')?.total ?? 0,
+    stripeTotal: sourceRows.find((r) => r.source === 'stripe')?.total ?? 0,
+    mine: { total: mine?.total ?? 0, count: mine?.count ?? 0 },
+    byUser: byUserRows,
+    pendingLinks: pending.results?.[0] ?? { total: 0, count: 0 },
+  });
+});
+
+// ===== Stripe payment links =====
+
+core.post('/payment-links', requirePermission('data:write'), async (c) => {
+  if (!c.env.STRIPE_SECRET_KEY) return c.json({ error: 'Stripe is not configured (missing STRIPE_SECRET_KEY secret)' }, 503);
+
+  const body = await c.req.json<{ studentId?: string; customerName?: string; amount?: number | string; description?: string }>();
+  const amount = Number(body.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return c.json({ error: 'Invalid amount' }, 400);
+  if (!body.studentId && !body.customerName) return c.json({ error: 'Missing studentId or customerName' }, 400);
+
+  let customerName = body.customerName ?? '';
+  if (body.studentId) {
+    const student = await c.env.DB.prepare(`SELECT name FROM students WHERE id = ?`).bind(body.studentId).first<{ name: string }>();
+    if (!student) return c.json({ error: 'Student not found' }, 404);
+    customerName = student.name;
+  }
+
+  const user = c.get('user');
+  const description = body.description?.trim() || `ค่าเรียน LITALK Education - ${customerName}`;
+
+  let link;
+  try {
+    link = await createStripePaymentLink(c.env.STRIPE_SECRET_KEY, {
+      productName: description,
+      amountSatang: Math.round(amount * 100),
+      currency: 'thb',
+      metadata: {
+        student_id: body.studentId ?? '',
+        customer_name: customerName,
+        created_by: user.email,
+      },
+    });
+  } catch (err) {
+    if (err instanceof StripeError) return c.json({ error: `Stripe: ${err.message}` }, 502);
+    throw err;
+  }
+
+  const result = await c.env.DB.prepare(
+    `INSERT INTO payment_links (stripe_payment_link_id, url, student_id, customer_name, description, amount, currency, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, 'thb', ?)`,
+  )
+    .bind(link.id, link.url, body.studentId ?? null, customerName, description, amount, user.email)
+    .run();
+  await logAudit(c.env.DB, user, 'CREATE_PAYMENT_LINK', body.studentId ?? null, link.id, true);
+
+  return c.json({ ok: true, id: Number(result.meta.last_row_id), url: link.url, paymentLinkId: link.id });
+});
+
+core.get('/payment-links', requirePermission('data:read'), async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT pl.id, pl.url, pl.student_id AS studentId, pl.customer_name AS customerName, pl.description,
+            pl.amount, pl.status, pl.created_by AS createdBy, pl.created_at AS createdAt
+     FROM payment_links pl ORDER BY pl.id DESC LIMIT 30`,
+  ).all();
+  return c.json(results);
+});
+
+core.post('/payment-links/:id/deactivate', requirePermission('data:write'), async (c) => {
+  if (!c.env.STRIPE_SECRET_KEY) return c.json({ error: 'Stripe is not configured (missing STRIPE_SECRET_KEY secret)' }, 503);
+  const id = c.req.param('id');
+  const row = await c.env.DB.prepare(`SELECT stripe_payment_link_id AS plId, status FROM payment_links WHERE id = ?`)
+    .bind(id)
+    .first<{ plId: string; status: string }>();
+  if (!row) return c.json({ error: 'Not found' }, 404);
+  if (row.status !== 'active') return c.json({ error: 'Link is not active' }, 400);
+
+  try {
+    await deactivateStripePaymentLink(c.env.STRIPE_SECRET_KEY, row.plId);
+  } catch (err) {
+    if (err instanceof StripeError) return c.json({ error: `Stripe: ${err.message}` }, 502);
+    throw err;
+  }
+  await c.env.DB.prepare(`UPDATE payment_links SET status = 'deactivated' WHERE id = ?`).bind(id).run();
+  await logAudit(c.env.DB, c.get('user'), 'DEACTIVATE_PAYMENT_LINK', null, row.plId, true);
+  return c.json({ ok: true });
+});
+
+// ===== One-time import from the old Google Sheet =====
+// Accepts JSON arrays exported from the Sheet (see worker/README.md).
+// Students upsert by id; the other tables plain-insert, so run it once.
+
+core.post('/import', requirePermission('data:write'), async (c) => {
+  const body = await c.req.json<{
+    students?: Array<{ id: string; name: string; nickname?: string; email?: string; phone?: string; course?: string }>;
+    studyLogs?: Array<{ studentId: string; date: string; feedback?: string; video?: string }>;
+    payments?: Array<{ studentId?: string; total: number; method?: string; date: string; proof?: string }>;
+    bookings?: Array<{ studentId: string; date: string; time: string; notes?: string }>;
+  }>();
+
+  const user = c.get('user');
+  const stmts: D1PreparedStatement[] = [];
+
+  for (const s of body.students ?? []) {
+    if (!s.id || !s.name) continue;
+    stmts.push(
+      c.env.DB.prepare(
+        `INSERT INTO students (id, name, nickname, email, phone, course, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name, nickname = excluded.nickname, email = excluded.email,
+           phone = excluded.phone, course = excluded.course`,
+      ).bind(s.id, s.name, s.nickname ?? null, s.email ?? null, s.phone ?? null, s.course ?? null, user.email),
+    );
+  }
+  for (const l of body.studyLogs ?? []) {
+    if (!l.studentId || !isYmd(l.date)) continue;
+    stmts.push(
+      c.env.DB.prepare(`INSERT INTO study_logs (student_id, log_date, feedback, video_url, created_by) VALUES (?, ?, ?, ?, ?)`)
+        .bind(l.studentId, l.date, l.feedback ?? null, l.video ?? null, user.email),
+    );
+  }
+  for (const p of body.payments ?? []) {
+    const amount = Number(p.total);
+    if (!Number.isFinite(amount) || amount <= 0 || !isYmd(p.date)) continue;
+    stmts.push(
+      c.env.DB.prepare(
+        `INSERT INTO payments (student_id, amount, method, paid_date, proof_url, source, recorded_by) VALUES (?, ?, ?, ?, ?, 'manual', ?)`,
+      ).bind(p.studentId ?? null, amount, p.method ?? null, p.date, p.proof ?? null, user.email),
+    );
+  }
+  for (const b of body.bookings ?? []) {
+    if (!b.studentId || !isYmd(b.date) || typeof b.time !== 'string') continue;
+    stmts.push(
+      c.env.DB.prepare(
+        `INSERT OR IGNORE INTO bookings (student_id, booking_date, booking_time, notes, created_by) VALUES (?, ?, ?, ?, ?)`,
+      ).bind(b.studentId, b.date, b.time, b.notes ?? null, user.email),
+    );
+  }
+
+  if (stmts.length > 5000) return c.json({ error: 'Too many rows in one request (max 5000); split the import' }, 400);
+  if (stmts.length > 0) await c.env.DB.batch(stmts);
+  await logAudit(c.env.DB, user, 'IMPORT', null, `${stmts.length} rows`, true);
+  return c.json({ ok: true, imported: stmts.length });
+});
+
+export default core;

@@ -2682,7 +2682,7 @@
                                 <span class="card-icon"><i class="fas fa-book"></i></span>
                                 <div>
                                     <h3>ข้อมูลคลาสเรียน</h3>
-                                    <p>กรอกข้อมูลหลังจบคลาส ระบบจะบันทึกลงชีตอัตโนมัติ</p>
+                                    <p>กรอกข้อมูลหลังจบคลาส ระบบจะบันทึกลงฐานข้อมูลอัตโนมัติ</p>
                                 </div>
                             </div>
 
@@ -2773,7 +2773,7 @@
                                 <span class="card-icon"><i class="fas fa-receipt"></i></span>
                                 <div>
                                     <h3>ข้อมูลการชำระเงิน</h3>
-                                    <p>ระบบจะบันทึกลงชีตการเงินอัตโนมัติ</p>
+                                    <p>ระบบจะบันทึกลงฐานข้อมูลการเงินอัตโนมัติ</p>
                                 </div>
                             </div>
 
@@ -2813,6 +2813,59 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- รายรับเดือนนี้ -->
+                    <div class="admin-card" style="margin-top: 24px;">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-sack-dollar"></i></span>
+                            <div>
+                                <h3>รายรับเดือนนี้</h3>
+                                <p id="earnings-month-label">-</p>
+                            </div>
+                        </div>
+                        <div class="form-body" id="earnings-body">
+                            <div class="form-hint">กำลังโหลดข้อมูล...</div>
+                        </div>
+                    </div>
+
+                    <!-- ลิงก์ชำระเงิน Stripe -->
+                    <div class="admin-card" style="margin-top: 24px;">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fab fa-stripe-s"></i></span>
+                            <div>
+                                <h3>ลิงก์ชำระเงิน Stripe</h3>
+                                <p>สร้างลิงก์ให้นักเรียนหรือลูกค้าชำระเงินออนไลน์ ระบบบันทึกยอดให้อัตโนมัติเมื่อชำระสำเร็จ</p>
+                            </div>
+                        </div>
+                        <div class="form-body">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div class="form-group">
+                                    <label><i class="fas fa-baht-sign"></i> จำนวนเงิน (บาท)</label>
+                                    <input type="number" id="link-amount" placeholder="0.00" min="1">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-user"></i> ชื่อลูกค้า (กรณีไม่ใช่นักเรียน)</label>
+                                    <input type="text" id="link-customer" placeholder="เว้นว่างเพื่อใช้นักเรียนที่เลือกด้านบน">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-align-left"></i> รายละเอียด (แสดงบนหน้าชำระเงิน)</label>
+                                <input type="text" id="link-description" placeholder="เช่น ค่าเรียนคอร์ส IELTS Prep เดือนกรกฎาคม">
+                            </div>
+                            <div style="display: flex; justify-content: flex-end;">
+                                <button class="btn btn-primary" onclick="createPaymentLink()" id="create-link-btn">
+                                    <i class="fas fa-link"></i> สร้างลิงก์ชำระเงิน
+                                </button>
+                            </div>
+                            <div id="payment-link-result" style="display: none;"></div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label><i class="fas fa-list"></i> ลิงก์ล่าสุด</label>
+                                <div class="row-list tight" id="payment-links-list">
+                                    <div class="form-hint">กำลังโหลดข้อมูล...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ============ CREATE STUDENT ============ -->
@@ -2835,7 +2888,7 @@
                             <i class="fas fa-info-circle"></i>
                             <div>
                                 <strong>ระบบดำเนินการอัตโนมัติ:</strong>
-                                สร้างบัญชี Auth0 พร้อมรหัสผ่านชั่วคราว และเพิ่มแถวข้อมูลนักเรียนลงชีตให้ทันทีหลังกดบันทึก
+                                สร้างบัญชี Auth0 พร้อมรหัสผ่านชั่วคราว และบันทึกข้อมูลนักเรียนลงฐานข้อมูลให้ทันทีหลังกดบันทึก
                             </div>
                         </div>
 
@@ -3182,14 +3235,20 @@
             useRefreshTokens: true
         });
 
-        // URL Web App จาก Google Apps Script
-        const gasAppUrl = 'https://script.google.com/macros/s/AKfycbyyiEM4NUx-leLse4535upWTtf6q68o4dTFIkO2FS0mml3J3kkIhM7WO27BoAP4aJ-BMg/exec';
-
-        // Cloudflare Worker API for the Student Files feature (upload/list/download/delete)
+        // Cloudflare Worker API — all admin data now lives here (D1), replacing
+        // the old Google Apps Script / Google Sheets backend.
         const filesApiUrl = 'https://litalk-files-api.n62c5gwghk.workers.dev';
 
         async function getFilesApiToken() {
             return auth0Client.getTokenSilently({ authorizationParams: { audience: filesApiAudience } });
+        }
+
+        // Authenticated fetch against the Worker (JSON in/out).
+        async function apiFetch(path, options = {}) {
+            const token = await getFilesApiToken();
+            const headers = Object.assign({ 'Authorization': 'Bearer ' + token }, options.headers || {});
+            if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+            return fetch(filesApiUrl + path, Object.assign({}, options, { headers }));
         }
 
         let appInitialized = false;
@@ -3365,6 +3424,10 @@
             if (screen === 'logs') {
                 requestAnimationFrame(updateMiniTabPill);
             }
+            if (screen === 'payments') {
+                loadEarnings();
+                loadPaymentLinks();
+            }
             if (screen === 'files') {
                 syncPickerText('files');
                 loadFilesForSelectedStudent();
@@ -3381,8 +3444,8 @@
             if (menu && menu.classList.contains('active')) closeMobileMenu();
         }
 
-        // ===== Dashboard (real data via the Apps Script's
-        // action=getDashboard&range=today|week|month endpoint) =====
+        // ===== Dashboard (real data via the Worker's
+        // GET /dashboard?range=today|week|month endpoint) =====
         let dashboardTimeframe = 'today';
         let dashboardData = null;
         let dashboardLoading = false;
@@ -3402,10 +3465,10 @@
             dashboardLoading = true;
             renderDashboardLoading();
             try {
-                const response = await fetch(`${gasAppUrl}?action=getDashboard&range=${encodeURIComponent(dashboardTimeframe)}`, { method: 'GET', redirect: 'follow' });
+                const response = await apiFetch(`/dashboard?range=${encodeURIComponent(dashboardTimeframe)}`);
                 const result = await response.json();
-                dashboardData = result.status === 'success' ? result.data : null;
-                if (!dashboardData) console.error('getDashboard error:', result.message);
+                dashboardData = response.ok ? result : null;
+                if (!dashboardData) console.error('getDashboard error:', result.error);
             } catch (error) {
                 console.error('Error loading dashboard:', error);
                 dashboardData = null;
@@ -3487,8 +3550,8 @@
             return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
         }
 
-        // Dashboard rows/alerts now carry a real studentId straight from the
-        // GAS aggregation, so this is a direct pre-select -- no name matching.
+        // Dashboard rows/alerts carry a real studentId straight from the
+        // Worker's aggregation, so this is a direct pre-select -- no name matching.
         function goToStudentAndScreen(studentId, screen) {
             if (studentId) {
                 selectedStudentId = studentId;
@@ -3544,14 +3607,9 @@
 
         async function loadStudentList() {
             try {
-                const response = await fetch(`${gasAppUrl}?action=getAllStudents`, { method: 'GET', redirect: 'follow' });
+                const response = await apiFetch('/students');
                 const result = await response.json();
-
-                if (result.status === 'success' && result.data.length > 0) {
-                    allStudentsData = result.data;
-                } else {
-                    allStudentsData = [];
-                }
+                allStudentsData = response.ok && Array.isArray(result) ? result : [];
             } catch (error) {
                 console.error('Error:', error);
                 allStudentsData = [];
@@ -3963,9 +4021,9 @@
 
         function renderBookingSlots() {
             const grid = document.getElementById('booking-slot-grid');
-            // Note: the GAS `createBooking` action checks the calendar for
-            // conflicts server-side and rejects overlapping slots; there is
-            // no read-only availability endpoint yet, so every slot renders
+            // Note: the Worker's POST /bookings rejects an already-taken
+            // date+time slot server-side (UNIQUE constraint); there is no
+            // read-only availability endpoint yet, so every slot renders
             // as selectable and a taken slot surfaces as an error on submit.
             grid.innerHTML = BOOKING_SLOTS.map(t => {
                 const h = Number(t.split(':')[0]);
@@ -4035,21 +4093,19 @@
 
             showLoading();
             try {
-                const response = await fetch(gasAppUrl, {
+                const response = await apiFetch('/bookings', {
                     method: 'POST',
-                    redirect: 'follow',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action: 'createBooking', adminEmail: currentAdminEmail || 'admin', payload: payload })
+                    body: JSON.stringify(payload)
                 });
 
                 const result = await response.json();
                 hideLoading();
 
-                if (result.status === 'success') {
+                if (response.ok && result.ok) {
                     showModal('จองเวลาเรียนสำเร็จ', result.message, 'success');
                     resetBookingWizard();
                 } else {
-                    showModal('ไม่สามารถดำเนินการได้', result.message, 'error');
+                    showModal('ไม่สามารถดำเนินการได้', result.error || result.message || 'เกิดข้อผิดพลาด', 'error');
                 }
             } catch (error) {
                 console.error(error);
@@ -4183,12 +4239,12 @@
             // แสดง Loading Overlay
             showLoading();
 
+            const ACTION_ENDPOINTS = { createStudent: '/students', addStudyLog: '/study-logs', addPayment: '/payments' };
+
             try {
-                const response = await fetch(gasAppUrl, {
+                const response = await apiFetch(ACTION_ENDPOINTS[actionType], {
                     method: 'POST',
-                    redirect: 'follow',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action: actionType, adminEmail: currentAdminEmail, payload: payload })
+                    body: JSON.stringify(payload)
                 });
 
                 const result = await response.json();
@@ -4196,7 +4252,7 @@
                 // ซ่อน Loading เมื่อประมวลผลเสร็จ
                 hideLoading();
 
-                if (result.status === 'success') {
+                if (response.ok && result.ok) {
                     // เปิด Web Modal แจ้งเตือนความสำเร็จ
                     if (actionType === 'createStudent') {
                         showModal('สร้างบัญชีสำเร็จ', result.message, 'success');
@@ -4216,14 +4272,157 @@
                         if (previewEl) previewEl.innerHTML = '';
                         switchTextareaTab('write');
                     }
-                    if (actionType === 'addPayment') { document.getElementById('pay-total').value = ''; document.getElementById('pay-proof').value = ''; }
+                    if (actionType === 'addPayment') {
+                        document.getElementById('pay-total').value = '';
+                        document.getElementById('pay-proof').value = '';
+                        loadEarnings();
+                    }
                 } else {
-                    showModal('เกิดข้อผิดพลาดจากระบบ', result.message, 'error');
+                    showModal('เกิดข้อผิดพลาดจากระบบ', result.error || result.message || 'เกิดข้อผิดพลาด', 'error');
                 }
             } catch (error) {
                 console.error(error);
                 hideLoading();
                 showModal('ข้อผิดพลาดการเชื่อมต่อ', 'เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาตรวจสอบ Console Log', 'error');
+            }
+        }
+
+        // ===== Stripe payment links + monthly earnings =====
+
+        async function loadEarnings() {
+            const body = document.getElementById('earnings-body');
+            document.getElementById('earnings-month-label').textContent =
+                new Date().toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+            try {
+                const response = await apiFetch('/earnings');
+                const e = await response.json();
+                if (!response.ok) throw new Error(e.error || 'load failed');
+                const rows = [
+                    { icon: 'fas fa-coins', label: 'รวมทั้งหมด', value: formatBaht(e.total), meta: `${e.count} รายการ` },
+                    { icon: 'fas fa-user-check', label: 'บันทึกโดยฉัน', value: formatBaht(e.mine.total), meta: `${e.mine.count} รายการ` },
+                    { icon: 'fab fa-stripe-s', label: 'ผ่าน Stripe', value: formatBaht(e.stripeTotal), meta: `บันทึกเอง ${formatBaht(e.manualTotal)}` },
+                    { icon: 'fas fa-hourglass-half', label: 'รอชำระจากลิงก์ที่เปิดอยู่', value: formatBaht(e.pendingLinks.total), meta: `${e.pendingLinks.count} ลิงก์` }
+                ];
+                let html = rows.map(r => `
+                    <div class="payment-row">
+                        <div class="payment-info"><div class="name"><i class="${r.icon}"></i> ${r.label}</div><div class="meta">${escapeHtml(r.meta)}</div></div>
+                        <div class="amount">${r.value}</div>
+                    </div>`).join('');
+                if (e.byUser && e.byUser.length > 1) {
+                    html += '<div class="form-hint" style="margin-top: 8px;">แยกตามผู้บันทึก</div>';
+                    html += e.byUser.map(u => `
+                        <div class="payment-row">
+                            <div class="payment-info"><div class="name">${escapeHtml(u.email)}</div><div class="meta">${u.count} รายการ</div></div>
+                            <div class="amount">${formatBaht(u.total)}</div>
+                        </div>`).join('');
+                }
+                body.innerHTML = html;
+            } catch (err) {
+                console.error('loadEarnings:', err);
+                body.innerHTML = '<div class="form-hint">โหลดข้อมูลรายรับไม่สำเร็จ</div>';
+            }
+        }
+
+        const LINK_STATUS_LABEL = { active: 'รอชำระ', paid: 'ชำระแล้ว', deactivated: 'ยกเลิกแล้ว' };
+
+        async function loadPaymentLinks() {
+            const list = document.getElementById('payment-links-list');
+            try {
+                const response = await apiFetch('/payment-links');
+                const links = await response.json();
+                if (!response.ok) throw new Error(links.error || 'load failed');
+                list.innerHTML = links.length ? links.map(l => `
+                    <div class="payment-row">
+                        <div class="payment-info">
+                            <div class="name">${escapeHtml(l.customerName || l.studentId || '-')}</div>
+                            <div class="meta">${escapeHtml(LINK_STATUS_LABEL[l.status] || l.status)} · ${escapeHtml(formatShortThaiDate((l.createdAt || '').slice(0, 10)))} · ${escapeHtml(l.createdBy || '')}</div>
+                        </div>
+                        <div class="amount">${formatBaht(l.amount)}</div>
+                        <button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(l.url)}', this)" title="คัดลอกลิงก์"><i class="fas fa-copy"></i></button>
+                        ${l.status === 'active' ? `<button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="deactivatePaymentLink(${l.id})" title="ยกเลิกลิงก์"><i class="fas fa-ban"></i></button>` : ''}
+                    </div>`).join('') : '<div class="form-hint">ยังไม่มีลิงก์ชำระเงิน</div>';
+            } catch (err) {
+                console.error('loadPaymentLinks:', err);
+                list.innerHTML = '<div class="form-hint">โหลดรายการลิงก์ไม่สำเร็จ</div>';
+            }
+        }
+
+        async function createPaymentLink() {
+            const amount = Number(document.getElementById('link-amount').value);
+            const customer = document.getElementById('link-customer').value.trim();
+            const description = document.getElementById('link-description').value.trim();
+            if (!amount || amount <= 0) {
+                triggerFieldError('link-amount', 'กรุณากรอกยอดเงิน');
+                return;
+            }
+            if (!selectedStudentId && !customer) {
+                triggerFieldError('link-customer', 'เลือกนักเรียนด้านบน หรือกรอกชื่อลูกค้า');
+                return;
+            }
+            const payload = { amount, description };
+            if (customer) payload.customerName = customer; else payload.studentId = selectedStudentId;
+
+            showLoading();
+            try {
+                const response = await apiFetch('/payment-links', { method: 'POST', body: JSON.stringify(payload) });
+                const result = await response.json();
+                hideLoading();
+                if (response.ok && result.ok) {
+                    const box = document.getElementById('payment-link-result');
+                    box.style.display = '';
+                    box.innerHTML = `
+                        <div class="info-notice" style="margin-top: 16px;">
+                            <i class="fas fa-check-circle"></i>
+                            <div style="min-width: 0;">
+                                <strong>สร้างลิงก์สำเร็จ:</strong>
+                                <a href="${escapeHtml(result.url)}" target="_blank" style="word-break: break-all;">${escapeHtml(result.url)}</a>
+                                <button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(result.url)}', this)"><i class="fas fa-copy"></i> คัดลอก</button>
+                            </div>
+                        </div>`;
+                    document.getElementById('link-amount').value = '';
+                    document.getElementById('link-customer').value = '';
+                    document.getElementById('link-description').value = '';
+                    loadPaymentLinks();
+                    loadEarnings();
+                } else {
+                    showModal('สร้างลิงก์ไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            } catch (err) {
+                hideLoading();
+                console.error(err);
+                showModal('ข้อผิดพลาดการเชื่อมต่อ', 'ไม่สามารถเชื่อมต่อระบบชำระเงินได้ กรุณาลองใหม่อีกครั้ง', 'error');
+            }
+        }
+
+        async function copyPaymentLink(url, btn) {
+            try {
+                await navigator.clipboard.writeText(url);
+                if (btn) {
+                    const orig = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-check"></i>';
+                    setTimeout(() => { btn.innerHTML = orig; }, 1200);
+                }
+            } catch {
+                showModal('คัดลอกอัตโนมัติไม่สำเร็จ', url, 'error');
+            }
+        }
+
+        async function deactivatePaymentLink(id) {
+            if (!confirm('ยกเลิกลิงก์ชำระเงินนี้หรือไม่? ลูกค้าจะไม่สามารถใช้ลิงก์นี้ชำระเงินได้อีก')) return;
+            showLoading();
+            try {
+                const response = await apiFetch(`/payment-links/${id}/deactivate`, { method: 'POST' });
+                const result = await response.json();
+                hideLoading();
+                if (response.ok && result.ok) {
+                    loadPaymentLinks();
+                    loadEarnings();
+                } else {
+                    showModal('ยกเลิกลิงก์ไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            } catch (err) {
+                hideLoading();
+                console.error(err);
             }
         }
 
