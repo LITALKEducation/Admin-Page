@@ -8865,15 +8865,49 @@
             else await enablePushNotifications();
         }
 
+        // iOS/iPadOS only allows Web Push for a page installed to the Home
+        // Screen — a regular Safari (or in-app-WebKit) tab silently rejects
+        // Notification.requestPermission() with no OS prompt at all, on every
+        // browser (Chrome/Firefox on iOS are WebKit-based too). Detect this
+        // up front so we can guide the user instead of showing a confusing
+        // "permission denied" after the fact.
+        function isIosDevice() {
+            return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        }
+        function isStandaloneDisplayMode() {
+            return window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+        }
+
         async function enablePushNotifications() {
-            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-                showModal('ไม่รองรับ', 'เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือนแบบ push', 'error');
+            if (isIosDevice() && !isStandaloneDisplayMode()) {
+                showModal(
+                    'ต้องเพิ่มลงหน้าจอโฮมก่อน',
+                    'iPhone/iPad ของ Apple อนุญาตให้ขอเปิดการแจ้งเตือนได้เฉพาะเมื่อเพิ่มเว็บนี้ลงหน้าจอโฮมแล้วเท่านั้น (จำกัดโดย iOS เอง ใช้ได้ทุกเบราว์เซอร์เหมือนกันหมด):\n\n' +
+                    '1. แตะปุ่มแชร์ (ไอคอนสี่เหลี่ยมมีลูกศรชี้ขึ้น) ด้านล่างจอ\n' +
+                    '2. เลือก "เพิ่มลงหน้าจอโฮม" (Add to Home Screen)\n' +
+                    '3. เปิดแอปจากไอคอนในหน้าจอโฮม (ไม่ใช่จาก Safari) แล้วกดปุ่มนี้อีกครั้ง',
+                    'error',
+                );
+                return;
+            }
+            if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') {
+                showModal(
+                    'ไม่รองรับการแจ้งเตือนแบบ push',
+                    'เบราว์เซอร์หรือแอปที่เปิดอยู่นี้ไม่รองรับ — พบบ่อยเมื่อเปิดผ่านแอปในตัว (เช่น LINE, Facebook) กรุณาเปิดด้วย Safari/Chrome โดยตรง',
+                    'error',
+                );
                 return;
             }
             try {
                 const permission = await Notification.requestPermission();
                 if (permission !== 'granted') {
-                    showToast('ไม่ได้เปิดการแจ้งเตือน', 'กรุณาอนุญาตการแจ้งเตือนจากเบราว์เซอร์', 'error');
+                    showToast(
+                        'ไม่ได้เปิดการแจ้งเตือน',
+                        permission === 'denied'
+                            ? 'เบราว์เซอร์นี้ถูกบล็อกการแจ้งเตือนไว้แล้ว กรุณาไปที่ตั้งค่าเว็บไซต์นี้ (ไอคอนกุญแจ/ตัวเลื่อนข้าง URL) แล้วอนุญาตใหม่'
+                            : 'กรุณาอนุญาตการแจ้งเตือนจากเบราว์เซอร์',
+                        'error',
+                    );
                     return;
                 }
                 const keyRes = await apiFetch('/push/vapid-public-key');
@@ -8885,13 +8919,14 @@
                 const reg = await navigator.serviceWorker.ready;
                 const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
                 const json = sub.toJSON();
-                await apiFetch('/push/subscribe', { method: 'POST', body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }) });
+                const subRes = await apiFetch('/push/subscribe', { method: 'POST', body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }) });
+                if (!subRes.ok) throw new Error('subscribe endpoint returned ' + subRes.status);
                 pushSubscribed = true;
                 updatePushToggleUI();
                 showToast('เปิดการแจ้งเตือนแล้ว', 'อุปกรณ์นี้จะได้รับการแจ้งเตือนแม้ปิดแท็บ', 'success');
             } catch (error) {
                 console.error('enablePushNotifications:', error);
-                showModal('เปิดการแจ้งเตือนไม่สำเร็จ', 'กรุณาลองใหม่อีกครั้ง', 'error');
+                showModal('เปิดการแจ้งเตือนไม่สำเร็จ', 'กรุณาลองใหม่อีกครั้ง (ดูรายละเอียดเพิ่มเติมได้ใน Console)', 'error');
             }
         }
 
