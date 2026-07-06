@@ -2505,19 +2505,36 @@
             z-index: 80;
         }
 
-        .topbar-title {
-            font-size: var(--text-base-lg);
+        /* Breadcrumb (shadcn Breadcrumb pattern: muted parent segments,
+           chevron separators, current page emphasized in normal text color). */
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            font-size: var(--text-base-sm);
+            min-width: 0;
+        }
+
+        .breadcrumb-item {
+            color: var(--text-muted);
+            font-weight: var(--weight-medium);
+            white-space: nowrap;
+        }
+
+        .breadcrumb-sep {
+            color: var(--text-muted);
+            font-size: 10px;
+            opacity: 0.7;
+        }
+
+        .breadcrumb-current {
+            color: var(--text-primary);
             font-weight: var(--weight-semibold);
             letter-spacing: var(--tracking-snug);
-            color: var(--text-primary);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-        }
-
-        .topbar-crumb {
-            color: var(--text-muted);
-            font-weight: var(--weight-medium);
         }
 
         .topbar-spacer { flex: 1; }
@@ -2845,6 +2862,94 @@
         .students-table tbody tr { cursor: pointer; transition: background-color 0.12s; }
         .students-table tbody tr:hover { background-color: var(--bg-tertiary); }
         .students-table tbody tr:last-child td { border-bottom: none; }
+        .students-table tbody tr.row-selected { background-color: color-mix(in srgb, var(--text-primary) 5%, transparent); }
+        .students-table th input[type="checkbox"],
+        .students-table td input[type="checkbox"] {
+            width: 15px;
+            height: 15px;
+            cursor: pointer;
+            accent-color: var(--brand-primary);
+        }
+
+        /* shadcn Data Table sortable header: plain button, icon dims when
+           the column isn't the active sort key. */
+        .th-sort-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: none;
+            background: transparent;
+            padding: 0;
+            font: inherit;
+            font-size: var(--text-xs);
+            font-weight: var(--weight-bold);
+            text-transform: uppercase;
+            letter-spacing: var(--tracking-wide);
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+
+        .th-sort-btn:hover { color: var(--text-primary); }
+        .th-sort-btn i { font-size: 10px; opacity: 0.5; }
+        .th-sort-btn.active i { opacity: 1; color: var(--text-primary); }
+
+        /* Bulk action bar: appears above the table once rows are checked. */
+        .bulk-action-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            margin-bottom: var(--space-2);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background-color: var(--bg-tertiary);
+            font-size: var(--text-base-sm);
+            font-weight: var(--weight-medium);
+            color: var(--text-secondary);
+            animation: fadeIn 0.15s ease;
+        }
+
+        .bulk-action-spacer { flex: 1; }
+
+        /* Pagination (shadcn Pagination pattern: numbered page buttons +
+           prev/next, active page filled). */
+        .table-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 16px;
+            border-top: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+
+        .pagination-summary { font-size: var(--text-sm); color: var(--text-muted); }
+
+        .pagination-controls { display: flex; align-items: center; gap: 4px; }
+
+        .page-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 32px;
+            height: 32px;
+            padding: 0 8px;
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: var(--text-base-sm);
+            cursor: pointer;
+            transition: all 0.12s ease;
+        }
+
+        .page-btn:hover:not(:disabled) { background-color: var(--bg-tertiary); color: var(--text-primary); }
+        .page-btn:disabled { color: var(--text-muted); cursor: not-allowed; opacity: 0.5; }
+        .page-btn.active { border-color: var(--border-color); background-color: var(--bg-secondary); color: var(--text-primary); font-weight: var(--weight-semibold); box-shadow: var(--card-shadow); }
+        .page-btn.ellipsis { cursor: default; }
+        .page-btn.ellipsis:hover { background: transparent; color: var(--text-secondary); }
 
         .student-cell { display: flex; align-items: center; gap: 12px; min-width: 0; }
 
@@ -3047,6 +3152,93 @@
             line-height: 1.5;
         }
 
+        /* ===== Toast notifications (sonner-style) ===== */
+        .toast-viewport {
+            position: fixed;
+            top: 72px;
+            right: 20px;
+            z-index: 10050;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 360px;
+            max-width: calc(100vw - 40px);
+            pointer-events: none;
+        }
+
+        @media (max-width: 900px) {
+            .toast-viewport { top: 64px; right: 12px; }
+        }
+
+        .toast {
+            pointer-events: auto;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-pop);
+            padding: 14px 16px;
+            transform: translateX(120%);
+            opacity: 0;
+            transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s;
+        }
+
+        .toast.show { transform: translateX(0); opacity: 1; }
+        .toast.hide { transform: translateX(120%); opacity: 0; }
+
+        .toast-icon {
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            margin-top: 1px;
+        }
+
+        .toast.success .toast-icon { color: var(--accent-success); }
+        .toast.error .toast-icon { color: var(--accent-danger); }
+        .toast.info .toast-icon { color: var(--text-primary); }
+
+        .toast-body { flex: 1; min-width: 0; }
+
+        .toast-title {
+            font-size: var(--text-base-sm);
+            font-weight: var(--weight-semibold);
+            color: var(--text-primary);
+            line-height: 1.35;
+        }
+
+        .toast-message {
+            font-size: var(--text-sm);
+            color: var(--text-secondary);
+            margin-top: 2px;
+            line-height: 1.45;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .toast-close {
+            flex-shrink: 0;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 12px;
+            padding: 2px;
+            border-radius: var(--radius-xs);
+            transition: color 0.15s, background-color 0.15s;
+        }
+
+        .toast-close:hover { color: var(--text-primary); background-color: var(--bg-tertiary); }
+
+        @media (prefers-reduced-motion: reduce) {
+            .toast { transition: opacity 0.15s; }
+        }
+
         @media (max-width: 700px) {
             .students-table thead { display: none; }
             .students-table td { display: block; border-bottom: none; padding: 4px 16px; white-space: normal; }
@@ -3220,7 +3412,11 @@
 
             <!-- Sticky top bar (desktop) -->
             <div class="topbar">
-                <span class="topbar-title"><span class="topbar-crumb" id="topbar-crumb">ภาพรวม</span> <span class="topbar-crumb" id="topbar-crumb-sep" style="display:none;">/</span> <span id="topbar-title">Dashboard</span></span>
+                <nav class="breadcrumb" aria-label="Breadcrumb">
+                    <span class="breadcrumb-item" id="topbar-crumb">ภาพรวม</span>
+                    <i class="fas fa-chevron-right breadcrumb-sep" id="topbar-crumb-sep" style="display:none;"></i>
+                    <span class="breadcrumb-current" id="topbar-title">Dashboard</span>
+                </nav>
                 <span class="topbar-spacer"></span>
                 <button class="search-trigger" onclick="openCommandPalette()" aria-label="ค้นหา (Ctrl+K)">
                     <i class="fas fa-magnifying-glass"></i>
@@ -3335,21 +3531,35 @@
                             <h1>รายชื่อนักเรียน</h1>
                             <p id="students-count-label">นักเรียนทั้งหมดในความดูแลของคุณ</p>
                         </div>
-                        <button class="btn btn-primary" data-admin-only style="display: none;" onclick="goScreen('create')">
-                            <i class="fas fa-plus"></i> เพิ่มนักเรียน
-                        </button>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-secondary" onclick="exportStudentsCsv(false)">
+                                <i class="fas fa-file-export"></i> Export
+                            </button>
+                            <button class="btn btn-primary" data-admin-only style="display: none;" onclick="goScreen('create')">
+                                <i class="fas fa-plus"></i> เพิ่มนักเรียน
+                            </button>
+                        </div>
                     </div>
 
                     <div class="table-toolbar">
                         <div class="search-box">
                             <i class="fas fa-magnifying-glass"></i>
-                            <input type="text" id="students-search-input" placeholder="ค้นหาชื่อ ชื่อเล่น หรือรหัสนักเรียน..." oninput="renderStudentsScreen()">
+                            <input type="text" id="students-search-input" placeholder="ค้นหาชื่อ ชื่อเล่น หรือรหัสนักเรียน..." oninput="studentsPage = 1; renderStudentsScreen()">
                         </div>
                         <div class="select-wrapper" style="width: auto;">
-                            <select id="students-course-filter" onchange="renderStudentsScreen()">
+                            <select id="students-course-filter" onchange="studentsPage = 1; renderStudentsScreen()">
                                 <option value="">คอร์สทั้งหมด</option>
                             </select>
                         </div>
+                    </div>
+
+                    <!-- Bulk action bar: shown only while >=1 row is checked -->
+                    <div class="bulk-action-bar" id="students-bulk-bar" style="display: none;">
+                        <span id="students-bulk-count">0 รายการที่เลือก</span>
+                        <span class="bulk-action-spacer"></span>
+                        <button class="btn btn-secondary" style="padding: 6px 12px;" onclick="exportStudentsCsv(true)"><i class="fas fa-file-export"></i> ส่งออกที่เลือก</button>
+                        <button class="btn btn-danger" data-admin-only style="display: none; padding: 6px 12px;" onclick="bulkDeleteStudents()"><i class="fas fa-user-slash"></i> ลบที่เลือก</button>
+                        <button class="btn btn-secondary" style="padding: 6px 12px;" onclick="clearStudentsSelection()"><i class="fas fa-xmark"></i> ยกเลิก</button>
                     </div>
 
                     <div class="students-table-card">
@@ -3357,8 +3567,9 @@
                             <table class="students-table">
                                 <thead>
                                     <tr>
-                                        <th>นักเรียน</th>
-                                        <th>คอร์สเรียน</th>
+                                        <th style="width: 36px;"><input type="checkbox" id="students-select-all" onchange="toggleSelectAllStudents(this)"></th>
+                                        <th><button class="th-sort-btn" onclick="setStudentsSort('name')">นักเรียน<i class="fas fa-sort" id="sort-icon-name"></i></button></th>
+                                        <th><button class="th-sort-btn" onclick="setStudentsSort('course')">คอร์สเรียน<i class="fas fa-sort" id="sort-icon-course"></i></button></th>
                                         <th>ติดต่อ</th>
                                         <th style="text-align: right;"></th>
                                     </tr>
@@ -3367,6 +3578,7 @@
                             </table>
                         </div>
                         <div id="students-empty" style="display: none;"></div>
+                        <div class="table-pagination" id="students-pagination" style="display: none;"></div>
                     </div>
                 </div>
 
@@ -4317,6 +4529,9 @@
         </div>
     </div>
 
+    <!-- Toasts (non-blocking confirmations) -->
+    <div class="toast-viewport" id="toast-viewport" aria-live="polite"></div>
+
     <!-- Modals -->
     <div id="loading-overlay" class="modal-overlay">
         <div class="modal-box" style="background: transparent; border: none; box-shadow: none;">
@@ -4637,6 +4852,52 @@
             modal.classList.remove('active');
             modal.classList.add('is-closing');
             setTimeout(() => modal.classList.remove('is-closing'), closeMs);
+        }
+
+        // Non-blocking confirmation for routine actions (save/approve/copy/etc).
+        // Use showModal() instead when the message holds something the user
+        // must actively read and keep — e.g. a one-time generated password —
+        // since a toast disappears on its own.
+        const TOAST_ICON = {
+            success: 'fas fa-check-circle',
+            error: 'fas fa-times-circle',
+            info: 'fas fa-info-circle',
+        };
+
+        function showToast(title, message, type = 'success', durationMs) {
+            const viewport = document.getElementById('toast-viewport');
+            if (!viewport) return;
+
+            const duration = durationMs ?? Math.min(9000, Math.max(4000, (String(message || '').length) * 60));
+
+            const el = document.createElement('div');
+            el.className = `toast ${type}`;
+            el.innerHTML = `
+                <span class="toast-icon"><i class="${TOAST_ICON[type] || TOAST_ICON.success}"></i></span>
+                <div class="toast-body">
+                    <div class="toast-title"></div>
+                    ${message ? '<div class="toast-message"></div>' : ''}
+                </div>
+                <button class="toast-close" aria-label="ปิด"><i class="fas fa-xmark"></i></button>`;
+            el.querySelector('.toast-title').textContent = title;
+            if (message) el.querySelector('.toast-message').textContent = message;
+
+            let timer = null;
+            const dismiss = () => {
+                if (timer) clearTimeout(timer);
+                el.classList.remove('show');
+                el.classList.add('hide');
+                setTimeout(() => el.remove(), 250);
+            };
+            const arm = () => { timer = setTimeout(dismiss, duration); };
+
+            el.addEventListener('mouseenter', () => { if (timer) clearTimeout(timer); });
+            el.addEventListener('mouseleave', arm);
+            el.querySelector('.toast-close').addEventListener('click', dismiss);
+
+            viewport.appendChild(el);
+            requestAnimationFrame(() => el.classList.add('show'));
+            arm();
         }
 
         // ===== Screen router (sidebar SPA) =====
@@ -5260,7 +5521,7 @@
                 }
 
                 fileInput.value = '';
-                showModal('อัปโหลดสำเร็จ', 'บันทึกไฟล์เรียบร้อยแล้ว', 'success');
+                showToast('อัปโหลดสำเร็จ', 'บันทึกไฟล์เรียบร้อยแล้ว', 'success');
                 loadFilesForSelectedStudent();
             } catch (error) {
                 hideLoading();
@@ -5282,7 +5543,7 @@
                     btn.innerHTML = '<i class="fas fa-check"></i>';
                     setTimeout(() => { btn.innerHTML = orig; }, 1400);
                 }
-                showModal('คัดลอกลิงก์สาธารณะแล้ว', 'ใครก็ตามที่มีลิงก์นี้จะเปิดไฟล์ได้:\n' + result.url, 'success');
+                showToast('คัดลอกลิงก์สาธารณะแล้ว', 'ใครก็ตามที่มีลิงก์นี้จะเปิดไฟล์ได้:\n' + result.url, 'success');
             } catch (error) {
                 if (btn) btn.innerHTML = orig;
                 console.error('copyPublicFileLink:', error);
@@ -5329,7 +5590,7 @@
                 hideLoading();
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-                showModal('ลบสำเร็จ', 'ลบไฟล์เรียบร้อยแล้ว', 'success');
+                showToast('ลบสำเร็จ', 'ลบไฟล์เรียบร้อยแล้ว', 'success');
                 loadFilesForSelectedStudent();
             } catch (error) {
                 hideLoading();
@@ -5514,7 +5775,7 @@
                 const result = await response.json();
                 hideLoading();
                 if (response.ok && result.ok) {
-                    showModal('แก้ไขสำเร็จ', result.message, 'success');
+                    showToast('แก้ไขสำเร็จ', result.message, 'success');
                     loadStudentCheck();
                 } else {
                     showModal('แก้ไขไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
@@ -5586,7 +5847,7 @@
                     throw new Error(err.error || `HTTP ${response.status}`);
                 }
                 fileInput.value = '';
-                showModal('อัปโหลดสำเร็จ', 'บันทึกไฟล์เรียบร้อยแล้ว', 'success');
+                showToast('อัปโหลดสำเร็จ', 'บันทึกไฟล์เรียบร้อยแล้ว', 'success');
                 loadCheckFiles();
             } catch (error) {
                 hideLoading();
@@ -5606,7 +5867,7 @@
                 const result = await response.json();
                 hideLoading();
                 if (response.ok && result.ok) {
-                    showModal('ลบนักเรียนสำเร็จ', result.message, 'success');
+                    showToast('ลบนักเรียนสำเร็จ', result.message, 'success');
                     selectedStudentId = '';
                     await loadStudentList();
                     updateSharedStudentIndicators();
@@ -5764,7 +6025,7 @@
                 const result = await response.json();
                 hideLoading();
                 if (response.ok && result.ok) {
-                    showModal(editing ? 'บันทึกตารางเรียนสำเร็จ' : 'ส่งตารางเรียนสำเร็จ', result.message, 'success');
+                    showToast(editing ? 'บันทึกตารางเรียนสำเร็จ' : 'ส่งตารางเรียนสำเร็จ', result.message, 'success');
                     resetScheduleForm();
                     loadSchedules();
                 } else {
@@ -5851,7 +6112,7 @@
                 const result = await response.json();
                 hideLoading();
                 if (response.ok && result.ok) {
-                    showModal('ส่งกลับให้ปรับปรุงแล้ว', result.message, 'success');
+                    showToast('ส่งกลับให้ปรับปรุงแล้ว', result.message, 'success');
                     loadSchedules();
                 } else {
                     showModal('ทำรายการไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
@@ -5873,9 +6134,9 @@
                 if (response.ok && result.ok) {
                     if (result.paymentUrl) {
                         copyPaymentLink(result.paymentUrl, null);
-                        showModal('อนุมัติแล้ว', result.message + '\n\nคัดลอกลิงก์ชำระเงินไว้ให้แล้ว: ' + result.paymentUrl, 'success');
+                        showToast('อนุมัติแล้ว', result.message + '\n\nคัดลอกลิงก์ชำระเงินไว้ให้แล้ว: ' + result.paymentUrl, 'success');
                     } else {
-                        showModal('อนุมัติแล้ว', result.message, 'success');
+                        showToast('อนุมัติแล้ว', result.message, 'success');
                     }
                     loadSchedules();
                 } else {
@@ -5897,7 +6158,7 @@
                 const result = await response.json();
                 hideLoading();
                 if (response.ok && result.ok) {
-                    showModal('ปฏิเสธแล้ว', result.message, 'success');
+                    showToast('ปฏิเสธแล้ว', result.message, 'success');
                     loadSchedules();
                 } else {
                     showModal('ปฏิเสธไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
@@ -6043,7 +6304,7 @@
                 hideLoading();
                 if (response.ok && result.ok) {
                     if (result.paymentUrl) copyPaymentLink(result.paymentUrl, null);
-                    showModal('ส่งคำร้องสำเร็จ', result.message, 'success');
+                    showToast('ส่งคำร้องสำเร็จ', result.message, 'success');
                     amendSessions = [];
                     document.getElementById('amend-note').value = '';
                     document.getElementById('amend-schedule-select').value = '';
@@ -6121,7 +6382,7 @@
                 hideLoading();
                 if (response.ok && result.ok) {
                     if (result.paymentUrl) copyPaymentLink(result.paymentUrl, null);
-                    showModal('อนุมัติแล้ว', result.message, 'success');
+                    showToast('อนุมัติแล้ว', result.message, 'success');
                     loadSchedules();
                 } else {
                     showModal('อนุมัติไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
@@ -6142,7 +6403,7 @@
                 const result = await response.json();
                 hideLoading();
                 if (response.ok && result.ok) {
-                    showModal('ปฏิเสธแล้ว', result.message, 'success');
+                    showToast('ปฏิเสธแล้ว', result.message, 'success');
                     loadSchedules();
                 } else {
                     showModal('ปฏิเสธไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
@@ -6279,7 +6540,7 @@
                 const result = await response.json();
                 hideLoading();
                 if (response.ok && result.ok) {
-                    showModal('บันทึกสิทธิ์สำเร็จ', result.message, 'success');
+                    showToast('บันทึกสิทธิ์สำเร็จ', result.message, 'success');
                     loadTeacherAssignments();
                 } else {
                     showModal('บันทึกสิทธิ์ไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
@@ -6420,7 +6681,7 @@
                 hideLoading();
 
                 if (response.ok && result.ok) {
-                    showModal('จองเวลาเรียนสำเร็จ', result.message, 'success');
+                    showToast('จองเวลาเรียนสำเร็จ', result.message, 'success');
                     resetBookingWizard();
                 } else {
                     showModal('ไม่สามารถดำเนินการได้', result.error || result.message || 'เกิดข้อผิดพลาด', 'error');
@@ -6683,7 +6944,7 @@
                         });
                         loadStudentList();
                     } else {
-                        showModal('บันทึกสำเร็จ', result.message, 'success');
+                        showToast('บันทึกสำเร็จ', result.message, 'success');
                     }
 
                     if (actionType === 'addStudyLog') {
@@ -7109,6 +7370,128 @@
             if (courses.includes(current)) select.value = current;
         }
 
+        // Sort / pagination / row-selection state for the students table.
+        let studentsSortKey = null;   // 'name' | 'course' | null
+        let studentsSortDir = 'asc';  // 'asc' | 'desc'
+        let studentsPage = 1;
+        const STUDENTS_PAGE_SIZE = 10;
+        let studentsSelected = new Set();
+        let studentsLastFiltered = []; // the current filtered+sorted list, kept for export/select-all
+
+        function setStudentsSort(key) {
+            if (studentsSortKey === key) {
+                studentsSortDir = studentsSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                studentsSortKey = key;
+                studentsSortDir = 'asc';
+            }
+            renderStudentsScreen();
+        }
+
+        function updateStudentsSortIcons() {
+            ['name', 'course'].forEach(key => {
+                const icon = document.getElementById('sort-icon-' + key);
+                if (!icon) return;
+                const btn = icon.closest('.th-sort-btn');
+                const active = studentsSortKey === key;
+                btn.classList.toggle('active', active);
+                icon.className = active
+                    ? (studentsSortDir === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down')
+                    : 'fas fa-sort';
+            });
+        }
+
+        function toggleSelectAllStudents(checkbox) {
+            if (checkbox.checked) studentsLastFiltered.forEach(s => studentsSelected.add(s.id));
+            else studentsLastFiltered.forEach(s => studentsSelected.delete(s.id));
+            renderStudentsScreen();
+        }
+
+        function toggleStudentSelected(e, id) {
+            e.stopPropagation();
+            if (e.target.checked) studentsSelected.add(id); else studentsSelected.delete(id);
+            renderStudentsScreen();
+        }
+
+        function clearStudentsSelection() {
+            studentsSelected.clear();
+            renderStudentsScreen();
+        }
+
+        function updateStudentsBulkBar() {
+            const bar = document.getElementById('students-bulk-bar');
+            const label = document.getElementById('students-bulk-count');
+            if (!bar || !label) return;
+            const count = studentsSelected.size;
+            bar.style.display = count > 0 ? 'flex' : 'none';
+            label.textContent = `${count} รายการที่เลือก`;
+        }
+
+        function csvEscape(value) {
+            const s = String(value ?? '');
+            return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+        }
+
+        function downloadCsv(filename, rows) {
+            const csv = '﻿' + rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        // Export the current filtered+sorted view, or just the checked rows
+        // when onlySelected is true (bulk bar's "ส่งออกที่เลือก").
+        function exportStudentsCsv(onlySelected) {
+            const rows = onlySelected
+                ? studentsLastFiltered.filter(s => studentsSelected.has(s.id))
+                : studentsLastFiltered;
+            if (!rows.length) {
+                showToast('ไม่มีข้อมูลให้ส่งออก', onlySelected ? 'กรุณาเลือกนักเรียนอย่างน้อย 1 คน' : '', 'info');
+                return;
+            }
+            const header = ['รหัสนักเรียน', 'ชื่อ', 'ชื่อเล่น', 'คอร์สเรียน', 'เบอร์โทร', 'อีเมล'];
+            const body = rows.map(s => [s.id, s.name, s.nickname || '', s.course || '', s.phone || '', s.email || '']);
+            downloadCsv(`litalk-students-${bangkokTodayLocal()}.csv`, [header, ...body]);
+            showToast('ส่งออกสำเร็จ', `บันทึก ${rows.length} รายการเป็นไฟล์ CSV แล้ว`, 'success');
+        }
+
+        function bangkokTodayLocal() {
+            return new Date().toISOString().slice(0, 10);
+        }
+
+        async function bulkDeleteStudents() {
+            const ids = [...studentsSelected];
+            if (!ids.length) return;
+            if (!confirm(`ยืนยันการลบนักเรียน ${ids.length} คนออกจากระบบ?\n\nประวัติการเรียนและการชำระเงินจะยังถูกเก็บไว้ และบัญชีเข้าสู่ระบบของนักเรียนจะไม่ถูกลบ`)) return;
+
+            showLoading();
+            let okCount = 0;
+            let failCount = 0;
+            for (const id of ids) {
+                try {
+                    const response = await apiFetch(`/students/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                    const result = await response.json();
+                    if (response.ok && result.ok) okCount++; else failCount++;
+                } catch {
+                    failCount++;
+                }
+            }
+            hideLoading();
+            studentsSelected.clear();
+            await loadStudentList();
+            if (failCount === 0) {
+                showToast('ลบนักเรียนสำเร็จ', `ลบนักเรียน ${okCount} คนออกจากระบบแล้ว`, 'success');
+            } else {
+                showModal('ลบนักเรียนบางส่วนไม่สำเร็จ', `ลบสำเร็จ ${okCount} คน, ไม่สำเร็จ ${failCount} คน`, 'error');
+            }
+        }
+
         function renderStudentsScreen() {
             const tbody = document.getElementById('students-table-body');
             const emptyEl = document.getElementById('students-empty');
@@ -7117,12 +7500,20 @@
             const q = (document.getElementById('students-search-input')?.value || '').trim().toLowerCase();
             const course = document.getElementById('students-course-filter')?.value || '';
 
-            const filtered = allStudentsData.filter(s => {
+            let filtered = allStudentsData.filter(s => {
                 if (course && (s.course || '') !== course) return false;
                 if (!q) return true;
                 return [s.name, s.nickname, s.id, s.email, s.phone]
                     .some(v => String(v || '').toLowerCase().includes(q));
             });
+
+            if (studentsSortKey) {
+                const dir = studentsSortDir === 'asc' ? 1 : -1;
+                filtered = [...filtered].sort((a, b) =>
+                    String(a[studentsSortKey] || '').localeCompare(String(b[studentsSortKey] || ''), 'th') * dir);
+            }
+            studentsLastFiltered = filtered;
+            updateStudentsSortIcons();
 
             const countLabel = document.getElementById('students-count-label');
             if (countLabel) {
@@ -7130,6 +7521,8 @@
                     ? `แสดง ${filtered.length} จากทั้งหมด ${allStudentsData.length} คน`
                     : `นักเรียนทั้งหมด ${allStudentsData.length} คน`;
             }
+
+            const paginationEl = document.getElementById('students-pagination');
 
             if (!filtered.length) {
                 tbody.innerHTML = '';
@@ -7139,15 +7532,25 @@
                     : (allStudentsData.length
                         ? `<div class="empty-state"><i class="fas fa-magnifying-glass"></i><div class="empty-title">ไม่พบนักเรียนที่ค้นหา</div><div class="empty-sub">ลองปรับคำค้นหาหรือตัวกรองคอร์สเรียน</div></div>`
                         : `<div class="empty-state"><i class="fas fa-user-graduate"></i><div class="empty-title">ยังไม่มีนักเรียนในระบบ</div><div class="empty-sub">เพิ่มนักเรียนใหม่ได้จากปุ่ม "เพิ่มนักเรียน" ด้านบน</div></div>`);
+                if (paginationEl) paginationEl.style.display = 'none';
+                updateStudentsBulkBar();
                 return;
             }
 
             emptyEl.style.display = 'none';
+
+            const totalPages = Math.max(1, Math.ceil(filtered.length / STUDENTS_PAGE_SIZE));
+            studentsPage = Math.min(Math.max(1, studentsPage), totalPages);
+            const start = (studentsPage - 1) * STUDENTS_PAGE_SIZE;
+            const pageRows = filtered.slice(start, start + STUDENTS_PAGE_SIZE);
+
             const admin = isAdminUser();
-            tbody.innerHTML = filtered.map(s => {
+            tbody.innerHTML = pageRows.map(s => {
                 const contact = [s.phone, s.email].filter(Boolean).map(escapeHtml).join(' · ') || '<span style="color: var(--text-muted);">-</span>';
+                const checked = studentsSelected.has(s.id);
                 return `
-                <tr onclick="goToStudentAndScreen('${escapeJs(s.id)}', 'check')">
+                <tr class="${checked ? 'row-selected' : ''}" onclick="goToStudentAndScreen('${escapeJs(s.id)}', 'check')">
+                    <td onclick="event.stopPropagation()"><input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleStudentSelected(event, '${escapeJs(s.id)}')"></td>
                     <td>
                         <div class="student-cell">
                             <span class="avatar">${escapeHtml(studentInitials(s.name))}</span>
@@ -7180,6 +7583,57 @@
                     </td>
                 </tr>`;
             }).join('');
+
+            const selectAll = document.getElementById('students-select-all');
+            if (selectAll) selectAll.checked = pageRows.length > 0 && pageRows.every(s => studentsSelected.has(s.id));
+
+            if (paginationEl) {
+                if (totalPages <= 1) {
+                    paginationEl.style.display = 'none';
+                } else {
+                    paginationEl.style.display = 'flex';
+                    paginationEl.innerHTML = renderPaginationControls(studentsPage, totalPages, filtered.length, start, pageRows.length, 'goToStudentsPage');
+                }
+            }
+
+            updateStudentsBulkBar();
+        }
+
+        function goToStudentsPage(page) {
+            studentsPage = page;
+            renderStudentsScreen();
+        }
+
+        // Shared pagination control markup: prev/next + numbered pages with
+        // an ellipsis once there are more than 7 pages (shadcn Pagination
+        // pattern). `gotoFnName` is the global function name to call on click.
+        function renderPaginationControls(page, totalPages, totalItems, start, pageCount, gotoFnName) {
+            const summary = `แสดง ${totalItems === 0 ? 0 : start + 1}-${start + pageCount} จาก ${totalItems} รายการ`;
+
+            let pages;
+            if (totalPages <= 7) {
+                pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+            } else {
+                pages = new Set([1, 2, totalPages - 1, totalPages, page - 1, page, page + 1]);
+                pages = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+            }
+
+            let lastPage = 0;
+            const pageButtons = pages.map(p => {
+                let html = '';
+                if (p - lastPage > 1) html += `<span class="page-btn ellipsis">…</span>`;
+                lastPage = p;
+                html += `<button class="page-btn ${p === page ? 'active' : ''}" onclick="${gotoFnName}(${p})">${p}</button>`;
+                return html;
+            }).join('');
+
+            return `
+                <span class="pagination-summary">${summary}</span>
+                <div class="pagination-controls">
+                    <button class="page-btn" onclick="${gotoFnName}(${page - 1})" ${page <= 1 ? 'disabled' : ''} aria-label="ก่อนหน้า"><i class="fas fa-chevron-left"></i></button>
+                    ${pageButtons}
+                    <button class="page-btn" onclick="${gotoFnName}(${page + 1})" ${page >= totalPages ? 'disabled' : ''} aria-label="ถัดไป"><i class="fas fa-chevron-right"></i></button>
+                </div>`;
         }
 
         function closeAllRowActionMenus() {
