@@ -1,5 +1,5 @@
-const CACHE_NAME = 'litalk-admin-cache-v1';
-const DYNAMIC_CACHE_NAME = 'litalk-admin-dynamic-v1';
+const CACHE_NAME = 'litalk-admin-cache-v2';
+const DYNAMIC_CACHE_NAME = 'litalk-admin-dynamic-v2';
 
 // Assets to precache immediately on install
 const PRECACHE_ASSETS = [
