@@ -3805,6 +3805,9 @@
                             <button class="sidebar-nav-item" data-screen="credits" onclick="goScreen('credits')" title="แก้ไขเครดิต">
                                 <i class="fas fa-coins"></i> <span class="sidebar-label">แก้ไขเครดิต</span>
                             </button>
+                            <button class="sidebar-nav-item" data-screen="notify" onclick="goScreen('notify')" title="ส่งการแจ้งเตือน">
+                                <i class="fas fa-paper-plane"></i> <span class="sidebar-label">ส่งการแจ้งเตือน</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -5037,6 +5040,88 @@
                     </div>
                 </div>
 
+                <!-- ============ SEND NOTIFICATION (ADMIN ONLY) ============ -->
+                <div id="screen-notify" class="tab-content" data-screen-panel="notify">
+                    <div class="screen-header">
+                        <h1>ส่งการแจ้งเตือน</h1>
+                        <p>ส่งข้อความแจ้งเตือนไปยังพนักงานหรือนักเรียน — เลือกได้ว่าจะส่งถึงใครคนหนึ่ง บทบาทใดบทบาทหนึ่ง หรือทุกคนในระบบ</p>
+                    </div>
+
+                    <div class="admin-card">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-paper-plane"></i></span>
+                            <div>
+                                <h3>ข้อความใหม่</h3>
+                                <p>หัวข้อและเนื้อหาจะแสดงในกระดิ่งแจ้งเตือนของผู้รับ</p>
+                            </div>
+                        </div>
+                        <div class="form-body">
+                            <div class="form-group">
+                                <label><i class="fas fa-heading"></i> หัวข้อเรื่อง</label>
+                                <input type="text" id="notify-title" placeholder="เช่น ปิดทำการวันหยุดนักขัตฤกษ์" maxlength="200">
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-align-left"></i> เนื้อหา</label>
+                                <textarea id="notify-body" rows="3" placeholder="รายละเอียดของการแจ้งเตือน (ไม่บังคับ)" maxlength="2000"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-link"></i> ลิงก์แนบ (ถ้ามี)</label>
+                                <input type="text" id="notify-link" placeholder="https://... (ไม่บังคับ)">
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div class="form-group">
+                                    <label><i class="fas fa-bullseye"></i> ส่งถึง</label>
+                                    <select id="notify-audience-type" onchange="onNotifyAudienceChange()">
+                                        <option value="all">ทุกคนในระบบ (พนักงาน + นักเรียน)</option>
+                                        <option value="all_staff">พนักงานทั้งหมด</option>
+                                        <option value="role">บทบาท (แอดมิน/ครู)</option>
+                                        <option value="staff_identity">พนักงานคนใดคนหนึ่ง</option>
+                                        <option value="all_students">นักเรียนทั้งหมด</option>
+                                        <option value="student">นักเรียนคนใดคนหนึ่ง</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-user-tag"></i> ชื่อผู้ส่งที่แสดง</label>
+                                    <input type="text" id="notify-sender-name" placeholder="ค่าเริ่มต้น: ชื่อบัญชีของคุณ">
+                                </div>
+                            </div>
+                            <div class="form-group" id="notify-role-group" style="display: none;">
+                                <label><i class="fas fa-user-group"></i> เลือกบทบาท</label>
+                                <select id="notify-role-value">
+                                    <option value="admin">แอดมินทั้งหมด</option>
+                                    <option value="teacher">ครูทั้งหมด</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="notify-staff-group" style="display: none;">
+                                <label><i class="fas fa-envelope"></i> บัญชีพนักงาน (อีเมลที่ใช้เข้าสู่ระบบ)</label>
+                                <input type="text" id="notify-staff-value" list="notify-staff-datalist" placeholder="teacher@example.com">
+                                <datalist id="notify-staff-datalist"></datalist>
+                            </div>
+                            <div class="form-group" id="notify-student-group" style="display: none;">
+                                <label><i class="fas fa-id-card"></i> รหัสนักเรียน</label>
+                                <input type="text" id="notify-student-value" list="notify-student-datalist" placeholder="เช่น litalk12345">
+                                <datalist id="notify-student-datalist"></datalist>
+                            </div>
+                            <div style="display: flex; justify-content: flex-end;">
+                                <button class="btn btn-primary" onclick="submitNotification()"><i class="fas fa-paper-plane"></i> ส่งการแจ้งเตือน</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="admin-card" style="margin-top: 24px;">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-clock-rotate-left"></i></span>
+                            <div>
+                                <h3>ประวัติการแจ้งเตือน</h3>
+                                <p>ล่าสุด 100 รายการ ทั้งที่ระบบสร้างอัตโนมัติและที่ส่งเอง</p>
+                            </div>
+                        </div>
+                        <div class="row-list" id="notify-history-list">
+                            <div class="form-hint">กำลังโหลดข้อมูล...</div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </main>
 
@@ -5128,6 +5213,7 @@
                 <div class="sidebar-nav-heading" data-admin-only style="margin-top: 10px; display: none;">ผู้ดูแลระบบ</div>
                 <a href="javascript:void(0)" data-screen="access" data-admin-only style="display: none;" onclick="goScreen('access')"><i class="fas fa-user-shield"></i> สิทธิ์การมองเห็น</a>
                 <a href="javascript:void(0)" data-screen="credits" data-admin-only style="display: none;" onclick="goScreen('credits')"><i class="fas fa-coins"></i> แก้ไขเครดิต</a>
+                <a href="javascript:void(0)" data-screen="notify" data-admin-only style="display: none;" onclick="goScreen('notify')"><i class="fas fa-paper-plane"></i> ส่งการแจ้งเตือน</a>
             </nav>
             <div class="mobile-menu-footer">
                 <div class="mobile-menu-email" id="mobile-menu-email">loading...</div>
@@ -5254,7 +5340,7 @@
 
         // Supports shareable links like ?screen=logs&student=litalk12345
         // (e.g. the "คัดลอกลิงก์ Study Log" button on the check screen).
-        const DEEP_LINK_SCREENS = ['dashboard', 'students', 'logs', 'payments', 'create', 'files', 'booking', 'check', 'schedule', 'hours', 'finance', 'access', 'credits'];
+        const DEEP_LINK_SCREENS = ['dashboard', 'students', 'logs', 'payments', 'create', 'files', 'booking', 'check', 'schedule', 'hours', 'finance', 'access', 'credits', 'notify'];
         function applyDeepLink() {
             const params = new URLSearchParams(window.location.search);
             const student = params.get('student');
@@ -5464,7 +5550,8 @@
             payments: { group: 'การเงิน', title: 'บันทึกการชำระเงิน' },
             finance: { group: 'การเงิน', title: 'สรุปการเงิน' },
             access: { group: 'ผู้ดูแลระบบ', title: 'สิทธิ์การมองเห็น' },
-            credits: { group: 'ผู้ดูแลระบบ', title: 'แก้ไขเครดิต' }
+            credits: { group: 'ผู้ดูแลระบบ', title: 'แก้ไขเครดิต' },
+            notify: { group: 'ผู้ดูแลระบบ', title: 'ส่งการแจ้งเตือน' }
         };
 
         function updateTopbar(screen) {
@@ -5577,6 +5664,10 @@
             }
             if (screen === 'access') {
                 loadTeacherAssignments();
+            }
+            if (screen === 'notify') {
+                loadNotifyRecipientOptions();
+                loadNotifyHistory();
             }
 
             closeMobileMenuIfOpen();
@@ -7297,6 +7388,115 @@
             }
         }
 
+        // ===== Send notification (admin) =====
+
+        function onNotifyAudienceChange() {
+            const type = document.getElementById('notify-audience-type').value;
+            document.getElementById('notify-role-group').style.display = type === 'role' ? '' : 'none';
+            document.getElementById('notify-staff-group').style.display = type === 'staff_identity' ? '' : 'none';
+            document.getElementById('notify-student-group').style.display = type === 'student' ? '' : 'none';
+        }
+
+        let notifyStaffOptionsLoaded = false;
+        async function loadNotifyRecipientOptions() {
+            const studentList = document.getElementById('notify-student-datalist');
+            if (studentList) {
+                studentList.innerHTML = allStudentsData.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join('');
+            }
+            if (notifyStaffOptionsLoaded) return;
+            try {
+                const response = await apiFetch('/staff-identities');
+                const rows = await response.json();
+                if (response.ok && Array.isArray(rows)) {
+                    document.getElementById('notify-staff-datalist').innerHTML =
+                        rows.map(r => `<option value="${escapeHtml(r.identity)}">${escapeHtml(r.name || r.identity)}</option>`).join('');
+                    notifyStaffOptionsLoaded = true;
+                }
+            } catch (error) {
+                console.error('loadNotifyRecipientOptions:', error);
+            }
+        }
+
+        async function submitNotification() {
+            const title = document.getElementById('notify-title').value.trim();
+            if (!title) {
+                triggerFieldError('notify-title', 'กรุณากรอกหัวข้อ');
+                return;
+            }
+            const audienceType = document.getElementById('notify-audience-type').value;
+            let audienceValue = null;
+            if (audienceType === 'role') {
+                audienceValue = document.getElementById('notify-role-value').value;
+            } else if (audienceType === 'staff_identity') {
+                audienceValue = document.getElementById('notify-staff-value').value.trim();
+                if (!audienceValue) { triggerFieldError('notify-staff-value', 'กรุณาระบุผู้รับ'); return; }
+            } else if (audienceType === 'student') {
+                audienceValue = document.getElementById('notify-student-value').value.trim();
+                if (!audienceValue) { triggerFieldError('notify-student-value', 'กรุณาระบุนักเรียน'); return; }
+            }
+
+            const payload = {
+                title,
+                body: document.getElementById('notify-body').value.trim(),
+                linkUrl: document.getElementById('notify-link').value.trim(),
+                senderName: document.getElementById('notify-sender-name').value.trim(),
+                audienceType,
+                audienceValue,
+            };
+
+            showLoading();
+            try {
+                const response = await apiFetch('/notifications', { method: 'POST', body: JSON.stringify(payload) });
+                const result = await response.json();
+                hideLoading();
+                if (response.ok && result.ok) {
+                    showToast('ส่งการแจ้งเตือนแล้ว', result.message, 'success');
+                    ['notify-title', 'notify-body', 'notify-link', 'notify-sender-name', 'notify-staff-value', 'notify-student-value']
+                        .forEach(id => { document.getElementById(id).value = ''; });
+                    loadNotifyHistory();
+                    loadNotifications();
+                } else {
+                    showModal('ส่งการแจ้งเตือนไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            } catch (error) {
+                hideLoading();
+                console.error('submitNotification:', error);
+                showModal('ข้อผิดพลาดการเชื่อมต่อ', 'ไม่สามารถส่งการแจ้งเตือนได้ กรุณาลองใหม่อีกครั้ง', 'error');
+            }
+        }
+
+        const NOTIF_AUDIENCE_LABEL = { all: 'ทุกคนในระบบ', all_staff: 'พนักงานทั้งหมด', all_students: 'นักเรียนทั้งหมด' };
+        function notifyAudienceLabel(n) {
+            if (n.audienceType === 'role') return n.audienceValue === 'admin' ? 'แอดมินทั้งหมด' : 'ครูทั้งหมด';
+            if (n.audienceType === 'staff_identity') return `พนักงาน: ${n.audienceValue}`;
+            if (n.audienceType === 'student') return `นักเรียน: ${n.audienceValue}`;
+            return NOTIF_AUDIENCE_LABEL[n.audienceType] || n.audienceType;
+        }
+
+        async function loadNotifyHistory() {
+            const list = document.getElementById('notify-history-list');
+            if (!list) return;
+            list.innerHTML = '<div class="form-hint">กำลังโหลดข้อมูล...</div>';
+            try {
+                const response = await apiFetch('/notifications/history');
+                const rows = await response.json();
+                if (!response.ok) throw new Error(rows.error || 'load failed');
+                list.innerHTML = rows.length ? rows.map(n => `
+                    <div class="alert-row">
+                        <i class="fas ${notifIcon(n.category)}" style="color: var(--text-secondary);"></i>
+                        <div style="flex: 1; min-width: 0;">
+                            <div class="alert-text"><strong>${escapeHtml(n.title)}</strong>${n.body ? ' — ' + escapeHtml(n.body) : ''}</div>
+                            <div class="alert-text" style="color: var(--text-muted); font-size: 12px;">
+                                ถึง ${escapeHtml(notifyAudienceLabel(n))} · ${escapeHtml(new Date(n.createdAt).toLocaleString('th-TH'))}${n.createdByName ? ' · โดย ' + escapeHtml(n.createdByName) : ' · ระบบ'}
+                            </div>
+                        </div>
+                    </div>`).join('') : '<div class="form-hint">ยังไม่มีการแจ้งเตือน</div>';
+            } catch (error) {
+                console.error('loadNotifyHistory:', error);
+                list.innerHTML = '<div class="form-hint">โหลดประวัติไม่สำเร็จ</div>';
+            }
+        }
+
         // ===== Booking wizard (3 steps) =====
         let bookingStep = 1;
         let bookingDate = '';
@@ -8488,22 +8688,27 @@
         }
 
         // ===== Notification bell (topbar) =====
-        // Reuses the same "unpaid this month" alerts already computed by the
-        // Worker's dashboard endpoint (independent of the visible dashboard's
-        // own today/week/month/year timeframe — alerts are always this-month).
+        // Two feeds merged into one panel: real notifications from the
+        // Worker's notification center (system events + admin-composed
+        // messages, persisted with per-user read state), and the existing
+        // "unpaid this month" alerts computed live by the dashboard endpoint
+        // (independent of the visible dashboard's own timeframe — those are
+        // always this-month, and were never persisted rows to begin with).
 
         let notifAlerts = [];
+        let notifItems = [];
         let notifLoaded = false;
 
         async function loadNotifications() {
             try {
-                const response = await apiFetch('/dashboard?range=today');
-                const result = await response.json();
-                if (response.ok) {
-                    notifAlerts = result.alerts || [];
-                    notifLoaded = true;
-                    renderNotifBadge();
-                }
+                const [dashRes, notifRes] = await Promise.all([
+                    apiFetch('/dashboard?range=today').catch(() => null),
+                    apiFetch('/notifications').catch(() => null),
+                ]);
+                if (dashRes && dashRes.ok) notifAlerts = (await dashRes.json()).alerts || [];
+                if (notifRes && notifRes.ok) notifItems = await notifRes.json();
+                notifLoaded = true;
+                renderNotifBadge();
             } catch (error) {
                 console.error('loadNotifications:', error);
             }
@@ -8512,9 +8717,20 @@
         function renderNotifBadge() {
             const badge = document.getElementById('notif-badge');
             if (!badge) return;
-            const count = notifAlerts.length;
+            const count = notifAlerts.length + notifItems.filter(n => !n.isRead).length;
             badge.style.display = count > 0 ? 'flex' : 'none';
             badge.textContent = count > 9 ? '9+' : String(count);
+        }
+
+        const NOTIF_CATEGORY_ICON = {
+            schedule_pending: 'fa-hourglass-half', schedule_approved: 'fa-circle-check', schedule_rejected: 'fa-circle-xmark',
+            schedule_revise: 'fa-pen', schedule_activated: 'fa-calendar-check', schedule_changed: 'fa-calendar-days',
+            amendment_pending: 'fa-hourglass-half', amendment_approved: 'fa-circle-check', amendment_rejected: 'fa-circle-xmark',
+            payment_due: 'fa-hand-holding-dollar', payment_received: 'fa-sack-dollar', credit_adjusted: 'fa-coins', custom: 'fa-bell',
+        };
+
+        function notifIcon(category) {
+            return NOTIF_CATEGORY_ICON[category] || 'fa-bell';
         }
 
         function renderNotifList() {
@@ -8524,18 +8740,64 @@
                 list.innerHTML = '<div class="empty-state" style="padding: 24px 16px;"><div class="skeleton skeleton-line" style="width: 80%;"></div><div class="skeleton skeleton-line" style="width: 60%;"></div></div>';
                 return;
             }
-            if (!notifAlerts.length) {
+            if (!notifItems.length && !notifAlerts.length) {
                 list.innerHTML = '<div class="empty-state" style="padding: 24px 16px;"><i class="fas fa-check-circle"></i><div class="empty-title">ไม่มีการแจ้งเตือน</div><div class="empty-sub">คุณติดตามทุกอย่างเรียบร้อยแล้ว</div></div>';
                 return;
             }
-            list.innerHTML = notifAlerts.map(a => `
-                <button class="notif-item" onclick="handleNotifClick('${escapeJs(a.studentId)}', '${a.screen}')">
-                    <i class="fas fa-triangle-exclamation" style="color: var(--accent-danger);"></i>
-                    <div class="notif-item-body">
-                        <div class="notif-item-text">${escapeHtml(a.text)}</div>
-                        <div class="notif-item-action">${escapeHtml(a.actionLabel)} <i class="fas fa-arrow-right" style="font-size: 9px;"></i></div>
-                    </div>
-                </button>`).join('');
+            let html = '';
+            if (notifItems.length) {
+                const hasUnread = notifItems.some(n => !n.isRead);
+                if (hasUnread) {
+                    html += `<button class="notif-item" style="justify-content: flex-end;" onclick="markAllNotifRead()">
+                        <span class="notif-item-action" style="margin: 0;">ทำเครื่องหมายว่าอ่านแล้วทั้งหมด</span>
+                    </button>`;
+                }
+                html += notifItems.map(n => `
+                    <button class="notif-item" onclick="openNotifItem(${n.id}, '${escapeJs(n.linkUrl || '')}')">
+                        <i class="fas ${notifIcon(n.category)}" style="color: ${n.isRead ? 'var(--text-muted)' : 'var(--brand-primary)'};"></i>
+                        <div class="notif-item-body">
+                            <div class="notif-item-text" style="${n.isRead ? '' : 'font-weight: var(--weight-bold);'}">${escapeHtml(n.title)}</div>
+                            ${n.body ? `<div class="notif-item-text" style="color: var(--text-muted);">${escapeHtml(n.body)}</div>` : ''}
+                            <div class="notif-item-action">${escapeHtml(n.createdByName || 'ระบบ')} · ${escapeHtml(new Date(n.createdAt).toLocaleString('th-TH'))}</div>
+                        </div>
+                    </button>`).join('');
+            }
+            if (notifAlerts.length) {
+                html += notifAlerts.map(a => `
+                    <button class="notif-item" onclick="handleNotifClick('${escapeJs(a.studentId)}', '${a.screen}')">
+                        <i class="fas fa-triangle-exclamation" style="color: var(--accent-danger);"></i>
+                        <div class="notif-item-body">
+                            <div class="notif-item-text">${escapeHtml(a.text)}</div>
+                            <div class="notif-item-action">${escapeHtml(a.actionLabel)} <i class="fas fa-arrow-right" style="font-size: 9px;"></i></div>
+                        </div>
+                    </button>`).join('');
+            }
+            list.innerHTML = html;
+        }
+
+        // Internal links are deep-link query strings (?screen=...&student=...)
+        // handled in-app; anything else is opened as an external URL.
+        async function openNotifItem(id, linkUrl) {
+            closeNotifPanel();
+            const item = notifItems.find(n => n.id === id);
+            if (item && !item.isRead) {
+                item.isRead = true;
+                renderNotifBadge();
+                apiFetch(`/notifications/${id}/read`, { method: 'POST' }).catch(() => {});
+            }
+            if (linkUrl && linkUrl.startsWith('?')) {
+                const params = new URLSearchParams(linkUrl.slice(1));
+                goToStudentAndScreen(params.get('student'), params.get('screen'));
+            } else if (linkUrl) {
+                window.open(linkUrl, '_blank', 'noopener');
+            }
+        }
+
+        async function markAllNotifRead() {
+            notifItems.forEach(n => { n.isRead = true; });
+            renderNotifBadge();
+            renderNotifList();
+            try { await apiFetch('/notifications/read-all', { method: 'POST' }); } catch (error) { console.error('markAllNotifRead:', error); }
         }
 
         function toggleNotifPanel(e) {
@@ -8618,7 +8880,7 @@
             const items = [];
 
             Object.entries(SCREEN_META).forEach(([screen, meta]) => {
-                if (!admin && ['create', 'finance', 'access', 'credits'].includes(screen)) return;
+                if (!admin && ['create', 'finance', 'access', 'credits', 'notify'].includes(screen)) return;
                 const label = meta.title;
                 if (q && !label.toLowerCase().includes(q) && !meta.group.toLowerCase().includes(q)) return;
                 items.push({
