@@ -237,7 +237,7 @@
             z-index: 999;
             opacity: 0;
             visibility: hidden;
-            transition: all 0.3s ease;
+            transition: opacity var(--modal-open-dur) var(--modal-ease), visibility var(--modal-open-dur) var(--modal-ease);
         }
 
         .mobile-menu-overlay.active {
@@ -256,7 +256,7 @@
             border-left: 1px solid var(--border-color);
             z-index: 1000;
             transform: translateX(100%);
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: transform var(--modal-open-dur) var(--modal-ease);
             display: flex;
             flex-direction: column;
             overflow-y: auto;
@@ -1364,7 +1364,7 @@
         }
 
         @media (prefers-reduced-motion: reduce) {
-            .tab-menu-pill, .tab-btn {
+            .tab-menu-pill, .tab-btn, .tab-menu-pill-mini, .tab-btn-mini {
                 transition: none !important;
             }
         }
@@ -2234,6 +2234,12 @@
             transition: transform var(--modal-close-dur) var(--modal-ease);
         }
 
+        @media (prefers-reduced-motion: reduce) {
+            .mobile-menu-overlay, .mobile-menu-panel {
+                transition: none !important;
+            }
+        }
+
         /* Icon Swap variables & classes transitions.dev */
         :root {
             --icon-swap-dur: 250ms;
@@ -2449,31 +2455,6 @@
             .files-table-row {
                 min-width: 560px;
             }
-        }
-
-        /* Mini tabs for Markdown preview */
-        .tab-btn-mini {
-            padding: 4px 10px;
-            font-size: 11px;
-            font-family: inherit;
-            font-weight: 500;
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--border-color);
-            background: var(--bg-tertiary);
-            color: var(--text-secondary);
-            cursor: pointer;
-            transition: var(--transition-all);
-        }
-
-        .tab-btn-mini.active {
-            background-color: var(--brand-primary);
-            color: var(--brand-btn-text);
-            border-color: var(--brand-primary);
-        }
-
-        .tab-btn-mini:hover:not(.active) {
-            background-color: var(--bg-secondary);
-            color: var(--text-primary);
         }
 
         .markdown-preview {
@@ -2777,10 +2758,35 @@
             display: none;
             flex-direction: column;
             overflow: hidden;
-            animation: fadeIn 0.15s ease;
+
+            /* t-dropdown transitions.dev integration */
+            transform-origin: top right;
+            transform: scale(var(--dropdown-pre-scale));
+            opacity: 0;
+            transition:
+                transform var(--dropdown-open-dur) var(--dropdown-ease),
+                opacity   var(--dropdown-open-dur) var(--dropdown-ease);
+            will-change: transform, opacity;
         }
 
-        .notif-wrap.open .notif-panel { display: flex; }
+        .notif-wrap.open .notif-panel {
+            display: flex;
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .notif-wrap.is-closing .notif-panel {
+            display: flex;
+            transform: scale(var(--dropdown-closing-scale));
+            opacity: 0;
+            transition:
+                transform var(--dropdown-close-dur) var(--dropdown-ease),
+                opacity   var(--dropdown-close-dur) var(--dropdown-ease);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .notif-panel { transition: none !important; }
+        }
 
         .notif-panel-header {
             padding: 12px 16px;
@@ -2831,9 +2837,20 @@
             justify-content: center;
             align-items: flex-start;
             padding: 12vh 16px 16px;
+            opacity: 0;
+            transition: opacity var(--modal-open-dur) var(--modal-ease);
         }
 
-        .cmdk-overlay.active { display: flex; }
+        .cmdk-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        .cmdk-overlay.is-closing {
+            display: flex;
+            opacity: 0;
+            transition: opacity var(--modal-close-dur) var(--modal-ease);
+        }
 
         .cmdk-box {
             width: 100%;
@@ -2845,7 +2862,34 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            animation: fadeIn 0.18s ease;
+
+            /* t-modal transitions.dev (reusing the shared modal tokens) */
+            transform-origin: center;
+            transform: scale(var(--modal-scale));
+            opacity: 0;
+            transition:
+                transform var(--modal-open-dur) var(--modal-ease),
+                opacity   var(--modal-open-dur) var(--modal-ease);
+            will-change: transform, opacity;
+        }
+
+        .cmdk-overlay.active .cmdk-box {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .cmdk-overlay.is-closing .cmdk-box {
+            transform: scale(var(--modal-scale-close));
+            opacity: 0;
+            transition:
+                transform var(--modal-close-dur) var(--modal-ease),
+                opacity   var(--modal-close-dur) var(--modal-ease);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .cmdk-overlay, .cmdk-box {
+                transition: none !important;
+            }
         }
 
         .cmdk-input-row {
@@ -2954,11 +2998,35 @@
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow-pop);
             padding: 6px;
+
+            /* t-dropdown transitions.dev integration */
             transform-origin: bottom right;
-            animation: fadeIn 0.16s ease;
+            transform: scale(var(--dropdown-pre-scale));
+            opacity: 0;
+            transition:
+                transform var(--dropdown-open-dur) var(--dropdown-ease),
+                opacity   var(--dropdown-open-dur) var(--dropdown-ease);
+            will-change: transform, opacity;
         }
 
-        .fab-wrap.open .fab-menu { display: flex; }
+        .fab-wrap.open .fab-menu {
+            display: flex;
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .fab-wrap.is-closing .fab-menu {
+            display: flex;
+            transform: scale(var(--dropdown-closing-scale));
+            opacity: 0;
+            transition:
+                transform var(--dropdown-close-dur) var(--dropdown-ease),
+                opacity   var(--dropdown-close-dur) var(--dropdown-ease);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .fab-menu { transition: none !important; }
+        }
 
         .fab-menu-item {
             display: flex;
@@ -3131,6 +3199,10 @@
             animation: fadeIn 0.15s ease;
         }
 
+        @media (prefers-reduced-motion: reduce) {
+            .bulk-action-bar { animation: none; }
+        }
+
         .bulk-action-spacer { flex: 1; }
 
         /* Pagination (shadcn Pagination pattern: numbered page buttons +
@@ -3250,11 +3322,37 @@
             z-index: 300;
             display: none;
             flex-direction: column;
-            animation: fadeIn 0.14s ease;
+
+            /* t-dropdown transitions.dev integration */
+            transform-origin: top right;
+            transform: scale(var(--dropdown-pre-scale));
+            opacity: 0;
+            transition:
+                transform var(--dropdown-open-dur) var(--dropdown-ease),
+                opacity   var(--dropdown-open-dur) var(--dropdown-ease);
+            will-change: transform, opacity;
         }
 
-        .row-actions.open .row-actions-menu { display: flex; }
-        .row-actions-menu.drop-up { top: auto; bottom: calc(100% + 6px); }
+        .row-actions.open .row-actions-menu {
+            display: flex;
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .row-actions.is-closing .row-actions-menu {
+            display: flex;
+            transform: scale(var(--dropdown-closing-scale));
+            opacity: 0;
+            transition:
+                transform var(--dropdown-close-dur) var(--dropdown-ease),
+                opacity   var(--dropdown-close-dur) var(--dropdown-ease);
+        }
+
+        .row-actions-menu.drop-up { top: auto; bottom: calc(100% + 6px); transform-origin: bottom right; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .row-actions-menu { transition: none !important; }
+        }
 
         .row-actions-item {
             display: flex;
@@ -3346,6 +3444,34 @@
 
         .skeleton-line { height: 12px; margin-bottom: 10px; }
         .skeleton-line:last-child { margin-bottom: 0; }
+
+        /* Skeleton loader and reveal (transitions.dev pattern), adapted:
+           the canonical snippet stacks skeleton + content as two
+           simultaneous absolutely-positioned layers, but this dashboard
+           swaps a single container's innerHTML from skeleton markup to
+           real markup, so there's only a "content fade in" side to
+           animate rather than a true cross-fade. Reusing the same
+           token names (--reveal-*) keeps it consistent with the rest of
+           the skill even though the mechanism is a plain entrance
+           animation instead of the two-layer cross-fade. */
+        :root {
+            --reveal-dur: 400ms;
+            --reveal-blur: 2px;
+            --reveal-ease: ease-in-out;
+        }
+
+        .dash-reveal {
+            animation: t-skel-reveal-in var(--reveal-dur) var(--reveal-ease);
+        }
+
+        @keyframes t-skel-reveal-in {
+            from { opacity: 0; filter: blur(var(--reveal-blur)); }
+            to   { opacity: 1; filter: blur(0); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .dash-reveal { animation: none; }
+        }
 
         /* ===== Empty states ===== */
         .empty-state {
@@ -5511,6 +5637,17 @@
             document.getElementById('dash-recent-payments').innerHTML = rowSkeleton.repeat(3);
         }
 
+        // Replace a container's HTML and replay the reveal fade-in
+        // (skeleton-reveal pattern's "content" side). Force a reflow so the
+        // animation restarts even if the container already had the class
+        // from a previous render.
+        function setHtmlWithReveal(el, html) {
+            el.classList.remove('dash-reveal');
+            el.innerHTML = html;
+            void el.offsetWidth;
+            el.classList.add('dash-reveal');
+        }
+
         function renderDashboard() {
             document.getElementById('dash-today-label').textContent =
                 new Date().toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -5531,21 +5668,21 @@
                 { label: 'รายรับ', icon: 'fas fa-money-bill-wave', value: formatBaht(stats.revenue), sub: stats.revenueLabel || '' },
                 { label: 'ค้างชำระ', icon: 'fas fa-triangle-exclamation', value: String(stats.unpaid || 0), sub: 'นักเรียนที่ต้องติดตาม' }
             ];
-            document.getElementById('dash-stat-grid').innerHTML = statCards.map(c => `
+            setHtmlWithReveal(document.getElementById('dash-stat-grid'), statCards.map(c => `
                 <div class="stat-card">
                     <div class="stat-card-top"><span class="stat-card-label">${c.label}</span><i class="${c.icon}"></i></div>
                     <div class="stat-card-value">${c.value}</div>
                     <div class="stat-card-sub">${escapeHtml(c.sub)}</div>
-                </div>`).join('');
+                </div>`).join(''));
 
             const todayClasses = dashboardData.todayClasses || [];
-            document.getElementById('dash-today-classes').innerHTML = todayClasses.length ? todayClasses.map(row => `
+            setHtmlWithReveal(document.getElementById('dash-today-classes'), todayClasses.length ? todayClasses.map(row => `
                 <div class="class-row">
                     <div class="class-time">${escapeHtml(row.time || '-')}</div>
                     <div class="class-info"><div class="name">${escapeHtml(row.name)}</div><div class="course">${escapeHtml(row.course || '')}</div></div>
                     <span class="class-status ${row.done ? 'done' : 'pending'}"><i class="${row.done ? 'fas fa-check-circle' : 'far fa-clock'}"></i> ${row.done ? 'บันทึกแล้ว' : 'รอบันทึกผล'}</span>
                     <button class="class-log-btn" onclick="goToStudentAndScreen('${escapeJs(row.studentId)}', 'logs')"><i class="fas fa-pen"></i> บันทึกผล</button>
-                </div>`).join('') : '<div class="form-hint">ไม่มีคลาสเรียนวันนี้</div>';
+                </div>`).join('') : '<div class="form-hint">ไม่มีคลาสเรียนวันนี้</div>');
 
             const alerts = dashboardData.alerts || [];
             document.getElementById('dash-alerts-card').style.display = alerts.length ? '' : 'none';
@@ -5560,11 +5697,11 @@
 
             document.getElementById('dash-revenue-sub').textContent = dashboardData.revenueSub || ('รวม ' + formatBaht(stats.revenue));
             const recentPayments = dashboardData.recentPayments || [];
-            document.getElementById('dash-recent-payments').innerHTML = recentPayments.length ? recentPayments.map(p => `
+            setHtmlWithReveal(document.getElementById('dash-recent-payments'), recentPayments.length ? recentPayments.map(p => `
                 <div class="payment-row">
                     <div class="payment-info"><div class="name">${escapeHtml(p.name)}</div><div class="meta">${escapeHtml(p.method || '-')} · ${escapeHtml(formatShortThaiDate(p.dateYMD))}</div></div>
                     <div class="amount">${formatBaht(p.total)}</div>
-                </div>`).join('') : '<div class="form-hint">ยังไม่มีรายการชำระเงิน</div>';
+                </div>`).join('') : '<div class="form-hint">ยังไม่มีรายการชำระเงิน</div>');
 
             renderWeekSummary();
         }
@@ -8247,7 +8384,17 @@
         }
 
         function closeAllRowActionMenus() {
-            document.querySelectorAll('.row-actions.open').forEach(el => el.classList.remove('open'));
+            document.querySelectorAll('.row-actions.open').forEach(closeRowActionsWrap);
+        }
+
+        function closeRowActionsWrap(wrap) {
+            if (!wrap.classList.contains('open')) return;
+            const closeMs = parseFloat(
+                getComputedStyle(document.documentElement).getPropertyValue("--dropdown-close-dur")
+            ) || 150;
+            wrap.classList.remove('open');
+            wrap.classList.add('is-closing');
+            setTimeout(() => wrap.classList.remove('is-closing'), closeMs);
         }
 
         function toggleRowActions(e) {
@@ -8260,6 +8407,7 @@
             const menu = wrap.querySelector('.row-actions-menu');
             const rect = e.currentTarget.getBoundingClientRect();
             menu.classList.toggle('drop-up', rect.bottom > window.innerHeight - 340);
+            wrap.classList.remove('is-closing');
             wrap.classList.add('open');
         }
 
@@ -8300,18 +8448,27 @@
             if (e) e.stopPropagation();
             const wrap = document.getElementById('quick-create-wrap');
             if (!wrap) return;
-            const open = wrap.classList.toggle('open');
+            if (wrap.classList.contains('open')) {
+                closeQuickCreate();
+                return;
+            }
+            wrap.classList.remove('is-closing');
+            wrap.classList.add('open');
             const btn = wrap.querySelector('.fab-btn');
-            if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (btn) btn.setAttribute('aria-expanded', 'true');
         }
 
         function closeQuickCreate() {
             const wrap = document.getElementById('quick-create-wrap');
-            if (wrap && wrap.classList.contains('open')) {
-                wrap.classList.remove('open');
-                const btn = wrap.querySelector('.fab-btn');
-                if (btn) btn.setAttribute('aria-expanded', 'false');
-            }
+            if (!wrap || !wrap.classList.contains('open')) return;
+            const closeMs = parseFloat(
+                getComputedStyle(document.documentElement).getPropertyValue("--dropdown-close-dur")
+            ) || 150;
+            wrap.classList.remove('open');
+            wrap.classList.add('is-closing');
+            setTimeout(() => wrap.classList.remove('is-closing'), closeMs);
+            const btn = wrap.querySelector('.fab-btn');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
         }
 
         function quickCreate(screen) {
@@ -8389,17 +8546,24 @@
             closeAllRowActionMenus();
             closeQuickCreate();
             if (opening) {
+                wrap.classList.remove('is-closing');
                 wrap.classList.add('open');
                 renderNotifList();
                 if (!notifLoaded) loadNotifications().then(renderNotifList);
             } else {
-                wrap.classList.remove('open');
+                closeNotifPanel();
             }
         }
 
         function closeNotifPanel() {
             const wrap = document.getElementById('notif-wrap');
-            if (wrap) wrap.classList.remove('open');
+            if (!wrap || !wrap.classList.contains('open')) return;
+            const closeMs = parseFloat(
+                getComputedStyle(document.documentElement).getPropertyValue("--dropdown-close-dur")
+            ) || 150;
+            wrap.classList.remove('open');
+            wrap.classList.add('is-closing');
+            setTimeout(() => wrap.classList.remove('is-closing'), closeMs);
         }
 
         function handleNotifClick(studentId, screen) {
@@ -8428,6 +8592,7 @@
             if (!panel || getComputedStyle(panel).display === 'none') return;
             const overlay = document.getElementById('cmdk-overlay');
             const input = document.getElementById('cmdk-input');
+            overlay.classList.remove('is-closing');
             overlay.classList.add('active');
             input.value = '';
             cmdkIndex = 0;
@@ -8437,7 +8602,14 @@
 
         function closeCommandPalette(e) {
             if (e && e.target !== e.currentTarget) return;
-            document.getElementById('cmdk-overlay').classList.remove('active');
+            const overlay = document.getElementById('cmdk-overlay');
+            if (!overlay.classList.contains('active')) return;
+            const closeMs = parseFloat(
+                getComputedStyle(document.documentElement).getPropertyValue("--modal-close-dur")
+            ) || 150;
+            overlay.classList.remove('active');
+            overlay.classList.add('is-closing');
+            setTimeout(() => overlay.classList.remove('is-closing'), closeMs);
         }
 
         function buildCommandItems(query) {
