@@ -598,8 +598,22 @@
             border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.2s ease;
         }
+
+        /* Icon-only collapsed rail (sidebar-03 collapsible="icon" pattern) */
+        .sidebar.icon-collapsed { width: 68px; }
+        .sidebar.icon-collapsed .sidebar-label,
+        .sidebar.icon-collapsed .sidebar-nav-heading,
+        .sidebar.icon-collapsed .admin-badge-text,
+        .sidebar.icon-collapsed .sidebar-wordmark { display: none !important; }
+        .sidebar.icon-collapsed .sidebar-header { justify-content: center; padding: 18px 10px; }
+        .sidebar.icon-collapsed .sidebar-collapse-btn { margin-left: 0; }
+        .sidebar.icon-collapsed .sidebar-nav-item { justify-content: center; padding: 10px; }
+        .sidebar.icon-collapsed .sidebar-nav-section-items { grid-template-rows: 1fr !important; }
+        .sidebar.icon-collapsed .sidebar-collapse-btn i { transform: rotate(180deg); }
+        .sidebar.icon-collapsed .sidebar-footer-row { justify-content: center; }
+        .sidebar.icon-collapsed #admin-logout-btn { padding-left: 0; padding-right: 0; }
 
         .sidebar-header {
             display: flex;
@@ -613,6 +627,26 @@
             height: 22px;
         }
 
+        .sidebar-collapse-btn {
+            margin-left: auto;
+            flex-shrink: 0;
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xs);
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.15s ease;
+        }
+
+        .sidebar-collapse-btn:hover { color: var(--text-primary); background-color: var(--bg-tertiary); }
+        .sidebar-collapse-btn i { transition: transform 0.2s ease; }
+
         .sidebar-nav {
             flex: 1;
             display: flex;
@@ -620,15 +654,55 @@
             gap: 4px;
             padding: 14px 12px;
             overflow-y: auto;
+            overflow-x: hidden;
         }
 
+        .sidebar-nav-section { display: flex; flex-direction: column; }
+
+        /* Collapsible section heading (sidebar-03 nav-main.tsx pattern):
+           a full-width button so the whole row toggles, chevron rotates. */
         .sidebar-nav-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            border: none;
+            background: transparent;
+            font-family: inherit;
             font-size: var(--text-xs);
             font-weight: var(--weight-bold);
             text-transform: uppercase;
             letter-spacing: var(--tracking-wide);
             color: var(--text-muted);
-            padding: 0 10px 6px;
+            padding: 4px 10px 6px;
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+
+        .sidebar-nav-heading:hover { color: var(--text-secondary); }
+        .sidebar-nav-heading .section-chevron { font-size: 9px; transition: transform 0.2s ease; }
+
+        /* CSS grid accordion trick: animate 1fr -> 0fr instead of measuring
+           height in JS. Requires the inner wrapper for overflow clipping. */
+        .sidebar-nav-section-items {
+            display: grid;
+            grid-template-rows: 1fr;
+            transition: grid-template-rows 0.2s ease;
+        }
+
+        .sidebar-nav-section-items .nav-items-inner {
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-height: 0;
+        }
+
+        .sidebar-nav-section.collapsed .sidebar-nav-section-items { grid-template-rows: 0fr; }
+        .sidebar-nav-section.collapsed .section-chevron { transform: rotate(-90deg); }
+
+        @media (prefers-reduced-motion: reduce) {
+            .sidebar, .sidebar-nav-section-items, .sidebar-collapse-btn i, .section-chevron { transition: none !important; }
         }
 
         .sidebar-nav-item {
@@ -2598,6 +2672,84 @@
             .topbar { display: none; }
         }
 
+        /* ===== Notification bell (sidebar-03 nav-notifications.tsx pattern) ===== */
+        .notif-wrap { position: relative; }
+
+        .notif-badge {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            min-width: 15px;
+            height: 15px;
+            padding: 0 3px;
+            border-radius: 999px;
+            background: var(--accent-danger);
+            color: #ffffff;
+            font-size: 9px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            border: 2px solid var(--bg-secondary);
+        }
+
+        .notif-panel {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            width: 340px;
+            max-width: calc(100vw - 40px);
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-pop);
+            z-index: 300;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            animation: fadeIn 0.15s ease;
+        }
+
+        .notif-wrap.open .notif-panel { display: flex; }
+
+        .notif-panel-header {
+            padding: 12px 16px;
+            font-size: var(--text-base-sm);
+            font-weight: var(--weight-bold);
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .notif-list {
+            max-height: 320px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            padding: 6px;
+        }
+
+        .notif-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            width: 100%;
+            padding: 10px;
+            border: none;
+            background: transparent;
+            border-radius: var(--radius-sm);
+            text-align: left;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background-color 0.12s;
+        }
+
+        .notif-item:hover { background-color: var(--bg-tertiary); }
+        .notif-item i { margin-top: 2px; font-size: 12px; flex-shrink: 0; }
+        .notif-item-body { min-width: 0; }
+        .notif-item-text { font-size: var(--text-base-sm); color: var(--text-primary); line-height: 1.4; }
+        .notif-item-action { font-size: var(--text-sm); color: var(--text-muted); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+
         /* ===== Command palette (Ctrl/Cmd + K) ===== */
         .cmdk-overlay {
             position: fixed;
@@ -3327,68 +3479,103 @@
     <div id="admin-panel" class="admin-dashboard">
 
         <!-- Sidebar -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="app-sidebar">
             <div class="sidebar-header">
-                <img src="../img/LITALK-Black.png" alt="LITALK Logo" class="logo-img theme-logo" style="height: 22px;">
-                <span class="admin-badge-text">ADMIN</span>
+                <img src="../img/LITALK-Black.png" alt="LITALK Logo" class="logo-img theme-logo sidebar-wordmark" style="height: 22px;">
+                <span class="admin-badge-text sidebar-label">ADMIN</span>
+                <button class="sidebar-collapse-btn" onclick="toggleSidebarCollapsed()" title="ย่อ/ขยายเมนู" aria-label="ย่อ/ขยายเมนู">
+                    <i class="fas fa-angles-left"></i>
+                </button>
             </div>
 
             <nav class="sidebar-nav">
-                <button class="sidebar-nav-item active" data-screen="dashboard" onclick="goScreen('dashboard')">
-                    <i class="fas fa-gauge-high"></i> <span>Dashboard</span>
+                <button class="sidebar-nav-item active" data-screen="dashboard" onclick="goScreen('dashboard')" title="Dashboard">
+                    <i class="fas fa-gauge-high"></i> <span class="sidebar-label">Dashboard</span>
                 </button>
 
-                <div class="sidebar-nav-heading" style="margin-top: 12px;">นักเรียน</div>
-                <button class="sidebar-nav-item" data-screen="students" onclick="goScreen('students')">
-                    <i class="fas fa-users"></i> <span>รายชื่อนักเรียน</span>
-                </button>
-                <button class="sidebar-nav-item" data-screen="check" onclick="goScreen('check')">
-                    <i class="fas fa-id-card"></i> <span>โปรไฟล์นักเรียน</span>
-                </button>
-                <button class="sidebar-nav-item" data-screen="files" onclick="goScreen('files')">
-                    <i class="fas fa-folder-open"></i> <span>ไฟล์นักเรียน</span>
-                </button>
-                <button class="sidebar-nav-item" data-screen="create" data-admin-only style="display: none;" onclick="goScreen('create')">
-                    <i class="fas fa-user-plus"></i> <span>สร้างบัญชีนักเรียน</span>
-                </button>
+                <div class="sidebar-nav-section" data-section="students">
+                    <button class="sidebar-nav-heading" style="margin-top: 12px;" onclick="toggleNavSection('students')">
+                        <span class="sidebar-label">นักเรียน</span> <i class="fas fa-chevron-down section-chevron"></i>
+                    </button>
+                    <div class="sidebar-nav-section-items" id="nav-section-students">
+                        <div class="nav-items-inner">
+                            <button class="sidebar-nav-item" data-screen="students" onclick="goScreen('students')" title="รายชื่อนักเรียน">
+                                <i class="fas fa-users"></i> <span class="sidebar-label">รายชื่อนักเรียน</span>
+                            </button>
+                            <button class="sidebar-nav-item" data-screen="check" onclick="goScreen('check')" title="โปรไฟล์นักเรียน">
+                                <i class="fas fa-id-card"></i> <span class="sidebar-label">โปรไฟล์นักเรียน</span>
+                            </button>
+                            <button class="sidebar-nav-item" data-screen="files" onclick="goScreen('files')" title="ไฟล์นักเรียน">
+                                <i class="fas fa-folder-open"></i> <span class="sidebar-label">ไฟล์นักเรียน</span>
+                            </button>
+                            <button class="sidebar-nav-item" data-screen="create" data-admin-only style="display: none;" onclick="goScreen('create')" title="สร้างบัญชีนักเรียน">
+                                <i class="fas fa-user-plus"></i> <span class="sidebar-label">สร้างบัญชีนักเรียน</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
-                <div class="sidebar-nav-heading" style="margin-top: 12px;">การเรียนการสอน</div>
-                <button class="sidebar-nav-item" data-screen="booking" onclick="goScreen('booking')">
-                    <i class="fas fa-calendar-check"></i> <span>จองเวลาเรียน</span>
-                </button>
-                <button class="sidebar-nav-item" data-screen="schedule" onclick="goScreen('schedule')">
-                    <i class="fas fa-calendar-days"></i> <span>ตารางเรียนรายเดือน</span>
-                </button>
-                <button class="sidebar-nav-item" data-screen="logs" onclick="goScreen('logs')">
-                    <i class="fas fa-book-open"></i> <span>บันทึกการเรียน</span>
-                </button>
+                <div class="sidebar-nav-section" data-section="teaching">
+                    <button class="sidebar-nav-heading" style="margin-top: 12px;" onclick="toggleNavSection('teaching')">
+                        <span class="sidebar-label">การเรียนการสอน</span> <i class="fas fa-chevron-down section-chevron"></i>
+                    </button>
+                    <div class="sidebar-nav-section-items" id="nav-section-teaching">
+                        <div class="nav-items-inner">
+                            <button class="sidebar-nav-item" data-screen="booking" onclick="goScreen('booking')" title="จองเวลาเรียน">
+                                <i class="fas fa-calendar-check"></i> <span class="sidebar-label">จองเวลาเรียน</span>
+                            </button>
+                            <button class="sidebar-nav-item" data-screen="schedule" onclick="goScreen('schedule')" title="ตารางเรียนรายเดือน">
+                                <i class="fas fa-calendar-days"></i> <span class="sidebar-label">ตารางเรียนรายเดือน</span>
+                            </button>
+                            <button class="sidebar-nav-item" data-screen="logs" onclick="goScreen('logs')" title="บันทึกการเรียน">
+                                <i class="fas fa-book-open"></i> <span class="sidebar-label">บันทึกการเรียน</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
-                <div class="sidebar-nav-heading" style="margin-top: 12px;">การเงิน</div>
-                <button class="sidebar-nav-item" data-screen="payments" onclick="goScreen('payments')">
-                    <i class="fas fa-money-bill-wave"></i> <span>บันทึกการชำระเงิน</span>
-                </button>
-                <button class="sidebar-nav-item" data-screen="finance" data-admin-only style="display: none;" onclick="goScreen('finance')">
-                    <i class="fas fa-chart-line"></i> <span>สรุปการเงิน</span>
-                </button>
+                <div class="sidebar-nav-section" data-section="finance">
+                    <button class="sidebar-nav-heading" style="margin-top: 12px;" onclick="toggleNavSection('finance')">
+                        <span class="sidebar-label">การเงิน</span> <i class="fas fa-chevron-down section-chevron"></i>
+                    </button>
+                    <div class="sidebar-nav-section-items" id="nav-section-finance">
+                        <div class="nav-items-inner">
+                            <button class="sidebar-nav-item" data-screen="payments" onclick="goScreen('payments')" title="บันทึกการชำระเงิน">
+                                <i class="fas fa-money-bill-wave"></i> <span class="sidebar-label">บันทึกการชำระเงิน</span>
+                            </button>
+                            <button class="sidebar-nav-item" data-screen="finance" data-admin-only style="display: none;" onclick="goScreen('finance')" title="สรุปการเงิน">
+                                <i class="fas fa-chart-line"></i> <span class="sidebar-label">สรุปการเงิน</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
-                <div class="sidebar-nav-heading" data-admin-only style="margin-top: 12px; display: none;">ผู้ดูแลระบบ</div>
-                <button class="sidebar-nav-item" data-screen="access" data-admin-only style="display: none;" onclick="goScreen('access')">
-                    <i class="fas fa-user-shield"></i> <span>สิทธิ์การมองเห็น</span>
-                </button>
+                <div class="sidebar-nav-section" data-section="admin" data-admin-only style="display: none;">
+                    <button class="sidebar-nav-heading" style="margin-top: 12px;" onclick="toggleNavSection('admin')">
+                        <span class="sidebar-label">ผู้ดูแลระบบ</span> <i class="fas fa-chevron-down section-chevron"></i>
+                    </button>
+                    <div class="sidebar-nav-section-items" id="nav-section-admin">
+                        <div class="nav-items-inner">
+                            <button class="sidebar-nav-item" data-screen="access" onclick="goScreen('access')" title="สิทธิ์การมองเห็น">
+                                <i class="fas fa-user-shield"></i> <span class="sidebar-label">สิทธิ์การมองเห็น</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </nav>
 
             <div class="sidebar-footer">
                 <div class="sidebar-footer-row">
-                    <span id="admin-display-email" class="sidebar-email">loading...</span>
-                    <button class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Theme" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;">
+                    <span id="admin-display-email" class="sidebar-email sidebar-label">loading...</span>
+                    <button class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Theme" title="สลับธีม" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;">
                         <div class="t-icon-swap" id="theme-icon-swap" data-state="light">
                             <span class="t-icon" data-icon="light"><i class="fas fa-sun"></i></span>
                             <span class="t-icon" data-icon="dark"><i class="fas fa-moon"></i></span>
                         </div>
                     </button>
                 </div>
-                <button class="btn btn-secondary" onclick="logout()" id="admin-logout-btn" style="width: 100%;">
-                    <i class="fas fa-sign-out-alt"></i> Logout
+                <button class="btn btn-secondary" onclick="logout()" id="admin-logout-btn" style="width: 100%;" title="Logout">
+                    <i class="fas fa-sign-out-alt"></i> <span class="sidebar-label">Logout</span>
                 </button>
             </div>
         </aside>
@@ -3423,6 +3610,16 @@
                     <span>ค้นหานักเรียน เมนู หรือคำสั่ง...</span>
                     <span class="kbd-group"><span class="kbd" id="kbd-mod">Ctrl</span><span class="kbd">K</span></span>
                 </button>
+                <div class="notif-wrap" id="notif-wrap">
+                    <button class="topbar-icon-btn" onclick="toggleNotifPanel(event)" aria-label="การแจ้งเตือน" title="การแจ้งเตือน">
+                        <i class="fas fa-bell"></i>
+                        <span class="notif-badge" id="notif-badge" style="display: none;">0</span>
+                    </button>
+                    <div class="notif-panel" id="notif-panel">
+                        <div class="notif-panel-header">การแจ้งเตือน</div>
+                        <div class="notif-list" id="notif-list"></div>
+                    </div>
+                </div>
                 <button class="topbar-icon-btn" onclick="toggleTheme()" aria-label="สลับธีม" title="สลับธีม">
                     <i class="fas fa-circle-half-stroke"></i>
                 </button>
@@ -4666,6 +4863,7 @@
             await loadStudentList();
             applyRoleGating();
             applyDeepLink();
+            loadNotifications();
         }
 
         function isAdminUser() {
@@ -4927,6 +5125,41 @@
             if (crumb) crumb.textContent = meta.group;
             if (sep) sep.style.display = '';
             if (title) title.textContent = meta.title;
+        }
+
+        // Collapsible sidebar sections (sidebar-03 nav-main.tsx pattern):
+        // each heading toggles its own item list, state remembered per section.
+        function toggleNavSection(section) {
+            const el = document.querySelector(`.sidebar-nav-section[data-section="${section}"]`);
+            if (!el) return;
+            const collapsed = el.classList.toggle('collapsed');
+            const state = JSON.parse(localStorage.getItem('sidebarSections') || '{}');
+            state[section] = collapsed;
+            localStorage.setItem('sidebarSections', JSON.stringify(state));
+        }
+
+        function restoreNavSectionsState() {
+            const state = JSON.parse(localStorage.getItem('sidebarSections') || '{}');
+            Object.entries(state).forEach(([section, collapsed]) => {
+                if (!collapsed) return;
+                const el = document.querySelector(`.sidebar-nav-section[data-section="${section}"]`);
+                if (el) el.classList.add('collapsed');
+            });
+        }
+
+        // Icon-only collapsed sidebar rail (sidebar-03 collapsible="icon").
+        function toggleSidebarCollapsed() {
+            const sidebar = document.getElementById('app-sidebar');
+            if (!sidebar) return;
+            const collapsed = sidebar.classList.toggle('icon-collapsed');
+            localStorage.setItem('sidebarIconCollapsed', collapsed ? '1' : '0');
+        }
+
+        function restoreSidebarCollapsedState() {
+            if (localStorage.getItem('sidebarIconCollapsed') === '1') {
+                const sidebar = document.getElementById('app-sidebar');
+                if (sidebar) sidebar.classList.add('icon-collapsed');
+            }
         }
 
         function goScreen(screen) {
@@ -7197,6 +7430,8 @@
                 updateThemeToggleIcon(savedTheme);
                 updateThemeLogos(savedTheme);
                 updateMiniTabPill();
+                restoreNavSectionsState();
+                restoreSidebarCollapsedState();
             });
             window.addEventListener('resize', () => {
                 updateMiniTabPill();
@@ -7681,6 +7916,7 @@
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.row-actions')) closeAllRowActionMenus();
             if (!e.target.closest('#quick-create-wrap')) closeQuickCreate();
+            if (!e.target.closest('#notif-wrap')) closeNotifPanel();
         });
 
         // ===== Floating Quick Create =====
@@ -7717,6 +7953,83 @@
             document.querySelectorAll('[data-profile-panel]').forEach(panel => {
                 panel.classList.toggle('active', panel.getAttribute('data-profile-panel') === tab);
             });
+        }
+
+        // ===== Notification bell (topbar) =====
+        // Reuses the same "unpaid this month" alerts already computed by the
+        // Worker's dashboard endpoint (independent of the visible dashboard's
+        // own today/week/month/year timeframe — alerts are always this-month).
+
+        let notifAlerts = [];
+        let notifLoaded = false;
+
+        async function loadNotifications() {
+            try {
+                const response = await apiFetch('/dashboard?range=today');
+                const result = await response.json();
+                if (response.ok) {
+                    notifAlerts = result.alerts || [];
+                    notifLoaded = true;
+                    renderNotifBadge();
+                }
+            } catch (error) {
+                console.error('loadNotifications:', error);
+            }
+        }
+
+        function renderNotifBadge() {
+            const badge = document.getElementById('notif-badge');
+            if (!badge) return;
+            const count = notifAlerts.length;
+            badge.style.display = count > 0 ? 'flex' : 'none';
+            badge.textContent = count > 9 ? '9+' : String(count);
+        }
+
+        function renderNotifList() {
+            const list = document.getElementById('notif-list');
+            if (!list) return;
+            if (!notifLoaded) {
+                list.innerHTML = '<div class="empty-state" style="padding: 24px 16px;"><div class="skeleton skeleton-line" style="width: 80%;"></div><div class="skeleton skeleton-line" style="width: 60%;"></div></div>';
+                return;
+            }
+            if (!notifAlerts.length) {
+                list.innerHTML = '<div class="empty-state" style="padding: 24px 16px;"><i class="fas fa-check-circle"></i><div class="empty-title">ไม่มีการแจ้งเตือน</div><div class="empty-sub">คุณติดตามทุกอย่างเรียบร้อยแล้ว</div></div>';
+                return;
+            }
+            list.innerHTML = notifAlerts.map(a => `
+                <button class="notif-item" onclick="handleNotifClick('${escapeJs(a.studentId)}', '${a.screen}')">
+                    <i class="fas fa-triangle-exclamation" style="color: var(--accent-danger);"></i>
+                    <div class="notif-item-body">
+                        <div class="notif-item-text">${escapeHtml(a.text)}</div>
+                        <div class="notif-item-action">${escapeHtml(a.actionLabel)} <i class="fas fa-arrow-right" style="font-size: 9px;"></i></div>
+                    </div>
+                </button>`).join('');
+        }
+
+        function toggleNotifPanel(e) {
+            if (e) e.stopPropagation();
+            const wrap = document.getElementById('notif-wrap');
+            if (!wrap) return;
+            const opening = !wrap.classList.contains('open');
+            closeAllRowActionMenus();
+            closeQuickCreate();
+            if (opening) {
+                wrap.classList.add('open');
+                renderNotifList();
+                if (!notifLoaded) loadNotifications().then(renderNotifList);
+            } else {
+                wrap.classList.remove('open');
+            }
+        }
+
+        function closeNotifPanel() {
+            const wrap = document.getElementById('notif-wrap');
+            if (wrap) wrap.classList.remove('open');
+        }
+
+        function handleNotifClick(studentId, screen) {
+            closeNotifPanel();
+            goToStudentAndScreen(studentId, screen);
         }
 
         // ===== Command palette (Ctrl/Cmd + K) =====
@@ -7858,6 +8171,7 @@
                 if (commandPaletteVisible()) { closeCommandPalette(); return; }
                 closeAllRowActionMenus();
                 closeQuickCreate();
+                closeNotifPanel();
             }
         });
     </script>
