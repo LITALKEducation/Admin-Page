@@ -222,6 +222,8 @@ permissions scoped to this account.
 | GET    | `/teacher-assignments`   | admin          | Per-teacher visible-student lists (with names)  |
 | PUT    | `/teacher-assignments/:identity` | admin  | Replaces a teacher's visible-student set (empty = sees nothing) |
 | GET    | `/staff-identities`      | admin          | Known login identities + display names (for assigning visibility) |
+| GET    | `/students/:id/credits`  | admin          | Credit balance + ledger history (manual adjustments + schedule/amendment entries) |
+| POST   | `/students/:id/credits/adjust` | admin    | `{ hours, reason }` — manual credit adjustment (hours can be negative) |
 | GET    | `/finance?month=`        | admin          | All transactions + per-teacher & per-recorder income |
 | POST   | `/study-logs`            | `data:write`   | `{ studentId, date, feedback, video }` |
 | GET    | `/students/:id/study-logs` | `data:read`  | A student's study logs (for editing) |

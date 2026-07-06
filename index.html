@@ -655,6 +655,15 @@
             padding: 14px 12px;
             overflow-y: auto;
             overflow-x: hidden;
+            /* Hidden but still scrollable (wheel/touch/keyboard) — a visible
+               scrollbar track eats a few px on one side, which throws off
+               icon centering in the collapsed icon-rail mode. */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .sidebar-nav::-webkit-scrollbar {
+            display: none;
         }
 
         .sidebar-nav-section { display: flex; flex-direction: column; }
@@ -1367,6 +1376,66 @@
 
         .tab-content.active {
             display: block;
+        }
+
+        /* Transitions.dev — Tabs sliding (small pill toggle, e.g. add/withdraw
+           hours). Colors reuse this app's theme tokens instead of the
+           snippet's hardcoded light-mode values so dark mode still works. */
+        .t-tabs {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 3px;
+            border-radius: 48px;
+            background: var(--tabs-bar-bg);
+            border: 1px solid var(--border-color);
+        }
+
+        .t-tab {
+            position: relative;
+            appearance: none;
+            border: 0;
+            background: transparent;
+            height: 30px;
+            padding: 4px 12px;
+            color: var(--tabs-text-muted);
+            cursor: pointer;
+            border-radius: 48px;
+            z-index: 1;
+            transition: color var(--tabs-dur) var(--tabs-ease);
+            font-family: inherit;
+            font-size: var(--text-base-sm);
+            font-weight: var(--weight-medium);
+        }
+
+        .t-tab:not([aria-selected="true"]):hover,
+        .t-tab[aria-selected="true"] {
+            color: var(--tabs-text-active);
+        }
+
+        .t-tab[aria-selected="true"] { font-weight: var(--weight-semibold); }
+
+        .t-tabs-pill {
+            position: absolute;
+            top: 3px;
+            left: 0;
+            height: 30px;
+            width: 0;
+            background: var(--tabs-pill-bg);
+            border-radius: 48px;
+            border: 1px solid var(--border-color);
+            transform: translateX(0);
+            transition:
+                transform var(--tabs-dur) var(--tabs-ease),
+                width     var(--tabs-dur) var(--tabs-ease);
+            will-change: transform, width;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .t-tabs-pill, .t-tab { transition: none !important; }
         }
 
         @keyframes fadeIn {
@@ -3304,6 +3373,51 @@
             line-height: 1.5;
         }
 
+        /* Teacher-visibility student checklist: full name + id stacked
+           (no truncation) instead of a single cramped ellipsis line. */
+        .access-student-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 8px;
+            max-height: 320px;
+            overflow-y: auto;
+            padding: 4px;
+        }
+
+        .access-student-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: background-color 0.12s, border-color 0.12s;
+        }
+
+        .access-student-item:hover { background-color: var(--bg-tertiary); }
+
+        .access-student-item input[type="checkbox"] {
+            flex-shrink: 0;
+            width: 15px;
+            height: 15px;
+            cursor: pointer;
+            accent-color: var(--brand-primary);
+        }
+
+        .access-student-item .a-name {
+            font-size: var(--text-base-sm);
+            font-weight: var(--weight-medium);
+            color: var(--text-primary);
+            overflow-wrap: anywhere;
+        }
+
+        .access-student-item .a-id {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+
         /* ===== Toast notifications (sonner-style) ===== */
         .toast-viewport {
             position: fixed;
@@ -3527,6 +3641,9 @@
                             <button class="sidebar-nav-item" data-screen="schedule" onclick="goScreen('schedule')" title="ตารางเรียนรายเดือน">
                                 <i class="fas fa-calendar-days"></i> <span class="sidebar-label">ตารางเรียนรายเดือน</span>
                             </button>
+                            <button class="sidebar-nav-item" data-screen="hours" onclick="goScreen('hours')" title="ปรับชั่วโมงเรียน">
+                                <i class="fas fa-arrows-up-down"></i> <span class="sidebar-label">ปรับชั่วโมงเรียน</span>
+                            </button>
                             <button class="sidebar-nav-item" data-screen="logs" onclick="goScreen('logs')" title="บันทึกการเรียน">
                                 <i class="fas fa-book-open"></i> <span class="sidebar-label">บันทึกการเรียน</span>
                             </button>
@@ -3559,6 +3676,9 @@
                             <button class="sidebar-nav-item" data-screen="access" onclick="goScreen('access')" title="สิทธิ์การมองเห็น">
                                 <i class="fas fa-user-shield"></i> <span class="sidebar-label">สิทธิ์การมองเห็น</span>
                             </button>
+                            <button class="sidebar-nav-item" data-screen="credits" onclick="goScreen('credits')" title="แก้ไขเครดิต">
+                                <i class="fas fa-coins"></i> <span class="sidebar-label">แก้ไขเครดิต</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -3567,12 +3687,6 @@
             <div class="sidebar-footer">
                 <div class="sidebar-footer-row">
                     <span id="admin-display-email" class="sidebar-email sidebar-label">loading...</span>
-                    <button class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle Theme" title="สลับธีม" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;">
-                        <div class="t-icon-swap" id="theme-icon-swap" data-state="light">
-                            <span class="t-icon" data-icon="light"><i class="fas fa-sun"></i></span>
-                            <span class="t-icon" data-icon="dark"><i class="fas fa-moon"></i></span>
-                        </div>
-                    </button>
                 </div>
                 <button class="btn btn-secondary" onclick="logout()" id="admin-logout-btn" style="width: 100%;" title="Logout">
                     <i class="fas fa-sign-out-alt"></i> <span class="sidebar-label">Logout</span>
@@ -4524,13 +4638,21 @@
                         </div>
                     </div>
 
-                    <!-- Request to add/withdraw hours on a live schedule -->
-                    <div class="admin-card" style="margin-top: 24px;">
+                </div>
+
+                <!-- ============ HOUR ADJUSTMENTS (add/withdraw hours) ============ -->
+                <div id="screen-hours" class="tab-content" data-screen-panel="hours">
+                    <div class="screen-header">
+                        <h1>ปรับชั่วโมงเรียน</h1>
+                        <p>ขอเพิ่มหรือถอนชั่วโมงเรียนจากตารางเรียนที่อนุมัติแล้ว — เพิ่มจะหักเครดิตก่อนแล้วจึงเก็บเงินส่วนที่เหลือ ถอนจะได้เครดิตคืนทันที</p>
+                    </div>
+
+                    <div class="admin-card">
                         <div class="card-title-bar">
                             <span class="card-icon"><i class="fas fa-arrows-up-down"></i></span>
                             <div>
                                 <h3>ขอเพิ่ม/ถอนชั่วโมงเรียน</h3>
-                                <p>ใช้กับตารางเรียนที่อนุมัติแล้วเท่านั้น — เพิ่มจะหักเครดิตก่อนแล้วจึงเก็บเงินส่วนที่เหลือ ถอนจะได้เครดิตคืนทันที</p>
+                                <p>ใช้กับตารางเรียนที่อนุมัติแล้วเท่านั้น</p>
                             </div>
                         </div>
                         <div class="form-body">
@@ -4544,10 +4666,10 @@
                             </div>
                             <div class="form-group">
                                 <label><i class="fas fa-toggle-on"></i> ประเภทคำร้อง</label>
-                                <div class="tab-menu-mini" style="display: inline-flex;">
-                                    <span class="tab-menu-pill-mini"></span>
-                                    <button type="button" class="tab-btn-mini active" id="amend-type-add" onclick="setAmendType('add')">เพิ่มชั่วโมง</button>
-                                    <button type="button" class="tab-btn-mini" id="amend-type-remove" onclick="setAmendType('remove')">ถอนชั่วโมง</button>
+                                <div class="t-tabs" role="tablist" id="amend-type-tabs" style="display: inline-flex;">
+                                    <span class="t-tabs-pill" aria-hidden="true"></span>
+                                    <button type="button" class="t-tab" role="tab" aria-selected="true" id="amend-type-add" onclick="setAmendType('add', event)">เพิ่มชั่วโมง</button>
+                                    <button type="button" class="t-tab" role="tab" aria-selected="false" id="amend-type-remove" onclick="setAmendType('remove', event)">ถอนชั่วโมง</button>
                                 </div>
                             </div>
 
@@ -4667,7 +4789,11 @@
                             </div>
                             <div class="form-group">
                                 <label><i class="fas fa-users"></i> นักเรียนที่ครูคนนี้เห็นได้</label>
-                                <div id="access-student-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; max-height: 320px; overflow-y: auto; padding: 4px;"></div>
+                                <div class="search-box" style="max-width: 320px; margin-bottom: 8px;">
+                                    <i class="fas fa-magnifying-glass"></i>
+                                    <input type="text" id="access-student-search" placeholder="ค้นหาชื่อหรือรหัสนักเรียน..." oninput="renderAccessStudentListFiltered()">
+                                </div>
+                                <div id="access-student-list" class="access-student-grid"></div>
                                 <div class="form-hint">ไม่เลือกเลย = ครูคนนี้เห็นนักเรียนทุกคน · สิทธิ์มีผลเมื่อครูรีเฟรชหน้าเว็บหรือเข้าสู่ระบบใหม่</div>
                             </div>
                             <div style="display: flex; justify-content: flex-end;">
@@ -4686,6 +4812,101 @@
                         </div>
                         <div class="row-list" id="access-current-list">
                             <div class="form-hint">กำลังโหลดข้อมูล...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============ CREDIT EDITING (ADMIN ONLY) ============ -->
+                <div id="screen-credits" class="tab-content" data-screen-panel="credits">
+                    <div class="screen-header">
+                        <h1>แก้ไขเครดิต</h1>
+                        <p>ปรับยอดเครดิตชั่วโมงเรียนของนักเรียนโดยตรง (สำหรับแอดมินเท่านั้น) — ใช้สำหรับชดเชยชั่วโมง แก้ไขข้อผิดพลาด หรือกรณีพิเศษอื่น ๆ</p>
+                    </div>
+
+                    <div class="sticky-picker">
+                        <div class="form-group" id="credits-picker-group">
+                            <div class="custom-dropdown" id="credits-dropdown-container">
+                                <div class="dropdown-trigger" onclick="toggleDropdown(event, 'credits')">
+                                    <span id="credits-selected-student-text">กำลังโหลดรายชื่อนักเรียน...</span>
+                                    <div class="dropdown-actions">
+                                        <i class="fas fa-times clear-btn" id="credits-clear-student-btn" onclick="clearStudentSelection(event, 'credits')" style="display: none;"></i>
+                                        <i class="fas fa-chevron-down arrow-icon"></i>
+                                    </div>
+                                </div>
+                                <div class="dropdown-menu-panel">
+                                    <div class="dropdown-search-box">
+                                        <i class="fas fa-search search-icon"></i>
+                                        <div class="t-clear" id="credits-student-search-clear-wrapper">
+                                            <input type="text" id="credits-student-search-input" placeholder="" onkeyup="filterStudentList('credits')" onclick="event.stopPropagation()">
+                                            <div class="t-clear-mirror" aria-hidden="true"></div>
+                                            <div class="t-clear-placeholder" aria-hidden="true">พิมพ์เพื่อค้นหาชื่อหรือรหัส...</div>
+                                            <div class="t-clear-glow" aria-hidden="true"></div>
+                                            <button class="t-clear-btn" type="button" aria-label="Clear"><i class="fas fa-times-circle"></i></button>
+                                        </div>
+                                    </div>
+                                    <div class="dropdown-options-list" id="credits-dropdown-options-list"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="student-indicator empty" id="credits-student-indicator">
+                            <i class="fas fa-info-circle"></i>
+                            <span>กรุณาเลือกนักเรียนจากรายชื่อด้านบนก่อนเริ่มบันทึกข้อมูล</span>
+                        </div>
+                    </div>
+
+                    <div class="form-cards-wrapper disabled" id="credits-form-wrapper">
+                        <div class="admin-card">
+                            <div class="card-title-bar">
+                                <span class="card-icon"><i class="fas fa-coins"></i></span>
+                                <div>
+                                    <h3>ยอดเครดิตปัจจุบัน</h3>
+                                    <p>รวมจากประวัติทุกรายการ (ตารางเรียน คำร้อง และการปรับด้วยมือ)</p>
+                                </div>
+                            </div>
+                            <div class="stat-card" style="max-width: 220px;">
+                                <div class="stat-card-top"><span class="stat-card-label">เครดิตคงเหลือ</span><i class="fas fa-piggy-bank"></i></div>
+                                <div class="stat-card-value" id="credits-balance-value">0</div>
+                                <div class="stat-card-sub">ชั่วโมง</div>
+                            </div>
+                        </div>
+
+                        <div class="admin-card">
+                            <div class="card-title-bar">
+                                <span class="card-icon"><i class="fas fa-sliders"></i></span>
+                                <div>
+                                    <h3>ปรับเครดิต</h3>
+                                    <p>ใส่จำนวนติดลบเพื่อหักเครดิต หรือบวกเพื่อเพิ่มเครดิต</p>
+                                </div>
+                            </div>
+                            <div class="form-body">
+                                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 16px;">
+                                    <div class="form-group">
+                                        <label><i class="fas fa-clock"></i> จำนวนชั่วโมง</label>
+                                        <input type="number" id="credit-adjust-hours" placeholder="เช่น 2 หรือ -1" step="0.5" inputmode="decimal">
+                                        <div class="form-hint">บวก = เพิ่มเครดิต · ลบ = หักเครดิต</div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-sticky-note"></i> เหตุผล</label>
+                                        <input type="text" id="credit-adjust-reason" placeholder="เช่น ชดเชยคลาสที่ครูยกเลิกกะทันหัน">
+                                    </div>
+                                </div>
+                                <div style="display: flex; justify-content: flex-end;">
+                                    <button class="btn btn-primary" onclick="submitCreditAdjustment()"><i class="fas fa-save"></i> บันทึกการปรับเครดิต</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="admin-card">
+                            <div class="card-title-bar">
+                                <span class="card-icon"><i class="fas fa-clock-rotate-left"></i></span>
+                                <div>
+                                    <h3>ประวัติเครดิต</h3>
+                                    <p>รายการล่าสุด 50 รายการ</p>
+                                </div>
+                            </div>
+                            <div class="row-list" id="credits-history-list">
+                                <div class="form-hint">กรุณาเลือกนักเรียนเพื่อดูประวัติ</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -4773,12 +4994,14 @@
                 <div class="sidebar-nav-heading" style="margin-top: 10px;">การเรียนการสอน</div>
                 <a href="javascript:void(0)" data-screen="booking" onclick="goScreen('booking')"><i class="fas fa-calendar-check"></i> จองเวลาเรียน</a>
                 <a href="javascript:void(0)" data-screen="schedule" onclick="goScreen('schedule')"><i class="fas fa-calendar-days"></i> ตารางเรียนรายเดือน</a>
+                <a href="javascript:void(0)" data-screen="hours" onclick="goScreen('hours')"><i class="fas fa-arrows-up-down"></i> ปรับชั่วโมงเรียน</a>
                 <a href="javascript:void(0)" data-screen="logs" onclick="goScreen('logs')"><i class="fas fa-book-open"></i> บันทึกการเรียน</a>
                 <div class="sidebar-nav-heading" style="margin-top: 10px;">การเงิน</div>
                 <a href="javascript:void(0)" data-screen="payments" onclick="goScreen('payments')"><i class="fas fa-money-bill-wave"></i> บันทึกการชำระเงิน</a>
                 <a href="javascript:void(0)" data-screen="finance" data-admin-only style="display: none;" onclick="goScreen('finance')"><i class="fas fa-chart-line"></i> สรุปการเงิน</a>
                 <div class="sidebar-nav-heading" data-admin-only style="margin-top: 10px; display: none;">ผู้ดูแลระบบ</div>
                 <a href="javascript:void(0)" data-screen="access" data-admin-only style="display: none;" onclick="goScreen('access')"><i class="fas fa-user-shield"></i> สิทธิ์การมองเห็น</a>
+                <a href="javascript:void(0)" data-screen="credits" data-admin-only style="display: none;" onclick="goScreen('credits')"><i class="fas fa-coins"></i> แก้ไขเครดิต</a>
             </nav>
             <div class="mobile-menu-footer">
                 <div class="mobile-menu-email" id="mobile-menu-email">loading...</div>
@@ -4905,7 +5128,7 @@
 
         // Supports shareable links like ?screen=logs&student=litalk12345
         // (e.g. the "คัดลอกลิงก์ Study Log" button on the check screen).
-        const DEEP_LINK_SCREENS = ['dashboard', 'students', 'logs', 'payments', 'create', 'files', 'booking', 'check', 'schedule', 'finance', 'access'];
+        const DEEP_LINK_SCREENS = ['dashboard', 'students', 'logs', 'payments', 'create', 'files', 'booking', 'check', 'schedule', 'hours', 'finance', 'access', 'credits'];
         function applyDeepLink() {
             const params = new URLSearchParams(window.location.search);
             const student = params.get('student');
@@ -5110,10 +5333,12 @@
             create: { group: 'นักเรียน', title: 'สร้างบัญชีนักเรียน' },
             booking: { group: 'การเรียนการสอน', title: 'จองเวลาเรียน' },
             schedule: { group: 'การเรียนการสอน', title: 'ตารางเรียนรายเดือน' },
+            hours: { group: 'การเรียนการสอน', title: 'ปรับชั่วโมงเรียน' },
             logs: { group: 'การเรียนการสอน', title: 'บันทึกการเรียน' },
             payments: { group: 'การเงิน', title: 'บันทึกการชำระเงิน' },
             finance: { group: 'การเงิน', title: 'สรุปการเงิน' },
-            access: { group: 'ผู้ดูแลระบบ', title: 'สิทธิ์การมองเห็น' }
+            access: { group: 'ผู้ดูแลระบบ', title: 'สิทธิ์การมองเห็น' },
+            credits: { group: 'ผู้ดูแลระบบ', title: 'แก้ไขเครดิต' }
         };
 
         function updateTopbar(screen) {
@@ -5212,6 +5437,14 @@
                 syncPickerText('schedule');
                 if (!schedSessions.length) addScheduleSession();
                 loadSchedules();
+            }
+            if (screen === 'hours') {
+                loadSchedules();
+                requestAnimationFrame(() => moveAmendTabPillTo(amendActiveTab(), false));
+            }
+            if (screen === 'credits') {
+                syncPickerText('credits');
+                loadStudentCredits();
             }
             if (screen === 'finance') {
                 loadFinance();
@@ -5426,6 +5659,8 @@
         window.addEventListener("resize", () => {
             const tab = activeTab();
             if (tab) moveTabPillTo(tab, false);
+            const amendTab = amendActiveTab();
+            if (amendTab) moveAmendTabPillTo(amendTab, false);
         });
 
         let allStudentsData = [];
@@ -5458,8 +5693,8 @@
         // Booking keeps its own (selectedBookingStudentId). Each screen has
         // its own DOM instance (prefix-scoped ids) so more than one can exist
         // in the document at once even though only one is visible.
-        const PICKER_PREFIXES = ['logs', 'payments', 'files', 'booking', 'check', 'schedule'];
-        const PICKER_TARGETS = { logs: 'shared', payments: 'shared', files: 'shared', booking: 'booking', check: 'shared', schedule: 'shared' };
+        const PICKER_PREFIXES = ['logs', 'payments', 'files', 'booking', 'check', 'schedule', 'credits'];
+        const PICKER_TARGETS = { logs: 'shared', payments: 'shared', files: 'shared', booking: 'booking', check: 'shared', schedule: 'shared', credits: 'shared' };
 
         let selectedStudentId = '';
         let selectedBookingStudentId = '';
@@ -5596,13 +5831,14 @@
                 updateSharedStudentIndicators();
                 if (currentScreen === 'files') loadFilesForSelectedStudent();
                 if (currentScreen === 'check') loadStudentCheck();
+                if (currentScreen === 'credits') loadStudentCredits();
             }
         }
 
         function updateSharedStudentIndicators() {
             const student = allStudentsData.find(s => s.id === selectedStudentId) || null;
 
-            ['logs', 'payments', 'schedule'].forEach(prefix => {
+            ['logs', 'payments', 'schedule', 'credits'].forEach(prefix => {
                 const indicator = document.getElementById(prefix + '-student-indicator');
                 const wrapper = document.getElementById(prefix + '-form-wrapper');
                 if (!indicator) return;
@@ -6445,14 +6681,41 @@
             onAmendScheduleChange();
         }
 
-        function setAmendType(type) {
+        function setAmendType(type, evt) {
             amendType = type;
-            document.getElementById('amend-type-add').classList.toggle('active', type === 'add');
-            document.getElementById('amend-type-remove').classList.toggle('active', type === 'remove');
-            updateMiniTabPill();
+            const tabs = document.querySelectorAll('#amend-type-tabs .t-tab');
+            tabs.forEach(btn => btn.setAttribute('aria-selected', btn.id === `amend-type-${type}` ? 'true' : 'false'));
+            moveAmendTabPillTo(evt ? evt.currentTarget : document.getElementById(`amend-type-${type}`), true);
             document.getElementById('amend-add-panel').style.display = type === 'add' ? '' : 'none';
             document.getElementById('amend-remove-panel').style.display = type === 'remove' ? '' : 'none';
             if (type === 'add' && !amendSessions.length) addAmendSession();
+        }
+
+        // Same sliding-pill mechanic as the dashboard timeframe tabs
+        // (moveTabPillTo/activeTab), duplicated for this tab group since it
+        // lives in a different screen and can be mounted independently.
+        function amendActiveTab() {
+            const tabMenu = document.getElementById('amend-type-tabs');
+            if (!tabMenu) return null;
+            return tabMenu.querySelector('.t-tab[aria-selected="true"]') || tabMenu.querySelector('.t-tab');
+        }
+
+        function moveAmendTabPillTo(tab, animate) {
+            const tabMenu = document.getElementById('amend-type-tabs');
+            if (!tabMenu || !tab) return;
+            const pill = tabMenu.querySelector('.t-tabs-pill');
+            if (!pill) return;
+            if (!animate) {
+                const prev = pill.style.transition;
+                pill.style.transition = 'none';
+                pill.style.transform = `translateX(${tab.offsetLeft}px)`;
+                pill.style.width = `${tab.offsetWidth}px`;
+                void pill.offsetWidth; // force reflow
+                pill.style.transition = prev;
+            } else {
+                pill.style.transform = `translateX(${tab.offsetLeft}px)`;
+                pill.style.width = `${tab.offsetWidth}px`;
+            }
         }
 
         function onAmendScheduleChange() {
@@ -6741,16 +7004,44 @@
             renderAccessStudentChecklist(new Set(existing ? existing.studentIds : []));
         }
 
+        // Selection is tracked separately from the DOM (not just read off
+        // checked checkboxes) so filtering the list never silently drops a
+        // selection that's scrolled out of view or hidden by the search box.
+        let accessSelectedIds = new Set();
+
         function renderAccessStudentChecklist(selectedIds) {
+            accessSelectedIds = new Set(selectedIds);
+            const search = document.getElementById('access-student-search');
+            if (search) search.value = '';
+            renderAccessStudentListFiltered();
+        }
+
+        function toggleAccessStudentSelected(id, checked) {
+            if (checked) accessSelectedIds.add(id); else accessSelectedIds.delete(id);
+        }
+
+        function renderAccessStudentListFiltered() {
             const listEl = document.getElementById('access-student-list');
+            if (!listEl) return;
             if (!allStudentsData.length) {
                 listEl.innerHTML = '<div class="form-hint">ยังไม่มีนักเรียนในระบบ</div>';
                 return;
             }
-            listEl.innerHTML = allStudentsData.map(s => `
-                <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); cursor: pointer; padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 6px;">
-                    <input type="checkbox" value="${escapeHtml(s.id)}" ${selectedIds.has(s.id) ? 'checked' : ''}>
-                    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">[${escapeHtml(s.id)}] ${escapeHtml(s.name)}</span>
+            const q = (document.getElementById('access-student-search')?.value || '').trim().toLowerCase();
+            const filtered = q
+                ? allStudentsData.filter(s => [s.name, s.nickname, s.id].some(v => String(v || '').toLowerCase().includes(q)))
+                : allStudentsData;
+            if (!filtered.length) {
+                listEl.innerHTML = '<div class="form-hint">ไม่พบนักเรียนที่ค้นหา</div>';
+                return;
+            }
+            listEl.innerHTML = filtered.map(s => `
+                <label class="access-student-item">
+                    <input type="checkbox" value="${escapeHtml(s.id)}" ${accessSelectedIds.has(s.id) ? 'checked' : ''} onchange="toggleAccessStudentSelected('${escapeJs(s.id)}', this.checked)">
+                    <div style="min-width: 0;">
+                        <div class="a-name">${escapeHtml(s.name)}${s.nickname ? ` <span style="color: var(--text-muted); font-weight: 400;">(${escapeHtml(s.nickname)})</span>` : ''}</div>
+                        <div class="a-id">${escapeHtml(s.id)}</div>
+                    </div>
                 </label>`).join('');
         }
 
@@ -6762,7 +7053,7 @@
                 triggerFieldError('access-teacher-email', 'กรุณากรอกอีเมลครู หรือเลือกบัญชีจากรายการ');
                 return;
             }
-            const studentIds = [...document.querySelectorAll('#access-student-list input[type="checkbox"]:checked')].map(cb => cb.value);
+            const studentIds = [...accessSelectedIds];
 
             showLoading();
             try {
@@ -6782,6 +7073,90 @@
                 hideLoading();
                 console.error('saveTeacherAssignments:', error);
                 showModal('ข้อผิดพลาดการเชื่อมต่อ', 'ไม่สามารถบันทึกสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง', 'error');
+            }
+        }
+
+        // ===== Credit editing (admin only) =====
+
+        let creditsBalance = 0;
+
+        async function loadStudentCredits() {
+            const historyList = document.getElementById('credits-history-list');
+            const balanceEl = document.getElementById('credits-balance-value');
+            if (!historyList || !balanceEl) return;
+
+            if (!selectedStudentId) {
+                balanceEl.textContent = '0';
+                historyList.innerHTML = '<div class="form-hint">กรุณาเลือกนักเรียนเพื่อดูประวัติ</div>';
+                return;
+            }
+
+            historyList.innerHTML = '<div class="form-hint">กำลังโหลดข้อมูล...</div>';
+            try {
+                const response = await apiFetch(`/students/${encodeURIComponent(selectedStudentId)}/credits`);
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || 'load failed');
+
+                creditsBalance = result.balance || 0;
+                balanceEl.textContent = String(creditsBalance);
+
+                const entries = result.entries || [];
+                historyList.innerHTML = entries.length ? entries.map(e => {
+                    const positive = e.hours > 0;
+                    return `
+                    <div class="alert-row">
+                        <i class="fas ${positive ? 'fa-plus-circle' : 'fa-minus-circle'}" style="color: ${positive ? 'var(--accent-success)' : 'var(--accent-danger)'};"></i>
+                        <div style="flex: 1; min-width: 0;">
+                            <div class="alert-text">
+                                <strong style="color: ${positive ? 'var(--accent-success)' : 'var(--accent-danger)'};">${positive ? '+' : ''}${e.hours} ชม.</strong>
+                                — ${escapeHtml(e.reason || '-')}
+                            </div>
+                            <div class="alert-text" style="color: var(--text-muted); font-size: 12px;">${escapeHtml(new Date(e.createdAt).toLocaleString('th-TH'))} · โดย ${escapeHtml(e.createdBy || '-')}</div>
+                        </div>
+                    </div>`;
+                }).join('') : '<div class="form-hint">ยังไม่มีประวัติเครดิต</div>';
+            } catch (error) {
+                console.error('loadStudentCredits:', error);
+                historyList.innerHTML = '<div class="form-hint">โหลดประวัติเครดิตไม่สำเร็จ</div>';
+            }
+        }
+
+        async function submitCreditAdjustment() {
+            if (!selectedStudentId) {
+                triggerFieldError('credits-dropdown-container', 'กรุณาเลือกนักเรียนจากรายชื่อด้านบน');
+                return;
+            }
+            const hours = Number(document.getElementById('credit-adjust-hours').value);
+            if (!hours) {
+                triggerFieldError('credit-adjust-hours', 'กรุณากรอกจำนวนชั่วโมงที่ไม่เป็นศูนย์');
+                return;
+            }
+            const reason = document.getElementById('credit-adjust-reason').value.trim();
+            if (!reason) {
+                triggerFieldError('credit-adjust-reason', 'กรุณาระบุเหตุผลการปรับเครดิต');
+                return;
+            }
+
+            showLoading();
+            try {
+                const response = await apiFetch(`/students/${encodeURIComponent(selectedStudentId)}/credits/adjust`, {
+                    method: 'POST',
+                    body: JSON.stringify({ hours, reason })
+                });
+                const result = await response.json();
+                hideLoading();
+                if (response.ok && result.ok) {
+                    showToast('ปรับเครดิตสำเร็จ', result.message, 'success');
+                    document.getElementById('credit-adjust-hours').value = '';
+                    document.getElementById('credit-adjust-reason').value = '';
+                    loadStudentCredits();
+                } else {
+                    showModal('ปรับเครดิตไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            } catch (error) {
+                hideLoading();
+                console.error('submitCreditAdjustment:', error);
+                showModal('ข้อผิดพลาดการเชื่อมต่อ', 'ไม่สามารถปรับเครดิตได้ กรุณาลองใหม่อีกครั้ง', 'error');
             }
         }
 
@@ -8071,7 +8446,7 @@
             const items = [];
 
             Object.entries(SCREEN_META).forEach(([screen, meta]) => {
-                if (!admin && ['create', 'finance', 'access'].includes(screen)) return;
+                if (!admin && ['create', 'finance', 'access', 'credits'].includes(screen)) return;
                 const label = meta.title;
                 if (q && !label.toLowerCase().includes(q) && !meta.group.toLowerCase().includes(q)) return;
                 items.push({
