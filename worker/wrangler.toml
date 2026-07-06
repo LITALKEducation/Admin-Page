@@ -30,15 +30,6 @@ PUBLIC_FILES_ORIGIN = "https://istudnt.litalkeducation.com"
 STUDENT_EMAIL_DOMAIN = "litalkeducation.com"
 AUTH0_DB_CONNECTION = "LITALK-Student"
 
-# Web Push (see worker/README.md "Web Push setup"). The public key is not
-# secret — it's shipped to every subscribing browser as the
-# applicationServerKey. VAPID_PRIVATE_KEY (its matching half) is a secret,
-# set via `wrangler secret put` below; without it push notifications are
-# silently skipped (the in-app notification center still works).
-VAPID_PUBLIC_KEY = "BGa4ejzt8q6HUmvZ8gFLDoOyrbNerUga9Swxh4dg5w5BZyZACZZBicV1TKjKrSCXTK0K00wyioEUzLCEkQifGo0"
-VAPID_SUBJECT = "mailto:admin@litalkeducation.com"
-
 # Secrets, NOT vars — set them with `npx wrangler secret put <NAME>`:
 #   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET        (Stripe payment links)
 #   AUTH0_MGMT_CLIENT_ID, AUTH0_MGMT_CLIENT_SECRET  (auto-create student logins)
-#   VAPID_PRIVATE_KEY                               (Web Push; see worker/README.md)

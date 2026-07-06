@@ -99,39 +99,6 @@ student id + creator email as metadata; when Stripe reports the session as
 paid, the webhook records a `payments` row automatically (source `stripe`)
 and marks the link `paid`. Amounts are THB.
 
-## Web Push setup
-
-Notifications (see "Notification center" below) can also be delivered as a
-browser/OS push — to the admin console and to the student portal — even when
-the tab is closed, using the standard Web Push protocol (VAPID). This is
-optional: without `VAPID_PRIVATE_KEY` set, push sends are silently skipped
-and the in-app notification center keeps working as normal.
-
-`wrangler.toml` ships with a working `VAPID_PUBLIC_KEY` (not secret — it's
-the `applicationServerKey` every subscribing browser needs). Its matching
-private key must be set as a secret and must never be committed:
-
-```sh
-npx wrangler secret put VAPID_PRIVATE_KEY
-```
-
-To generate your own key pair instead of reusing the shipped one (recommended
-before going to production, since this repo's default pair is not private):
-
-```js
-const { subtle } = require('crypto').webcrypto;
-(async () => {
-  const pair = await subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
-  const b64url = (buf) => Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  console.log('VAPID_PUBLIC_KEY  =', b64url(await subtle.exportKey('raw', pair.publicKey)));
-  console.log('VAPID_PRIVATE_KEY =', (await subtle.exportKey('jwk', pair.privateKey)).d);
-})();
-```
-
-Put the new public key in `wrangler.toml`, the private key via
-`wrangler secret put VAPID_PRIVATE_KEY` above, and update `VAPID_SUBJECT` to
-a real `mailto:` contact the push services can reach you at if they need to.
-
 ## 2. One-time Cloudflare resource setup
 
 If `litalk` (D1) and `files-litalk` (R2) don't already exist:
@@ -275,18 +242,6 @@ permissions scoped to this account.
 | POST   | `/import`                | `data:write`   | One-time Sheet migration (see above) |
 | POST   | `/stripe/webhook`        | (Stripe signature) | Records paid checkout sessions |
 | GET    | `/portal/:studentId`     | (public)       | Student portal data for litalkeducation.com |
-| POST   | `/portal/:studentId/notifications/:id/read` | (public) | Marks one of the student's notifications read |
-| POST   | `/portal/:studentId/push/subscribe` | (public) | Registers a Web Push subscription for this student |
-| POST   | `/portal/:studentId/push/unsubscribe` | (public) | Removes a Web Push subscription by endpoint |
-| GET    | `/notifications`         | (any valid token) | The signed-in staff member's notifications (role/identity/broadcast) |
-| GET    | `/notifications/unread-count` | (any valid token) | Badge count for the bell icon |
-| POST   | `/notifications/:id/read` | (any valid token) | Marks one notification read |
-| POST   | `/notifications/read-all` | (any valid token) | Marks every visible notification read |
-| GET    | `/notifications/history` | admin          | Full send history (system + composed) |
-| POST   | `/notifications`        | admin          | Compose and send to a person, a role, a student, or everyone |
-| GET    | `/push/vapid-public-key` | (public)       | The VAPID `applicationServerKey` for `PushManager.subscribe()` |
-| POST   | `/push/subscribe`       | (any valid token) | Registers a Web Push subscription for the signed-in staff member |
-| POST   | `/push/unsubscribe`     | (any valid token) | Removes a Web Push subscription by endpoint |
 
 `file_type` must be one of: `Homework`, `Worksheet`, `Exam`, `Attendance`,
 `Certificate`, `Portfolio`, `Other`.

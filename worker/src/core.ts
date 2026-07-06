@@ -6,7 +6,6 @@ import { createStripePaymentLink, deactivateStripePaymentLink, StripeError, with
 import { createStudentAuth0User } from './auth0mgmt';
 import { bangkokToday, bangkokMonth, daysAgo, isYmd } from './dates';
 import { visibleStudentIds, canSeeStudent, activateApprovedSchedulesForStudent, activateAwaitingAmendmentsForStudent } from './manage';
-import { notifyStudent } from './notifications';
 
 export { bangkokToday, bangkokMonth } from './dates';
 
@@ -146,16 +145,11 @@ core.post('/payments', requirePermission('data:write'), async (c) => {
 
   // A successful payment starts the student's approved monthly schedule (or
   // add-hours request) immediately (sessions become bookings).
-  const activated = await activateApprovedSchedulesForStudent(c.env, body.studentId);
-  const amendmentsActivated = await activateAwaitingAmendmentsForStudent(c.env, body.studentId);
+  const activated = await activateApprovedSchedulesForStudent(c.env.DB, body.studentId);
+  const amendmentsActivated = await activateAwaitingAmendmentsForStudent(c.env.DB, body.studentId);
   let message = 'บันทึกการชำระเงินสำเร็จ';
   if (activated > 0) message += ' — ตารางเรียนที่อนุมัติไว้เริ่มทำงานแล้ว';
   if (amendmentsActivated > 0) message += ' — เพิ่มคาบเรียนตามคำร้องเรียบร้อยแล้ว';
-
-  let studentBody = `ยอด ${amount.toLocaleString()} บาท`;
-  if (activated > 0) studentBody += ' — ตารางเรียนเริ่มทำงานแล้ว';
-  await notifyStudent(c.env, body.studentId, { title: 'ชำระเงินสำเร็จ', body: studentBody, category: 'payment_received' }).catch(() => {});
-
   return c.json({ ok: true, message });
 });
 
