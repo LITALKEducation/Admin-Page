@@ -23,3 +23,21 @@ export function isYm(s: unknown): s is string {
 export function isHm(s: unknown): s is string {
   return typeof s === 'string' && /^\d{2}:\d{2}$/.test(s);
 }
+
+const THAI_MONTHS_SHORT = [
+  'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
+];
+
+// Renders a session list as "3 ก.ค. 18:00, 10 ก.ค. 18:00, ..." for Stripe
+// payment link descriptions, capped so the string stays a sane length.
+export function formatSessionsThai(sessions: Array<{ date: string; time: string }>, maxItems = 6): string {
+  const sorted = [...sessions].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  const items = sorted.slice(0, maxItems).map((s) => {
+    const [, m, d] = s.date.split('-');
+    return `${Number(d)} ${THAI_MONTHS_SHORT[Number(m) - 1]} ${s.time}`;
+  });
+  let text = items.join(', ');
+  if (sorted.length > maxItems) text += ` และอีก ${sorted.length - maxItems} ครั้ง`;
+  return text;
+}

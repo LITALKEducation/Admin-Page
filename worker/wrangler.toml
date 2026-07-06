@@ -20,6 +20,10 @@ AUTH0_NAME_CLAIM = "https://admin.litalkeducation.com/name"   # namespaced displ
 # Comma-separated: admin panel + public student site (both call this Worker)
 ALLOWED_ORIGIN = "https://admin.litalkeducation.com,https://litalkeducation.com,https://www.litalkeducation.com"
 
+# Custom domain routed to this same Worker, used only to make shareable file
+# links look like the student-facing site instead of the workers.dev URL.
+PUBLIC_FILES_ORIGIN = "https://istudnt.litalkeducation.com"
+
 # Login email for an auto-created student account is <studentId>@<this domain>.
 # MUST match the convention the old GAS backend used (the student site derives
 # the student id from the email's local part).

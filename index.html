@@ -2297,6 +2297,22 @@
             .admin-card {
                 padding: 20px;
             }
+
+            /* Two-up form rows (amount/date pairs, etc.) stack on phones
+               instead of squeezing two inputs into a narrow column. */
+            [style*="grid-template-columns: 1fr 1fr"] {
+                grid-template-columns: 1fr !important;
+            }
+
+            /* Fixed-column data grids scroll horizontally instead of
+               crushing text unreadably. */
+            .files-table {
+                overflow-x: auto;
+            }
+            .files-table-head,
+            .files-table-row {
+                min-width: 560px;
+            }
         }
 
         /* Mini tabs for Markdown preview */
@@ -2767,7 +2783,7 @@
                                 <span class="card-icon"><i class="fas fa-book"></i></span>
                                 <div>
                                     <h3>ข้อมูลคลาสเรียน</h3>
-                                    <p>กรอกข้อมูลหลังจบคลาส ระบบจะบันทึกลงฐานข้อมูลอัตโนมัติ</p>
+                                    <p>กรอกข้อมูลหลังจบคลาส ระบบบันทึกให้อัตโนมัติ</p>
                                 </div>
                             </div>
 
@@ -2863,7 +2879,7 @@
                                 <span class="card-icon"><i class="fas fa-receipt"></i></span>
                                 <div>
                                     <h3>ข้อมูลการชำระเงิน</h3>
-                                    <p>ระบบจะบันทึกลงฐานข้อมูลการเงินอัตโนมัติ</p>
+                                    <p>ระบบบันทึกยอดชำระให้อัตโนมัติ</p>
                                 </div>
                             </div>
 
@@ -2871,7 +2887,7 @@
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                                     <div class="form-group">
                                         <label><i class="fas fa-baht-sign"></i> จำนวนเงิน (บาท)</label>
-                                        <input type="number" id="pay-total" placeholder="0.00">
+                                        <input type="number" id="pay-total" placeholder="0.00" inputmode="decimal">
                                     </div>
                                     <div class="form-group">
                                         <label><i class="fas fa-credit-card"></i> วิธีชำระเงิน</label>
@@ -2931,7 +2947,7 @@
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                                 <div class="form-group">
                                     <label><i class="fas fa-baht-sign"></i> จำนวนเงิน (บาท)</label>
-                                    <input type="number" id="link-amount" placeholder="0.00" min="1">
+                                    <input type="number" id="link-amount" placeholder="0.00" min="1" inputmode="decimal">
                                 </div>
                                 <div class="form-group">
                                     <label><i class="fas fa-user"></i> ชื่อลูกค้า (กรณีไม่ใช่นักเรียน)</label>
@@ -2978,7 +2994,7 @@
                             <i class="fas fa-info-circle"></i>
                             <div>
                                 <strong>ระบบดำเนินการอัตโนมัติ:</strong>
-                                สร้างบัญชี Auth0 พร้อมรหัสผ่านชั่วคราว และบันทึกข้อมูลนักเรียนลงฐานข้อมูลให้ทันทีหลังกดบันทึก
+                                สร้างบัญชีเข้าสู่ระบบพร้อมรหัสผ่านชั่วคราว และบันทึกข้อมูลนักเรียนให้ทันทีหลังกดบันทึก
                             </div>
                         </div>
 
@@ -3296,7 +3312,7 @@
                                     <button class="btn btn-secondary" onclick="copyStudyLogLink(this)"><i class="fas fa-link"></i> คัดลอกลิงก์ Study Log</button>
                                     <button class="btn btn-danger" data-admin-only style="display: none;" onclick="deleteSelectedStudent()"><i class="fas fa-user-slash"></i> ลบนักเรียนออกจากระบบ</button>
                                 </div>
-                                <div class="form-hint" data-admin-only style="display: none;">การลบนักเรียนจะลบเฉพาะข้อมูลในระบบนี้ ไม่ลบบัญชีเข้าสู่ระบบใน Auth0</div>
+                                <div class="form-hint" data-admin-only style="display: none;">การลบนักเรียนจะลบเฉพาะข้อมูลในระบบนี้ ไม่ลบบัญชีเข้าสู่ระบบของนักเรียน</div>
                             </div>
                         </div>
 
@@ -3416,7 +3432,7 @@
                                     </div>
                                     <div class="form-group">
                                         <label><i class="fas fa-baht-sign"></i> ราคาต่อคาบ (บาท)</label>
-                                        <input type="number" id="sched-rate" placeholder="0.00" min="1" oninput="updateSchedTotal()">
+                                        <input type="number" id="sched-rate" placeholder="0.00" min="1" inputmode="decimal" oninput="updateSchedTotal()">
                                     </div>
                                 </div>
                                 <div class="form-group">
@@ -3449,6 +3465,72 @@
                             </div>
                         </div>
                         <div class="row-list" id="schedule-list">
+                            <div class="form-hint">กำลังโหลดข้อมูล...</div>
+                        </div>
+                    </div>
+
+                    <!-- Request to add/withdraw hours on a live schedule -->
+                    <div class="admin-card" style="margin-top: 24px;">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-arrows-up-down"></i></span>
+                            <div>
+                                <h3>ขอเพิ่ม/ถอนชั่วโมงเรียน</h3>
+                                <p>ใช้กับตารางเรียนที่อนุมัติแล้วเท่านั้น — เพิ่มจะหักเครดิตก่อนแล้วจึงเก็บเงินส่วนที่เหลือ ถอนจะได้เครดิตคืนทันที</p>
+                            </div>
+                        </div>
+                        <div class="form-body">
+                            <div class="form-group">
+                                <label><i class="fas fa-calendar-days"></i> ตารางเรียน</label>
+                                <div class="select-wrapper">
+                                    <select id="amend-schedule-select" onchange="onAmendScheduleChange()">
+                                        <option value="">-- เลือกตารางเรียนที่อนุมัติแล้ว --</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-toggle-on"></i> ประเภทคำร้อง</label>
+                                <div class="tab-menu-mini" style="display: inline-flex;">
+                                    <span class="tab-menu-pill-mini"></span>
+                                    <button type="button" class="tab-btn-mini active" id="amend-type-add" onclick="setAmendType('add')">เพิ่มชั่วโมง</button>
+                                    <button type="button" class="tab-btn-mini" id="amend-type-remove" onclick="setAmendType('remove')">ถอนชั่วโมง</button>
+                                </div>
+                            </div>
+
+                            <div id="amend-add-panel">
+                                <div class="form-group">
+                                    <label><i class="fas fa-clock"></i> คาบเรียนที่จะเพิ่ม</label>
+                                    <div id="amend-session-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                                    <button class="btn btn-secondary" style="margin-top: 8px;" onclick="addAmendSession()"><i class="fas fa-plus"></i> เพิ่มคาบเรียน</button>
+                                </div>
+                            </div>
+
+                            <div id="amend-remove-panel" style="display: none;">
+                                <div class="form-group">
+                                    <label><i class="fas fa-clock"></i> เลือกคาบเรียนที่จะถอน</label>
+                                    <div id="amend-remove-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label><i class="fas fa-sticky-note"></i> หมายเหตุ (ไม่บังคับ)</label>
+                                <input type="text" id="amend-note" placeholder="เหตุผลของคำร้อง">
+                            </div>
+
+                            <div style="display: flex; justify-content: flex-end;">
+                                <button class="btn btn-primary" onclick="submitAmendment()"><i class="fas fa-paper-plane"></i> ส่งคำร้อง</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="admin-card" style="margin-top: 24px;">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-clipboard-list"></i></span>
+                            <div>
+                                <h3>คำร้องเพิ่ม/ถอนชั่วโมงเรียน</h3>
+                                <p>รายการคำร้องล่าสุด</p>
+                            </div>
+                        </div>
+                        <div class="row-list" id="amendment-list">
                             <div class="form-hint">กำลังโหลดข้อมูล...</div>
                         </div>
                     </div>
@@ -4405,7 +4487,7 @@
                 containerEl.style.display = 'flex';
             } catch (error) {
                 console.error('Error loading files:', error);
-                emptyEl.textContent = 'โหลดรายการไฟล์ล้มเหลว ตรวจสอบการตั้งค่า Worker API';
+                emptyEl.textContent = 'โหลดรายการไฟล์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
                 emptyEl.style.display = 'block';
                 containerEl.style.display = 'none';
             }
@@ -4593,8 +4675,15 @@
 
             let detail = '';
             if (p.last) {
+                const refBits = [];
+                if (admin && p.last.proof) refBits.push(`<a href="${escapeHtml(p.last.proof)}" target="_blank" class="alert-action">ดูหลักฐาน <i class="fas fa-arrow-up-right-from-square" style="font-size: 10px;"></i></a>`);
+                if (admin && p.last.source === 'stripe' && p.last.stripeSessionId) refBits.push(`<span class="form-hint" style="margin: 0;">Payment ID: ${escapeHtml(p.last.stripeSessionId)}</span>`);
                 detail += `<div class="payment-row">
-                    <div class="payment-info"><div class="name">ชำระล่าสุด</div><div class="meta">${escapeHtml(p.last.method || '-')} · ${escapeHtml(formatShortThaiDate(p.last.date))}</div></div>
+                    <div class="payment-info">
+                        <div class="name">ชำระล่าสุด</div>
+                        <div class="meta">${escapeHtml(p.last.method || '-')} · ${escapeHtml(formatShortThaiDate(p.last.date))}</div>
+                        ${refBits.length ? `<div style="display: flex; gap: 12px; margin-top: 2px;">${refBits.join('')}</div>` : ''}
+                    </div>
                     <div class="amount">${formatBaht(p.last.amount)}</div>
                     ${admin ? `<button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="editPayment(${p.last.id}, ${p.last.amount})" title="แก้ไขจำนวนเงิน"><i class="fas fa-pen"></i></button>` : ''}
                 </div>`;
@@ -4616,15 +4705,24 @@
                 </div>`).join('') : '<div class="form-hint">ยังไม่มีคลาสที่จองไว้ล่วงหน้า</div>';
 
             const schedules = d.schedules || [];
-            document.getElementById('check-schedules').innerHTML = schedules.length ? schedules.map(m => `
-                <div class="payment-row">
+            document.getElementById('check-schedules').innerHTML = schedules.length ? schedules.map(m => {
+                const sessions = m.sessions || [];
+                const sessionRows = sessions.map(s => `
+                    <tr>
+                        <td>${escapeHtml(formatShortThaiDate(s.date))}</td>
+                        <td>${escapeHtml(s.time)}</td>
+                    </tr>`).join('');
+                return `
+                <div class="payment-row" style="align-items: flex-start;">
                     <div class="payment-info">
                         <div class="name">ตารางเรียนเดือน ${escapeHtml(m.month)} (${m.sessionCount} ครั้ง)</div>
                         <div class="meta">${escapeHtml(SCHEDULE_STATUS_LABEL[m.status] || m.status)} · โดย ${escapeHtml(m.createdBy || '-')}</div>
+                        ${sessions.length ? `<div class="table-scroll" style="margin-top: 8px; max-height: 160px; overflow-y: auto;"><table class="data-table"><thead><tr><th>วันที่</th><th>เวลา</th></tr></thead><tbody>${sessionRows}</tbody></table></div>` : ''}
                     </div>
                     <div class="amount">${formatBaht(m.total)}</div>
                     ${m.paymentUrl && m.status === 'approved' ? `<button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(m.paymentUrl)}', this)" title="คัดลอกลิงก์ชำระเงิน"><i class="fas fa-copy"></i></button>` : ''}
-                </div>`).join('') : '';
+                </div>`;
+            }).join('') : '';
 
             const logs = d.recentLogs || [];
             document.getElementById('check-recent-logs').innerHTML = logs.length ? logs.map(l => `
@@ -4769,7 +4867,7 @@
         async function deleteSelectedStudent() {
             const student = allStudentsData.find(s => s.id === selectedStudentId);
             if (!student) return;
-            if (!confirm(`ยืนยันการลบนักเรียน ${student.name} (${student.id}) ออกจากระบบ?\n\nประวัติการเรียนและการชำระเงินจะยังถูกเก็บไว้ และบัญชีเข้าสู่ระบบใน Auth0 จะไม่ถูกลบ`)) return;
+            if (!confirm(`ยืนยันการลบนักเรียน ${student.name} (${student.id}) ออกจากระบบ?\n\nประวัติการเรียนและการชำระเงินจะยังถูกเก็บไว้ และบัญชีเข้าสู่ระบบของนักเรียนจะไม่ถูกลบ`)) return;
 
             showLoading();
             try {
@@ -4959,6 +5057,8 @@
                 schedulesData = Array.isArray(rows) ? rows : [];
                 const admin = isAdminUser();
                 list.innerHTML = schedulesData.length ? schedulesData.map(r => renderScheduleRow(r, admin)).join('') : '<div class="form-hint">ยังไม่มีตารางเรียนรายเดือน</div>';
+                renderAmendScheduleOptions();
+                loadAmendments();
             } catch (error) {
                 console.error('loadSchedules:', error);
                 list.innerHTML = '<div class="form-hint">โหลดรายการตารางเรียนไม่สำเร็จ</div>';
@@ -5096,6 +5196,251 @@
             }
         }
 
+        // ===== Schedule amendments (add / withdraw hours) =====
+
+        let amendType = 'add';
+        let amendSessions = [];
+        const AMENDMENT_STATUS_LABEL = {
+            pending: 'รออนุมัติ',
+            awaiting_payment: 'รอชำระเงิน',
+            applied: 'เรียบร้อยแล้ว',
+            rejected: 'ถูกปฏิเสธ',
+            cancelled: 'ยกเลิกแล้ว'
+        };
+
+        // Only schedules that are already approved or active can be amended.
+        function renderAmendScheduleOptions() {
+            const select = document.getElementById('amend-schedule-select');
+            if (!select) return;
+            const eligible = schedulesData.filter(r => ['approved', 'active'].includes(r.status));
+            const current = select.value;
+            select.innerHTML = '<option value="">-- เลือกตารางเรียนที่อนุมัติแล้ว --</option>' +
+                eligible.map(r => `<option value="${r.id}">${escapeHtml(r.studentName)} · เดือน ${escapeHtml(r.month)} (${r.sessionCount} ครั้ง)</option>`).join('');
+            if (eligible.some(r => String(r.id) === current)) select.value = current;
+            onAmendScheduleChange();
+        }
+
+        function setAmendType(type) {
+            amendType = type;
+            document.getElementById('amend-type-add').classList.toggle('active', type === 'add');
+            document.getElementById('amend-type-remove').classList.toggle('active', type === 'remove');
+            updateMiniTabPill();
+            document.getElementById('amend-add-panel').style.display = type === 'add' ? '' : 'none';
+            document.getElementById('amend-remove-panel').style.display = type === 'remove' ? '' : 'none';
+            if (type === 'add' && !amendSessions.length) addAmendSession();
+        }
+
+        function onAmendScheduleChange() {
+            amendSessions = [];
+            if (amendType === 'add') addAmendSession();
+            renderAmendSessionList();
+            renderAmendRemoveList();
+        }
+
+        function addAmendSession() {
+            amendSessions.push({ date: '', time: '09:00' });
+            renderAmendSessionList();
+        }
+
+        function removeAmendSession(index) {
+            amendSessions.splice(index, 1);
+            renderAmendSessionList();
+        }
+
+        function renderAmendSessionList() {
+            const list = document.getElementById('amend-session-list');
+            if (!list) return;
+            const scheduleId = document.getElementById('amend-schedule-select').value;
+            const sched = schedulesData.find(r => String(r.id) === scheduleId);
+            const min = sched ? `${sched.month}-01` : undefined;
+            const [y, m] = sched ? sched.month.split('-').map(Number) : [0, 0];
+            const max = sched ? `${sched.month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}` : undefined;
+            list.innerHTML = amendSessions.map((s, i) => `
+                <div style="display: grid; grid-template-columns: 1fr 120px 40px; gap: 8px; align-items: center;">
+                    <input type="date" value="${escapeHtml(s.date)}" ${min ? `min="${min}" max="${max}"` : ''} onchange="amendSessions[${i}].date = this.value">
+                    <div class="select-wrapper">
+                        <select onchange="amendSessions[${i}].time = this.value">
+                            ${BOOKING_SLOTS.map(t => `<option value="${t}" ${s.time === t ? 'selected' : ''}>${t}</option>`).join('')}
+                        </select>
+                    </div>
+                    <button class="btn btn-danger" style="padding: 8px 10px;" onclick="removeAmendSession(${i})" title="ลบแถวนี้"><i class="fas fa-trash"></i></button>
+                </div>`).join('');
+        }
+
+        function renderAmendRemoveList() {
+            const list = document.getElementById('amend-remove-list');
+            if (!list) return;
+            const scheduleId = document.getElementById('amend-schedule-select').value;
+            const sched = schedulesData.find(r => String(r.id) === scheduleId);
+            const sessions = sched ? (sched.sessions || []) : [];
+            list.innerHTML = sessions.length ? sessions.map((s, i) => `
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); cursor: pointer;">
+                    <input type="checkbox" class="amend-remove-check" data-date="${escapeHtml(s.date)}" data-time="${escapeHtml(s.time)}">
+                    ${escapeHtml(formatShortThaiDate(s.date))} ${escapeHtml(s.time)}
+                </label>`).join('') : '<div class="form-hint">เลือกตารางเรียนก่อน</div>';
+        }
+
+        async function submitAmendment() {
+            const scheduleId = document.getElementById('amend-schedule-select').value;
+            if (!scheduleId) {
+                triggerFieldError('amend-schedule-select', 'กรุณาเลือกตารางเรียน');
+                return;
+            }
+
+            let sessions;
+            if (amendType === 'add') {
+                sessions = amendSessions.filter(s => s.date && s.time);
+                if (!sessions.length) {
+                    showModal('ยังไม่มีคาบเรียน', 'กรุณาเพิ่มคาบเรียนที่จะขอเพิ่มอย่างน้อย 1 คาบ', 'error');
+                    return;
+                }
+            } else {
+                sessions = [...document.querySelectorAll('.amend-remove-check:checked')].map(cb => ({ date: cb.dataset.date, time: cb.dataset.time }));
+                if (!sessions.length) {
+                    showModal('ยังไม่ได้เลือกคาบเรียน', 'กรุณาเลือกคาบเรียนที่จะถอนอย่างน้อย 1 คาบ', 'error');
+                    return;
+                }
+            }
+
+            showLoading();
+            try {
+                const response = await apiFetch(`/schedules/${scheduleId}/amend`, {
+                    method: 'POST',
+                    body: JSON.stringify({ type: amendType, sessions, note: document.getElementById('amend-note').value })
+                });
+                const result = await response.json();
+                hideLoading();
+                if (response.ok && result.ok) {
+                    if (result.paymentUrl) copyPaymentLink(result.paymentUrl, null);
+                    showModal('ส่งคำร้องสำเร็จ', result.message, 'success');
+                    amendSessions = [];
+                    document.getElementById('amend-note').value = '';
+                    document.getElementById('amend-schedule-select').value = '';
+                    onAmendScheduleChange();
+                    loadSchedules();
+                } else {
+                    showModal('ส่งคำร้องไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            } catch (error) {
+                hideLoading();
+                console.error('submitAmendment:', error);
+                showModal('ข้อผิดพลาดการเชื่อมต่อ', 'ไม่สามารถส่งคำร้องได้ กรุณาลองใหม่อีกครั้ง', 'error');
+            }
+        }
+
+        async function loadAmendments() {
+            const list = document.getElementById('amendment-list');
+            if (!list) return;
+            try {
+                const response = await apiFetch('/schedule-amendments');
+                const rows = await response.json();
+                if (!response.ok) throw new Error(rows.error || 'load failed');
+                const admin = isAdminUser();
+                list.innerHTML = Array.isArray(rows) && rows.length
+                    ? rows.map(r => renderAmendmentRow(r, admin)).join('')
+                    : '<div class="form-hint">ยังไม่มีคำร้อง</div>';
+            } catch (error) {
+                console.error('loadAmendments:', error);
+                list.innerHTML = '<div class="form-hint">โหลดรายการคำร้องไม่สำเร็จ</div>';
+            }
+        }
+
+        function renderAmendmentRow(r, admin) {
+            const sessions = (r.sessions || []).map(s => `${formatShortThaiDate(s.date)} ${s.time}`).join(' · ');
+            const statusColor = r.status === 'applied' ? 'var(--accent-success)' : (r.status === 'rejected' || r.status === 'cancelled') ? 'var(--accent-danger)' : 'var(--text-muted)';
+            const mine = filesApiMe && (r.createdBy || '').toLowerCase() === (filesApiMe.email || '').toLowerCase();
+            let buttons = '';
+            if (admin && r.status === 'pending') {
+                buttons += `<button class="btn btn-success" style="padding: 6px 10px;" onclick="approveAmendment(${r.id})"><i class="fas fa-check"></i> อนุมัติ</button>
+                            <button class="btn btn-danger" style="padding: 6px 10px;" onclick="rejectAmendment(${r.id})"><i class="fas fa-xmark"></i> ปฏิเสธ</button>`;
+            }
+            if ((admin || mine) && ['pending', 'awaiting_payment'].includes(r.status) && (admin || r.status === 'pending')) {
+                buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="cancelAmendment(${r.id})"><i class="fas fa-ban"></i> ยกเลิก</button>`;
+            }
+            if (r.paymentUrl && r.status === 'awaiting_payment') {
+                buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(r.paymentUrl)}', this)" title="คัดลอกลิงก์ชำระเงิน"><i class="fas fa-copy"></i> ลิงก์ชำระเงิน</button>`;
+            }
+            const typeLabel = r.type === 'add' ? 'ขอเพิ่ม' : 'ขอถอน';
+            const amountNote = r.type === 'add'
+                ? (r.chargeAmount > 0 ? ` · เก็บเพิ่ม ${formatBaht(r.chargeAmount)}` : ' · ใช้เครดิตทั้งหมด')
+                : ` · ได้เครดิตคืน ${(r.sessions || []).length} ชม.`;
+            return `
+                <div class="alert-row" style="align-items: flex-start;">
+                    <i class="fas fa-arrows-up-down" style="color: ${statusColor}; margin-top: 3px;"></i>
+                    <div style="flex: 1; min-width: 0;">
+                        <div class="alert-text">
+                            <strong>${escapeHtml(r.studentName)}</strong> · ${typeLabel}ชั่วโมงเดือน ${escapeHtml(r.month)} (${(r.sessions || []).length} คาบ)${amountNote}
+                            <span style="color: ${statusColor};"> — ${escapeHtml(AMENDMENT_STATUS_LABEL[r.status] || r.status)}</span>
+                        </div>
+                        <div class="alert-text" style="color: var(--text-muted); font-size: 12px;">${escapeHtml(sessions)}</div>
+                        ${r.note ? `<div class="alert-text" style="color: var(--text-muted); font-size: 12px;">หมายเหตุ: ${escapeHtml(r.note)}</div>` : ''}
+                        ${r.rejectReason ? `<div class="alert-text" style="color: var(--accent-danger); font-size: 12px;">เหตุผล: ${escapeHtml(r.rejectReason)}</div>` : ''}
+                        <div class="alert-text" style="color: var(--text-muted); font-size: 12px;">ส่งโดย ${escapeHtml(r.createdByName || r.createdBy || '-')}</div>
+                        ${buttons ? `<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">${buttons}</div>` : ''}
+                    </div>
+                </div>`;
+        }
+
+        async function approveAmendment(id) {
+            if (!confirm('อนุมัติคำร้องนี้?')) return;
+            showLoading();
+            try {
+                const response = await apiFetch(`/schedule-amendments/${id}/approve`, { method: 'POST' });
+                const result = await response.json();
+                hideLoading();
+                if (response.ok && result.ok) {
+                    if (result.paymentUrl) copyPaymentLink(result.paymentUrl, null);
+                    showModal('อนุมัติแล้ว', result.message, 'success');
+                    loadSchedules();
+                } else {
+                    showModal('อนุมัติไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            } catch (error) {
+                hideLoading();
+                console.error('approveAmendment:', error);
+                showModal('ข้อผิดพลาดการเชื่อมต่อ', 'ไม่สามารถอนุมัติได้ กรุณาลองใหม่อีกครั้ง', 'error');
+            }
+        }
+
+        async function rejectAmendment(id) {
+            const reason = prompt('เหตุผลที่ปฏิเสธ:');
+            if (reason === null) return;
+            showLoading();
+            try {
+                const response = await apiFetch(`/schedule-amendments/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) });
+                const result = await response.json();
+                hideLoading();
+                if (response.ok && result.ok) {
+                    showModal('ปฏิเสธแล้ว', result.message, 'success');
+                    loadSchedules();
+                } else {
+                    showModal('ปฏิเสธไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            } catch (error) {
+                hideLoading();
+                console.error('rejectAmendment:', error);
+                showModal('ข้อผิดพลาดการเชื่อมต่อ', 'ไม่สามารถปฏิเสธได้ กรุณาลองใหม่อีกครั้ง', 'error');
+            }
+        }
+
+        async function cancelAmendment(id) {
+            if (!confirm('ยกเลิกคำร้องนี้หรือไม่?')) return;
+            showLoading();
+            try {
+                const response = await apiFetch(`/schedule-amendments/${id}/cancel`, { method: 'POST' });
+                const result = await response.json();
+                hideLoading();
+                if (response.ok && result.ok) {
+                    loadSchedules();
+                } else {
+                    showModal('ยกเลิกไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            } catch (error) {
+                hideLoading();
+                console.error('cancelAmendment:', error);
+            }
+        }
+
         // ===== Teacher visibility management (admin) =====
 
         let teacherAssignments = [];
@@ -5112,8 +5457,8 @@
                 const looksLikeEmail = identity.includes('@');
                 noteEl.style.display = '';
                 noteEl.innerHTML = looksLikeEmail
-                    ? `<i class="fas fa-circle-info"></i><div>ระบบระบุตัวตนของคุณเป็น <strong>${escapeHtml(identity)}</strong> — การจำกัดสิทธิ์จับคู่กับอีเมลลักษณะนี้ของครูแต่ละคน</div>`
-                    : `<i class="fas fa-triangle-exclamation" style="color: var(--accent-danger);"></i><div><strong>สำคัญ:</strong> access token ไม่มีอีเมล (ระบบเห็นบัญชีคุณเป็น <strong>${escapeHtml(identity)}</strong>) ถ้ากำหนดสิทธิ์ด้วย "อีเมล" ระบบจะจับคู่ครูไม่ได้ และครูจะยังเห็นนักเรียนทุกคน — ให้เลือกบัญชีของครูจากรายการด้านล่างแทน หรือเพิ่ม Auth0 Action ตาม worker/README.md ขั้นตอนที่ 5 เพื่อใส่อีเมลลงใน token</div>`;
+                    ? `<i class="fas fa-circle-info"></i><div>บัญชีของคุณ: <strong>${escapeHtml(identity)}</strong></div>`
+                    : `<i class="fas fa-triangle-exclamation" style="color: var(--accent-danger);"></i><div>ระบบยังไม่รู้จักอีเมลของบัญชีนี้ (เห็นเป็น <strong>${escapeHtml(identity)}</strong>) — เลือกบัญชีครูจากรายการด้านล่างแทนการพิมพ์อีเมล หรือแจ้งผู้ดูแลระบบให้ตั้งค่าเพิ่มเติม</div>`;
             }
 
             const chipsEl = document.getElementById('access-identity-list');
@@ -5352,7 +5697,7 @@
             } catch (error) {
                 console.error(error);
                 hideLoading();
-                showModal('ข้อผิดพลาดการเชื่อมต่อ', 'ระบบตรวจพบความขัดข้องในการเชื่อมต่อฐานข้อมูล กรุณาตรวจสอบ Console Log', 'error');
+                showModal('ข้อผิดพลาดการเชื่อมต่อ', 'ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง', 'error');
             }
         }
 
@@ -5443,16 +5788,22 @@
                 const tx = f.transactions || [];
                 txWrap.innerHTML = tx.length ? `
                     <table class="data-table">
-                        <thead><tr><th>วันที่</th><th>นักเรียน/ลูกค้า</th><th>ช่องทาง</th><th>ผู้บันทึก</th><th style="text-align:right;">จำนวน</th></tr></thead>
+                        <thead><tr><th>วันที่</th><th>นักเรียน/ลูกค้า</th><th>ช่องทาง</th><th>ผู้บันทึก</th><th>หลักฐาน</th><th style="text-align:right;">จำนวน</th></tr></thead>
                         <tbody>
-                            ${tx.map(t => `
+                            ${tx.map(t => {
+                                const ref = t.source === 'stripe'
+                                    ? (t.stripeSessionId ? `<span title="Payment ID">${escapeHtml(t.stripeSessionId.slice(0, 18))}…</span>` : '-')
+                                    : (t.proof ? `<a href="${escapeHtml(t.proof)}" target="_blank">ดูหลักฐาน</a>` : '-');
+                                return `
                                 <tr>
                                     <td>${escapeHtml(formatShortThaiDate(t.date))}</td>
                                     <td>${escapeHtml(t.studentName)}</td>
                                     <td>${escapeHtml(t.method || FINANCE_SOURCE_LABEL[t.source] || t.source)}</td>
                                     <td>${escapeHtml(t.recordedBy || '-')}</td>
+                                    <td>${ref}</td>
                                     <td style="text-align:right;">${formatBaht(t.amount)}</td>
-                                </tr>`).join('')}
+                                </tr>`;
+                            }).join('')}
                         </tbody>
                     </table>` : '<div class="form-hint">ไม่มีธุรกรรมในเดือนนี้</div>';
             } catch (error) {
@@ -5624,7 +5975,7 @@
             } catch (error) {
                 console.error(error);
                 hideLoading();
-                showModal('ข้อผิดพลาดการเชื่อมต่อ', 'เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาตรวจสอบ Console Log', 'error');
+                showModal('ข้อผิดพลาดการเชื่อมต่อ', 'เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง', 'error');
             }
         }
 

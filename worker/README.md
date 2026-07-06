@@ -40,17 +40,18 @@ access token instead:
    Then assign the appropriate role to each staff user (**User Management →
    Users → [user] → Roles**).
 5. (Strongly recommended — required for teacher-visibility rules keyed by
-   email) Add an Auth0 Action (Login Flow) that copies the user's email
-   into a namespaced access-token claim, since access tokens don't include
-   `email` by default:
+   email) Add an Auth0 Action (Login Flow) that copies the user's email and
+   name into namespaced access-token claims, since access tokens don't
+   include them by default:
    ```js
    exports.onExecutePostLogin = async (event, api) => {
      api.accessToken.setCustomClaim('https://admin.litalkeducation.com/email', event.user.email);
+     api.accessToken.setCustomClaim('https://admin.litalkeducation.com/name', event.user.name);
    };
    ```
-   This must match `AUTH0_EMAIL_CLAIM` in `wrangler.toml`. If skipped, the
-   Worker falls back to using the Auth0 `sub` as the "uploaded by" / audit
-   identity.
+   These must match `AUTH0_EMAIL_CLAIM` / `AUTH0_NAME_CLAIM` in
+   `wrangler.toml`. If skipped, the Worker falls back to the Auth0 `sub` for
+   identity and to `name`/`nickname`/email for display name.
 
 Once the API exists, the frontend (`index.html`) needs `audience` added to
 its `Auth0Client` config and to request an access token via
@@ -112,6 +113,12 @@ npx wrangler r2 bucket create files-litalk
 
 Also replace `AUTH0_AUDIENCE` in `wrangler.toml` with the API Identifier from
 step 1.
+
+`PUBLIC_FILES_ORIGIN` in `wrangler.toml` should be a custom domain you route
+to this same Worker in the Cloudflare dashboard (**Workers & Pages → this
+Worker → Settings → Domains & Routes**); it only affects how shareable file
+links are displayed, not where they're served from. If unset, links fall
+back to the request's own origin.
 
 ## 3. Apply the D1 schema
 
@@ -206,6 +213,12 @@ permissions scoped to this account.
 | POST   | `/schedules/:id/reject`  | admin          | Rejects with an optional reason                |
 | POST   | `/schedules/:id/revise`  | admin          | Asks the teacher to revise (status `revise`) instead of rejecting |
 | POST   | `/schedules/:id/cancel`  | `data:write`   | Teacher cancels own; admin any not-yet-paid       |
+| POST   | `/schedules/:id/amend`   | `data:write`   | Request/perform an add or withdraw-hours change on an approved/active schedule |
+| GET    | `/schedules/:id/amendments` | `data:read` | Amendment history for one schedule |
+| GET    | `/schedule-amendments?status=` | `data:read` | Teachers see own requests; admins see all |
+| POST   | `/schedule-amendments/:id/approve` | admin | Approves a teacher's pending request (runs the credit/charge decision) |
+| POST   | `/schedule-amendments/:id/reject` | admin | Rejects with an optional reason |
+| POST   | `/schedule-amendments/:id/cancel` | `data:write` | Teacher cancels own pending; admin cancels pending/awaiting-payment |
 | GET    | `/teacher-assignments`   | admin          | Per-teacher visible-student lists (with names)  |
 | PUT    | `/teacher-assignments/:identity` | admin  | Replaces a teacher's visible-student set (empty = sees nothing) |
 | GET    | `/staff-identities`      | admin          | Known login identities + display names (for assigning visibility) |
@@ -244,6 +257,32 @@ permissions scoped to this account.
    (`INSERT OR IGNORE`, so already-taken slots are skipped) and the status
    becomes `active`.
 
+Every Stripe payment link this system creates has its description built
+automatically from the sessions being billed (dates + times) unless the
+approver supplies a custom one, and always ends with the fixed no-refund
+policy note (`STRIPE_POLICY_NOTE` in `stripe.ts`).
+
+## Schedule amendments (add / withdraw hours)
+
+Once a schedule is `approved` or `active`, a teacher can request extra or
+fewer sessions via `POST /schedules/:id/amend` (`{ type: 'add'|'remove',
+sessions, note }`). An admin performing the same call decides it
+immediately instead of leaving it `pending`.
+
+- **remove**: the listed sessions are dropped right away (and their
+  bookings cancelled if the schedule is active) and converted 1:1 into
+  `student_credits` — no payment is ever involved.
+- **add**: the student's credit balance is spent first
+  (`min(balance, sessionCount)`); only sessions left uncovered are billed —
+  a Stripe link if configured (metadata carries `amendment_id`), else a
+  manual payment activates it later. Fully credit-covered requests apply
+  immediately with nothing to charge.
+
+`POST /schedule-amendments/:id/approve` runs this same decision for a
+teacher's pending request. `.../reject` and `.../cancel` release any
+credit that was tentatively reserved and deactivate any Stripe link that
+was created.
+
 ## Teacher visibility
 
 `teacher_students` maps a teacher's **request identity** to the students
@@ -261,12 +300,28 @@ and `POST /payment-links` are admin-only.
 
 ## Class-hour credits
 
-When an admin trims a paid schedule's hours (`PATCH /schedules/:id`), the
-removed sessions become credit in `student_credits` (1 credit = 1 hour). A
-student's balance is applied automatically the next time a schedule is
-built for them: credit covers sessions first, and only the remainder is
-charged. Reserved credit is released if a schedule is edited, rejected, or
-cancelled before it is paid.
+When an admin trims a paid schedule's hours (`PATCH /schedules/:id`) or a
+"withdraw hours" amendment is applied, the removed sessions become credit
+in `student_credits` (1 credit = 1 hour). A student's balance is spent
+automatically the next time hours are added for them — a new schedule or
+an "add hours" amendment — covering sessions first, with only the
+remainder charged. Reserved credit is released if a schedule/amendment is
+edited, rejected, or cancelled before it is paid.
+
+## Public file links
+
+`POST /files/:fileId/public-link` mints an opaque, unauthenticated token
+(`GET /public/files/:token` streams the file). The URL returned uses
+`PUBLIC_FILES_ORIGIN` (a custom domain routed to this same Worker) instead
+of the Worker's own `workers.dev` origin, so shared links look like the
+student-facing site.
+
+## Payment verification
+
+Both `GET /student-check/:id` and `GET /finance` expose a payment's
+`proof_url` and, for Stripe payments, `stripe_session_id` — but only to
+admins (the fields are stripped for teachers). The admin UI surfaces these
+as a "view proof" link and a Payment ID.
 
 ## Staff names
 

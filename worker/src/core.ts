@@ -2,10 +2,10 @@ import { Hono } from 'hono';
 import type { AppBindings } from './types';
 import { requirePermission, requireAdmin, isAdmin } from './auth';
 import { logAudit } from './db';
-import { createStripePaymentLink, deactivateStripePaymentLink, StripeError } from './stripe';
+import { createStripePaymentLink, deactivateStripePaymentLink, StripeError, withPolicyNote } from './stripe';
 import { createStudentAuth0User } from './auth0mgmt';
 import { bangkokToday, bangkokMonth, daysAgo, isYmd } from './dates';
-import { visibleStudentIds, canSeeStudent, activateApprovedSchedulesForStudent } from './manage';
+import { visibleStudentIds, canSeeStudent, activateApprovedSchedulesForStudent, activateAwaitingAmendmentsForStudent } from './manage';
 
 export { bangkokToday, bangkokMonth } from './dates';
 
@@ -143,11 +143,13 @@ core.post('/payments', requirePermission('data:write'), async (c) => {
     .run();
   await logAudit(c.env.DB, user, 'ADD_PAYMENT', body.studentId, null, true);
 
-  // A successful payment starts the student's approved monthly schedule
-  // immediately (sessions become bookings).
+  // A successful payment starts the student's approved monthly schedule (or
+  // add-hours request) immediately (sessions become bookings).
   const activated = await activateApprovedSchedulesForStudent(c.env.DB, body.studentId);
+  const amendmentsActivated = await activateAwaitingAmendmentsForStudent(c.env.DB, body.studentId);
   let message = 'บันทึกการชำระเงินสำเร็จ';
   if (activated > 0) message += ' — ตารางเรียนที่อนุมัติไว้เริ่มทำงานแล้ว';
+  if (amendmentsActivated > 0) message += ' — เพิ่มคาบเรียนตามคำร้องเรียบร้อยแล้ว';
   return c.json({ ok: true, message });
 });
 
@@ -386,6 +388,7 @@ core.post('/payment-links', requireAdmin, async (c) => {
   try {
     link = await createStripePaymentLink(c.env.STRIPE_SECRET_KEY, {
       productName: description,
+      productDescription: withPolicyNote(),
       amountSatang: Math.round(amount * 100),
       currency: 'thb',
       metadata: {
