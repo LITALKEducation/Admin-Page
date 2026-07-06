@@ -6,9 +6,10 @@
 // state (notification_reads).
 
 import { Hono } from 'hono';
-import type { AppBindings } from './types';
+import type { AppBindings, Env } from './types';
 import { requireAdmin, isAdmin } from './auth';
 import { logAudit } from './db';
+import { dispatchPush, savePushSubscription, deletePushSubscription } from './push';
 
 export type AudienceType = 'staff_identity' | 'role' | 'all_staff' | 'student' | 'all_students' | 'all';
 
@@ -23,12 +24,14 @@ export interface NotificationInput {
   createdByName?: string | null;
 }
 
-export async function createNotification(db: D1Database, input: NotificationInput): Promise<number> {
-  const result = await db
-    .prepare(
-      `INSERT INTO notifications (title, body, link_url, category, audience_type, audience_value, created_by, created_by_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
+// Writes the row, then best-effort pushes it to every matching device. Push
+// failures (unconfigured VAPID, unreachable devices, etc.) never affect the
+// in-app notification — it's already committed by the time dispatchPush runs.
+export async function createNotification(env: Env, input: NotificationInput): Promise<number> {
+  const result = await env.DB.prepare(
+    `INSERT INTO notifications (title, body, link_url, category, audience_type, audience_value, created_by, created_by_name)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
     .bind(
       input.title,
       input.body ?? null,
@@ -40,23 +43,25 @@ export async function createNotification(db: D1Database, input: NotificationInpu
       input.createdByName ?? null,
     )
     .run();
-  return Number(result.meta.last_row_id);
+  const id = Number(result.meta.last_row_id);
+  dispatchPush(env, { audienceType: input.audienceType, audienceValue: input.audienceValue, title: input.title, body: input.body, linkUrl: input.linkUrl }).catch(() => {});
+  return id;
 }
 
 // Convenience wrappers for the system-triggered events fired from core.ts /
 // manage.ts. All are "fire and forget" — a notification failure must never
 // block the underlying action, so callers should skip awaiting failures.
 
-export function notifyAdmins(db: D1Database, input: Omit<NotificationInput, 'audienceType' | 'audienceValue'>) {
-  return createNotification(db, { ...input, audienceType: 'role', audienceValue: 'admin' });
+export function notifyAdmins(env: Env, input: Omit<NotificationInput, 'audienceType' | 'audienceValue'>) {
+  return createNotification(env, { ...input, audienceType: 'role', audienceValue: 'admin' });
 }
 
-export function notifyStaff(db: D1Database, identity: string, input: Omit<NotificationInput, 'audienceType' | 'audienceValue'>) {
-  return createNotification(db, { ...input, audienceType: 'staff_identity', audienceValue: identity });
+export function notifyStaff(env: Env, identity: string, input: Omit<NotificationInput, 'audienceType' | 'audienceValue'>) {
+  return createNotification(env, { ...input, audienceType: 'staff_identity', audienceValue: identity });
 }
 
-export function notifyStudent(db: D1Database, studentId: string, input: Omit<NotificationInput, 'audienceType' | 'audienceValue'>) {
-  return createNotification(db, { ...input, audienceType: 'student', audienceValue: studentId });
+export function notifyStudent(env: Env, studentId: string, input: Omit<NotificationInput, 'audienceType' | 'audienceValue'>) {
+  return createNotification(env, { ...input, audienceType: 'student', audienceValue: studentId });
 }
 
 // Shared WHERE clause (+ binds) for "notifications visible to this staff
@@ -179,7 +184,7 @@ notifications.post('/notifications', requireAdmin, async (c) => {
     if (!student) return c.json({ error: 'ไม่พบนักเรียนรหัสนี้ในระบบ' }, 404);
   }
 
-  const id = await createNotification(c.env.DB, {
+  const id = await createNotification(c.env, {
     title,
     body: (body.body ?? '').trim() || null,
     linkUrl: (body.linkUrl ?? '').trim() || null,
@@ -191,6 +196,22 @@ notifications.post('/notifications', requireAdmin, async (c) => {
   });
   await logAudit(c.env.DB, user, 'SEND_NOTIFICATION', audienceType === 'student' ? audienceValue : null, `${id} ${audienceType}:${audienceValue ?? ''}`, true);
   return c.json({ ok: true, id, message: 'ส่งการแจ้งเตือนแล้ว' });
+});
+
+// ===== Web Push subscriptions (staff) =====
+
+notifications.post('/push/subscribe', async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json<{ endpoint?: string; keys?: { p256dh?: string; auth?: string } }>();
+  if (!body.endpoint || !body.keys?.p256dh || !body.keys?.auth) return c.json({ error: 'Invalid subscription' }, 400);
+  await savePushSubscription(c.env.DB, 'staff', user.email, { endpoint: body.endpoint, p256dh: body.keys.p256dh, auth: body.keys.auth });
+  return c.json({ ok: true });
+});
+
+notifications.post('/push/unsubscribe', async (c) => {
+  const body = await c.req.json<{ endpoint?: string }>().catch(() => ({ endpoint: undefined }));
+  if (body.endpoint) await deletePushSubscription(c.env.DB, body.endpoint);
+  return c.json({ ok: true });
 });
 
 export default notifications;
