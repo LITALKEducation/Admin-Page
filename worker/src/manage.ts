@@ -142,6 +142,63 @@ manage.delete('/students/:id', requireAdmin, async (c) => {
   return c.json({ ok: true, message: `ลบนักเรียน ${studentId} ออกจากระบบแล้ว (บัญชีเข้าสู่ระบบใน Auth0 ไม่ถูกลบ)` });
 });
 
+// ===== Credit editing (admin only) =====
+// Manual adjustments to a student's class-hour credit ledger — e.g. a
+// goodwill credit or correcting an error — go through the same
+// student_credits table as schedule/amendment credits, just with
+// schedule_id left NULL.
+
+manage.get('/students/:id/credits', requireAdmin, async (c) => {
+  const studentId = c.req.param('id');
+  if (!studentId) return c.json({ error: 'Missing student id' }, 400);
+  const student = await c.env.DB.prepare(`SELECT id, name FROM students WHERE id = ? AND deleted_at IS NULL`)
+    .bind(studentId)
+    .first<{ id: string; name: string }>();
+  if (!student) return c.json({ error: 'ไม่พบนักเรียนรหัสนี้ในระบบ' }, 404);
+
+  const [entries, balance] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT id, hours, reason, schedule_id AS scheduleId, created_by AS createdBy, created_at AS createdAt
+       FROM student_credits WHERE student_id = ? ORDER BY created_at DESC, id DESC LIMIT 50`,
+    )
+      .bind(studentId)
+      .all(),
+    creditBalance(c.env.DB, studentId),
+  ]);
+
+  return c.json({ student, balance, entries: entries.results ?? [] });
+});
+
+manage.post('/students/:id/credits/adjust', requireAdmin, async (c) => {
+  const studentId = c.req.param('id');
+  if (!studentId) return c.json({ error: 'Missing student id' }, 400);
+  const user = c.get('user');
+  const body = await c.req.json<{ hours?: number | string; reason?: string }>();
+
+  const hours = Number(body.hours);
+  if (!Number.isFinite(hours) || hours === 0) return c.json({ error: 'กรุณากรอกจำนวนชั่วโมงที่ไม่เป็นศูนย์' }, 400);
+  const reason = (body.reason ?? '').trim();
+  if (!reason) return c.json({ error: 'กรุณาระบุเหตุผลการปรับเครดิต' }, 400);
+
+  const student = await c.env.DB.prepare(`SELECT id, name FROM students WHERE id = ? AND deleted_at IS NULL`)
+    .bind(studentId)
+    .first<{ id: string; name: string }>();
+  if (!student) return c.json({ error: 'ไม่พบนักเรียนรหัสนี้ในระบบ' }, 404);
+
+  await c.env.DB.prepare(`INSERT INTO student_credits (student_id, hours, reason, created_by) VALUES (?, ?, ?, ?)`)
+    .bind(studentId, hours, reason, user.email)
+    .run();
+  const balance = await creditBalance(c.env.DB, studentId);
+  await logAudit(c.env.DB, user, 'ADJUST_CREDIT', studentId, `${hours > 0 ? '+' : ''}${hours} (${reason})`, true);
+
+  const sign = hours > 0 ? '+' : '';
+  return c.json({
+    ok: true,
+    balance,
+    message: `ปรับเครดิตของ ${student.name} เรียบร้อย (${sign}${hours} ชม.) ยอดคงเหลือ ${balance} ชม.`,
+  });
+});
+
 // ===== Student check ("ตรวจสอบนักเรียน") =====
 // One call returns everything the check screen needs: profile, payment
 // status this month, upcoming study days, recent logs, and schedule states.
