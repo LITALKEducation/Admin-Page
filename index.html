@@ -8866,14 +8866,25 @@
         }
 
         async function enablePushNotifications() {
-            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-                showModal('ไม่รองรับ', 'เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือนแบบ push', 'error');
+            if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') {
+                showModal(
+                    'ไม่รองรับการแจ้งเตือนแบบ push',
+                    'เบราว์เซอร์หรือแอปที่เปิดอยู่นี้ไม่รองรับ — พบบ่อยเมื่อเปิดผ่านแอปในตัว (เช่น LINE, Facebook) กรุณาเปิดด้วย Safari/Chrome โดยตรง ' +
+                    'หากใช้ iPhone ต้องกด "เพิ่มลงหน้าจอโฮม" ก่อน (Web Push บน iOS ใช้ได้เฉพาะเมื่อเพิ่มเป็นแอปในหน้าจอหลักแล้วเท่านั้น)',
+                    'error',
+                );
                 return;
             }
             try {
                 const permission = await Notification.requestPermission();
                 if (permission !== 'granted') {
-                    showToast('ไม่ได้เปิดการแจ้งเตือน', 'กรุณาอนุญาตการแจ้งเตือนจากเบราว์เซอร์', 'error');
+                    showToast(
+                        'ไม่ได้เปิดการแจ้งเตือน',
+                        permission === 'denied'
+                            ? 'เบราว์เซอร์นี้ถูกบล็อกการแจ้งเตือนไว้แล้ว กรุณาไปที่ตั้งค่าเว็บไซต์นี้ (ไอคอนกุญแจ/ตัวเลื่อนข้าง URL) แล้วอนุญาตใหม่'
+                            : 'กรุณาอนุญาตการแจ้งเตือนจากเบราว์เซอร์',
+                        'error',
+                    );
                     return;
                 }
                 const keyRes = await apiFetch('/push/vapid-public-key');
@@ -8885,13 +8896,14 @@
                 const reg = await navigator.serviceWorker.ready;
                 const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
                 const json = sub.toJSON();
-                await apiFetch('/push/subscribe', { method: 'POST', body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }) });
+                const subRes = await apiFetch('/push/subscribe', { method: 'POST', body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }) });
+                if (!subRes.ok) throw new Error('subscribe endpoint returned ' + subRes.status);
                 pushSubscribed = true;
                 updatePushToggleUI();
                 showToast('เปิดการแจ้งเตือนแล้ว', 'อุปกรณ์นี้จะได้รับการแจ้งเตือนแม้ปิดแท็บ', 'success');
             } catch (error) {
                 console.error('enablePushNotifications:', error);
-                showModal('เปิดการแจ้งเตือนไม่สำเร็จ', 'กรุณาลองใหม่อีกครั้ง', 'error');
+                showModal('เปิดการแจ้งเตือนไม่สำเร็จ', 'กรุณาลองใหม่อีกครั้ง (ดูรายละเอียดเพิ่มเติมได้ใน Console)', 'error');
             }
         }
 
