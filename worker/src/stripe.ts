@@ -61,17 +61,23 @@ export async function createStripePaymentLink(
     metadata: Record<string, string>;
   },
 ): Promise<CreatedPaymentLink> {
+  // Stripe's price-create endpoint only accepts a handful of product_data
+  // fields (name, metadata, active, statement_descriptor, tax_code,
+  // unit_label) — description is NOT one of them, so it must not be sent
+  // here (Stripe rejects it as an unknown parameter).
   const price = await stripeRequest<{ id: string }>(secretKey, 'POST', '/v1/prices', {
     unit_amount: String(opts.amountSatang),
     currency: opts.currency,
     'product_data[name]': opts.productName,
-    ...(opts.productDescription ? { 'product_data[description]': opts.productDescription } : {}),
   });
 
   const params: Record<string, string> = {
     'line_items[0][price]': price.id,
     'line_items[0][quantity]': '1',
     'restrictions[completed_sessions][limit]': '1',
+    // The description belongs on the resulting PaymentIntent instead, where
+    // it shows up on the checkout page, receipt, and dashboard.
+    ...(opts.productDescription ? { 'payment_intent_data[description]': opts.productDescription } : {}),
   };
   for (const [k, v] of Object.entries(opts.metadata)) {
     params[`metadata[${k}]`] = v;
