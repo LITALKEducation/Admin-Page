@@ -8865,12 +8865,35 @@
             else await enablePushNotifications();
         }
 
+        // iOS/iPadOS only allows Web Push for a page installed to the Home
+        // Screen — a regular Safari (or in-app-WebKit) tab silently rejects
+        // Notification.requestPermission() with no OS prompt at all, on every
+        // browser (Chrome/Firefox on iOS are WebKit-based too). Detect this
+        // up front so we can guide the user instead of showing a confusing
+        // "permission denied" after the fact.
+        function isIosDevice() {
+            return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        }
+        function isStandaloneDisplayMode() {
+            return window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+        }
+
         async function enablePushNotifications() {
+            if (isIosDevice() && !isStandaloneDisplayMode()) {
+                showModal(
+                    'ต้องเพิ่มลงหน้าจอโฮมก่อน',
+                    'iPhone/iPad ของ Apple อนุญาตให้ขอเปิดการแจ้งเตือนได้เฉพาะเมื่อเพิ่มเว็บนี้ลงหน้าจอโฮมแล้วเท่านั้น (จำกัดโดย iOS เอง ใช้ได้ทุกเบราว์เซอร์เหมือนกันหมด):\n\n' +
+                    '1. แตะปุ่มแชร์ (ไอคอนสี่เหลี่ยมมีลูกศรชี้ขึ้น) ด้านล่างจอ\n' +
+                    '2. เลือก "เพิ่มลงหน้าจอโฮม" (Add to Home Screen)\n' +
+                    '3. เปิดแอปจากไอคอนในหน้าจอโฮม (ไม่ใช่จาก Safari) แล้วกดปุ่มนี้อีกครั้ง',
+                    'error',
+                );
+                return;
+            }
             if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') {
                 showModal(
                     'ไม่รองรับการแจ้งเตือนแบบ push',
-                    'เบราว์เซอร์หรือแอปที่เปิดอยู่นี้ไม่รองรับ — พบบ่อยเมื่อเปิดผ่านแอปในตัว (เช่น LINE, Facebook) กรุณาเปิดด้วย Safari/Chrome โดยตรง ' +
-                    'หากใช้ iPhone ต้องกด "เพิ่มลงหน้าจอโฮม" ก่อน (Web Push บน iOS ใช้ได้เฉพาะเมื่อเพิ่มเป็นแอปในหน้าจอหลักแล้วเท่านั้น)',
+                    'เบราว์เซอร์หรือแอปที่เปิดอยู่นี้ไม่รองรับ — พบบ่อยเมื่อเปิดผ่านแอปในตัว (เช่น LINE, Facebook) กรุณาเปิดด้วย Safari/Chrome โดยตรง',
                     'error',
                 );
                 return;
