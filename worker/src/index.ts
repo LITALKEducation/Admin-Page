@@ -13,6 +13,7 @@ import manage, {
   canSeeStudent,
 } from './manage';
 import { verifyStripeSignature } from './stripe';
+import notifications, { notifyStudent } from './notifications';
 
 const app = new Hono<AppBindings>();
 
@@ -74,15 +75,23 @@ app.post('/stripe/webhook', async (c) => {
       // right away.
       const scheduleId = Number(meta.schedule_id);
       const amendmentId = Number(meta.amendment_id);
+      let scheduleActivated = false;
       if (Number.isFinite(amendmentId) && amendmentId > 0) {
+        // activateAmendment sends its own "hours added" notification.
         await activateAmendment(c.env.DB, amendmentId);
       } else if (Number.isFinite(scheduleId) && scheduleId > 0) {
-        await activateSchedule(c.env.DB, scheduleId);
+        scheduleActivated = await activateSchedule(c.env.DB, scheduleId);
       } else if (meta.student_id) {
-        await activateApprovedSchedulesForStudent(c.env.DB, meta.student_id);
+        scheduleActivated = (await activateApprovedSchedulesForStudent(c.env.DB, meta.student_id)) > 0;
         await activateAwaitingAmendmentsForStudent(c.env.DB, meta.student_id);
       }
       await logAudit(c.env.DB, null, 'STRIPE_PAYMENT', meta.student_id || null, session.id, true);
+
+      if (meta.student_id) {
+        let payBody = `ยอด ${(session.amount_total / 100).toLocaleString()} บาท ผ่าน Stripe`;
+        if (scheduleActivated) payBody += ' — ตารางเรียนเริ่มทำงานแล้ว';
+        await notifyStudent(c.env.DB, meta.student_id, { title: 'ชำระเงินสำเร็จ', body: payBody, category: 'payment_received' }).catch(() => {});
+      }
     }
   }
 
@@ -104,7 +113,7 @@ app.get('/portal/:studentId', async (c) => {
   }
 
   const today = bangkokToday();
-  const [logs, pays, upcoming, pendingLinks] = await c.env.DB.batch([
+  const [logs, pays, upcoming, pendingLinks, notifs] = await c.env.DB.batch([
     c.env.DB.prepare(
       `SELECT log_date AS timestamp, feedback, video_url AS video FROM study_logs WHERE student_id = ? ORDER BY log_date DESC, id DESC`,
     ).bind(student.id),
@@ -123,6 +132,16 @@ app.get('/portal/:studentId', async (c) => {
     c.env.DB.prepare(
       `SELECT url, amount, description FROM payment_links WHERE student_id = ? AND status = 'active' ORDER BY id DESC LIMIT 5`,
     ).bind(student.id),
+    // Notifications aimed at this student specifically or at all students.
+    c.env.DB.prepare(
+      `SELECT n.id, n.title, n.body, n.link_url AS linkUrl, n.category, n.created_by_name AS createdByName, n.created_at AS createdAt,
+              CASE WHEN r.notification_id IS NOT NULL THEN 1 ELSE 0 END AS isRead
+       FROM notifications n
+       LEFT JOIN notification_reads r ON r.notification_id = n.id AND r.reader_identity = ? COLLATE NOCASE
+       WHERE n.audience_type = 'all' OR n.audience_type = 'all_students'
+          OR (n.audience_type = 'student' AND n.audience_value = ? COLLATE NOCASE)
+       ORDER BY n.created_at DESC LIMIT 30`,
+    ).bind(student.id, student.id),
   ]);
 
   const payments = (pays.results ?? []) as Array<{ timestamp: string }>;
@@ -138,8 +157,28 @@ app.get('/portal/:studentId', async (c) => {
       payments,
       schedule: upcoming.results ?? [],
       pendingPayments: pendingLinks.results ?? [],
+      notifications: notifs.results ?? [],
     },
   });
+});
+
+// Mark one of the student's own notifications read. Public by student id,
+// mirroring the rest of this portal's security model (no student auth
+// token exists — see the module-level note above).
+app.post('/portal/:studentId/notifications/:id/read', async (c) => {
+  const studentId = c.req.param('studentId');
+  const id = Number(c.req.param('id'));
+  const notif = await c.env.DB.prepare(
+    `SELECT id FROM notifications WHERE id = ? AND (audience_type = 'all' OR audience_type = 'all_students'
+       OR (audience_type = 'student' AND audience_value = ? COLLATE NOCASE))`,
+  )
+    .bind(id, studentId)
+    .first();
+  if (!notif) return c.json({ error: 'Not found' }, 404);
+  await c.env.DB.prepare(`INSERT OR IGNORE INTO notification_reads (notification_id, reader_identity) VALUES (?, ?)`)
+    .bind(id, studentId)
+    .run();
+  return c.json({ ok: true });
 });
 
 // Public file download by opaque token (shareable link). No auth: the token
@@ -172,6 +211,7 @@ app.use('*', verifyAuth);
 
 app.route('/', core);
 app.route('/', manage);
+app.route('/', notifications);
 
 app.get('/me', (c) => c.json(c.get('user')));
 
