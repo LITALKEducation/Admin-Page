@@ -351,9 +351,13 @@ when the current token carries no email. Setting up the Action from step
   the student's Auth0 login account is deliberately **not** deleted.
 - `GET /portal/:studentId` is **public by student id**, mirroring the GAS
   endpoint it replaces (the student site "logs in" client-side only). It
-  exposes the same data the old Sheet endpoint did: name, course, study
-  logs, and payment history for a known student id. Locking this down
-  properly would mean issuing student-audience Auth0 tokens and verifying
-  them here — a separate piece of work.
+  exposes the same data the old Sheet endpoint did — name, course, study
+  logs, and payment history — plus two additions for the student site:
+  `schedule` (upcoming `booked` classes only; a withdrawn hour flips its
+  booking to `cancelled` and simply disappears from this list) and
+  `pendingPayments` (active Stripe payment links awaiting checkout, so the
+  site can show a "pay now" prompt). Locking this endpoint down properly
+  would mean issuing student-audience Auth0 tokens and verifying them here
+  — a separate piece of work.
 - `ALLOWED_ORIGIN` (comma-separated) must include both the admin panel and
   the public site origins.

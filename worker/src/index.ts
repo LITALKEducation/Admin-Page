@@ -103,12 +103,25 @@ app.get('/portal/:studentId', async (c) => {
     return c.json({ status: 'error', message: 'ไม่พบข้อมูลนักเรียนรหัสนี้ในระบบ' }, 404);
   }
 
-  const [logs, pays] = await c.env.DB.batch([
+  const today = bangkokToday();
+  const [logs, pays, upcoming, pendingLinks] = await c.env.DB.batch([
     c.env.DB.prepare(
       `SELECT log_date AS timestamp, feedback, video_url AS video FROM study_logs WHERE student_id = ? ORDER BY log_date DESC, id DESC`,
     ).bind(student.id),
     c.env.DB.prepare(
       `SELECT paid_date AS timestamp, method, amount AS total, proof_url AS proof FROM payments WHERE student_id = ? ORDER BY paid_date DESC, id DESC`,
+    ).bind(student.id),
+    // Only 'booked' rows: a withdrawn hour flips its booking to 'cancelled'
+    // (see applyRemoveSessions in manage.ts), so that day simply stops
+    // showing up here — no separate "removed" state to reconcile.
+    c.env.DB.prepare(
+      `SELECT booking_date AS date, booking_time AS time FROM bookings
+       WHERE student_id = ? AND status = 'booked' AND booking_date >= ? ORDER BY booking_date, booking_time LIMIT 60`,
+    ).bind(student.id, today),
+    // Payment links the system is waiting on this student to pay (schedule
+    // approvals / hour top-ups that still need a Stripe checkout).
+    c.env.DB.prepare(
+      `SELECT url, amount, description FROM payment_links WHERE student_id = ? AND status = 'active' ORDER BY id DESC LIMIT 5`,
     ).bind(student.id),
   ]);
 
@@ -123,6 +136,8 @@ app.get('/portal/:studentId', async (c) => {
       },
       studyLogs: logs.results ?? [],
       payments,
+      schedule: upcoming.results ?? [],
+      pendingPayments: pendingLinks.results ?? [],
     },
   });
 });
