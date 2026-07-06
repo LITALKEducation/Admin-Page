@@ -7,6 +7,8 @@ import core, { bangkokToday } from './core';
 import manage, {
   activateSchedule,
   activateApprovedSchedulesForStudent,
+  activateAmendment,
+  activateAwaitingAmendmentsForStudent,
   visibleStudentIds,
   canSeeStudent,
 } from './manage';
@@ -68,12 +70,17 @@ app.post('/stripe/webhook', async (c) => {
           .bind(session.payment_link)
           .run();
       }
-      // A successful payment starts the approved monthly schedule right away.
+      // A successful payment starts the approved schedule (or amendment)
+      // right away.
       const scheduleId = Number(meta.schedule_id);
-      if (Number.isFinite(scheduleId) && scheduleId > 0) {
+      const amendmentId = Number(meta.amendment_id);
+      if (Number.isFinite(amendmentId) && amendmentId > 0) {
+        await activateAmendment(c.env.DB, amendmentId);
+      } else if (Number.isFinite(scheduleId) && scheduleId > 0) {
         await activateSchedule(c.env.DB, scheduleId);
       } else if (meta.student_id) {
         await activateApprovedSchedulesForStudent(c.env.DB, meta.student_id);
+        await activateAwaitingAmendmentsForStudent(c.env.DB, meta.student_id);
       }
       await logAudit(c.env.DB, null, 'STRIPE_PAYMENT', meta.student_id || null, session.id, true);
     }
@@ -273,7 +280,8 @@ app.post('/files/:fileId/public-link', requirePermission('files:write'), async (
     await c.env.DB.prepare(`UPDATE student_files SET public_token = ? WHERE id = ?`).bind(token, fileId).run();
     await logAudit(c.env.DB, c.get('user'), 'CREATE_PUBLIC_LINK', row.studentId, fileId, true);
   }
-  const url = `${new URL(c.req.url).origin}/public/files/${token}`;
+  const origin = c.env.PUBLIC_FILES_ORIGIN || new URL(c.req.url).origin;
+  const url = `${origin}/public/files/${token}`;
   return c.json({ ok: true, token, url });
 });
 

@@ -2,11 +2,12 @@
 // per-teacher student visibility, and in-app student deletion.
 
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import type { AppBindings, AuthUser } from './types';
 import { requirePermission, requireAdmin, isAdmin } from './auth';
 import { logAudit } from './db';
-import { bangkokToday, bangkokMonth, isYm, isYmd, isHm } from './dates';
-import { createStripePaymentLink, StripeError } from './stripe';
+import { bangkokToday, bangkokMonth, isYm, isYmd, isHm, formatSessionsThai } from './dates';
+import { createStripePaymentLink, deactivateStripePaymentLink, StripeError, withPolicyNote } from './stripe';
 
 // ===== Per-teacher student visibility =====
 // Admin sees everyone (returns null = unrestricted). A non-admin teacher
@@ -162,11 +163,17 @@ manage.get('/student-check/:id', requirePermission('data:read'), async (c) => {
 
   const month = bangkokMonth();
   const today = bangkokToday();
+  const admin = isAdmin(user);
   const [monthPays, lastPay, pendingLinks, upcoming, recentLogs, schedules, credit] = await c.env.DB.batch([
     c.env.DB.prepare(`SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM payments WHERE student_id = ? AND paid_date LIKE ? || '%'`)
       .bind(studentId, month),
-    c.env.DB.prepare(`SELECT id, paid_date AS date, amount, method FROM payments WHERE student_id = ? ORDER BY paid_date DESC, id DESC LIMIT 1`)
-      .bind(studentId),
+    // proof_url/stripe_session_id are only meaningful to the admin (payment
+    // verification); the route still selects them, the response just omits
+    // them for teachers.
+    c.env.DB.prepare(
+      `SELECT id, paid_date AS date, amount, method, source, proof_url AS proof, stripe_session_id AS stripeSessionId
+       FROM payments WHERE student_id = ? ORDER BY paid_date DESC, id DESC LIMIT 1`,
+    ).bind(studentId),
     c.env.DB.prepare(`SELECT url, amount, description FROM payment_links WHERE student_id = ? AND status = 'active' ORDER BY id DESC LIMIT 5`)
       .bind(studentId),
     c.env.DB.prepare(
@@ -186,6 +193,28 @@ manage.get('/student-check/:id', requirePermission('data:read'), async (c) => {
     c.env.DB.prepare(`SELECT COALESCE(SUM(hours), 0) AS balance FROM student_credits WHERE student_id = ?`).bind(studentId),
   ]);
 
+  const scheduleRows = (schedules.results ?? []) as Array<Record<string, unknown> & { id: number }>;
+  if (scheduleRows.length) {
+    const ids = scheduleRows.map((r) => r.id);
+    const { results: sess } = await c.env.DB.prepare(
+      `SELECT schedule_id AS scheduleId, session_date AS date, session_time AS time
+       FROM schedule_sessions WHERE schedule_id IN (${ids.map(() => '?').join(',')})
+       ORDER BY session_date, session_time`,
+    )
+      .bind(...ids)
+      .all<{ scheduleId: number; date: string; time: string }>();
+    const byId = new Map<number, Array<{ date: string; time: string }>>();
+    for (const s of sess ?? []) {
+      if (!byId.has(s.scheduleId)) byId.set(s.scheduleId, []);
+      byId.get(s.scheduleId)!.push({ date: s.date, time: s.time });
+    }
+    for (const r of scheduleRows) r.sessions = byId.get(r.id) ?? [];
+  }
+
+  const lastPayRow = lastPay.results?.[0] as
+    | { id: number; date: string; amount: number; method: string | null; source: string; proof: string | null; stripeSessionId: string | null }
+    | undefined;
+
   const monthRow = (monthPays.results?.[0] ?? { total: 0, count: 0 }) as { total: number; count: number };
   return c.json({
     student,
@@ -194,12 +223,23 @@ manage.get('/student-check/:id', requirePermission('data:read'), async (c) => {
     payment: {
       paidThisMonth: monthRow.count > 0,
       monthTotal: monthRow.total,
-      last: lastPay.results?.[0] ?? null,
+      last: lastPayRow
+        ? {
+            id: lastPayRow.id,
+            date: lastPayRow.date,
+            amount: lastPayRow.amount,
+            method: lastPayRow.method,
+            source: lastPayRow.source,
+            // Only the admin sees payment verification details.
+            proof: admin ? lastPayRow.proof : undefined,
+            stripeSessionId: admin ? lastPayRow.stripeSessionId : undefined,
+          }
+        : null,
       pendingLinks: pendingLinks.results ?? [],
     },
     upcomingClasses: upcoming.results ?? [],
     recentLogs: recentLogs.results ?? [],
-    schedules: schedules.results ?? [],
+    schedules: scheduleRows,
   });
 });
 
@@ -458,6 +498,7 @@ manage.get('/schedules', requirePermission('data:read'), async (c) => {
 // webhook can activate exactly this schedule when the parent pays.
 manage.post('/schedules/:id/approve', requireAdmin, async (c) => {
   const id = Number(c.req.param('id'));
+  const body = await c.req.json<{ description?: string }>().catch(() => ({ description: undefined }));
   const sched = await c.env.DB.prepare(
     `SELECT ms.id, ms.student_id AS studentId, ms.month, ms.total_amount AS total,
             (SELECT COUNT(*) FROM schedule_sessions ss WHERE ss.schedule_id = ms.id) AS sessionCount,
@@ -491,9 +532,22 @@ manage.post('/schedules/:id/approve', requireAdmin, async (c) => {
 
   if (c.env.STRIPE_SECRET_KEY) {
     try {
-      const description = `ค่าเรียนเดือน ${sched.month} - ${sched.studentName} (${sched.sessionCount} ครั้ง)`;
+      const productName = `ค่าเรียนเดือน ${sched.month} - ${sched.studentName} (${sched.sessionCount} ครั้ง)`;
+      // Custom description if the admin supplied one; otherwise auto-list
+      // every session's date and time. The no-refund policy note is always
+      // appended.
+      let autoDescription = body.description?.trim();
+      if (!autoDescription) {
+        const { results: sess } = await c.env.DB.prepare(
+          `SELECT session_date AS date, session_time AS time FROM schedule_sessions WHERE schedule_id = ?`,
+        )
+          .bind(sched.id)
+          .all<{ date: string; time: string }>();
+        autoDescription = `คาบเรียน: ${formatSessionsThai(sess ?? [])}`;
+      }
       const link = await createStripePaymentLink(c.env.STRIPE_SECRET_KEY, {
-        productName: description,
+        productName,
+        productDescription: withPolicyNote(autoDescription),
         amountSatang: Math.round(sched.total * 100),
         currency: 'thb',
         metadata: {
@@ -506,7 +560,7 @@ manage.post('/schedules/:id/approve', requireAdmin, async (c) => {
         `INSERT INTO payment_links (stripe_payment_link_id, url, student_id, customer_name, description, amount, currency, created_by)
          VALUES (?, ?, ?, ?, ?, ?, 'thb', ?)`,
       )
-        .bind(link.id, link.url, sched.studentId, sched.studentName, description, sched.total, user.email)
+        .bind(link.id, link.url, sched.studentId, sched.studentName, productName, sched.total, user.email)
         .run();
       await c.env.DB.prepare(`UPDATE monthly_schedules SET payment_link_id = ? WHERE id = ?`)
         .bind(Number(linkRow.meta.last_row_id), id)
@@ -594,6 +648,421 @@ manage.post('/schedules/:id/cancel', requirePermission('data:write'), async (c) 
   return c.json({ ok: true, message: 'ยกเลิกตารางเรียนแล้ว' });
 });
 
+// ===== Schedule amendments (add / withdraw hours on a live schedule) =====
+// A teacher can request extra or fewer sessions once a schedule is already
+// approved (or active). An admin acting directly applies the same request
+// immediately instead of parking it as 'pending'. Either way, the same
+// decision logic runs once the request is "decided":
+//   - remove: sessions are dropped and converted to credit right away —
+//     no payment is ever involved.
+//   - add: the student's credit balance is spent first; only sessions left
+//     uncovered are charged (a Stripe link if configured, else a manual
+//     payment activates it later, matching the original schedule flow).
+
+const AMENDMENT_STATUSES = ['pending', 'awaiting_payment', 'applied', 'rejected', 'cancelled'] as const;
+type ScheduleRow = { id: number; studentId: string; month: string; rate: number; status: string };
+
+async function applyAddSessions(
+  db: D1Database,
+  schedule: ScheduleRow,
+  sessions: CleanSession[],
+  actor: string,
+): Promise<void> {
+  const stmts: D1PreparedStatement[] = sessions.map((s) =>
+    db.prepare(`INSERT OR IGNORE INTO schedule_sessions (schedule_id, session_date, session_time) VALUES (?, ?, ?)`)
+      .bind(schedule.id, s.date, s.time),
+  );
+  if (schedule.status === 'active') {
+    const label = `ตารางเรียนเดือน ${schedule.month}`;
+    stmts.push(
+      ...sessions.map((s) =>
+        db.prepare(`INSERT OR IGNORE INTO bookings (student_id, booking_date, booking_time, notes, created_by) VALUES (?, ?, ?, ?, ?)`)
+          .bind(schedule.studentId, s.date, s.time, label, actor),
+      ),
+    );
+  }
+  await db.batch(stmts);
+}
+
+async function applyRemoveSessions(
+  db: D1Database,
+  schedule: ScheduleRow,
+  sessions: CleanSession[],
+  actor: string,
+): Promise<void> {
+  const stmts: D1PreparedStatement[] = sessions.map((s) =>
+    db.prepare(`DELETE FROM schedule_sessions WHERE schedule_id = ? AND session_date = ? AND session_time = ?`)
+      .bind(schedule.id, s.date, s.time),
+  );
+  if (schedule.status === 'active') {
+    const label = `ตารางเรียนเดือน ${schedule.month}`;
+    stmts.push(
+      ...sessions.map((s) =>
+        db.prepare(`UPDATE bookings SET status = 'cancelled' WHERE student_id = ? AND booking_date = ? AND booking_time = ? AND notes = ? AND status = 'booked'`)
+          .bind(schedule.studentId, s.date, s.time, label),
+      ),
+    );
+  }
+  stmts.push(
+    db.prepare(`INSERT INTO student_credits (student_id, hours, reason, schedule_id, created_by) VALUES (?, ?, ?, ?, ?)`)
+      .bind(schedule.studentId, sessions.length, `ถอนชั่วโมงจากตารางเรียนเดือน ${schedule.month}`, schedule.id, actor),
+  );
+  await db.batch(stmts);
+}
+
+// Runs the credit-then-charge decision for an amendment and updates its row.
+// Used both when an admin creates a request directly and when an admin
+// approves a teacher's pending request — same outcome either way.
+async function decideAmendment(
+  c: Context<AppBindings>,
+  amendment: {
+    id: number;
+    scheduleId: number;
+    studentId: string;
+    type: string;
+    sessions: CleanSession[];
+    rate: number;
+  },
+  schedule: ScheduleRow,
+): Promise<{ message: string; paymentUrl: string | null }> {
+  const db = c.env.DB;
+  const user = c.get('user');
+
+  if (amendment.type === 'remove') {
+    await applyRemoveSessions(db, schedule, amendment.sessions, user.email);
+    await db
+      .prepare(`UPDATE schedule_amendments SET status = 'applied', approved_by = ?, approved_at = CURRENT_TIMESTAMP, applied_at = CURRENT_TIMESTAMP WHERE id = ?`)
+      .bind(user.email, amendment.id)
+      .run();
+    await logAudit(db, user, 'APPLY_AMENDMENT_REMOVE', amendment.studentId, `${amendment.id} x${amendment.sessions.length}`, true);
+    return { message: `ถอนชั่วโมงเรียน ${amendment.sessions.length} คาบแล้ว — เพิ่มเครดิตให้นักเรียน ${amendment.sessions.length} ชม.`, paymentUrl: null };
+  }
+
+  // type 'add'
+  const sessionCount = amendment.sessions.length;
+  const balance = await creditBalance(db, amendment.studentId);
+  const creditsUsed = Math.min(Math.max(0, balance), sessionCount);
+  const chargeCount = sessionCount - creditsUsed;
+  const chargeAmount = chargeCount * amendment.rate;
+
+  if (creditsUsed > 0) {
+    await db
+      .prepare(`INSERT INTO student_credits (student_id, hours, reason, schedule_id, created_by) VALUES (?, ?, ?, ?, ?)`)
+      .bind(amendment.studentId, -creditsUsed, `ใช้เครดิตกับคำร้องเพิ่มชั่วโมงเดือน ${schedule.month}`, schedule.id, user.email)
+      .run();
+  }
+
+  if (chargeAmount <= 0) {
+    await applyAddSessions(db, schedule, amendment.sessions, user.email);
+    await db
+      .prepare(`UPDATE schedule_amendments SET status = 'applied', credits_used = ?, charge_amount = 0, approved_by = ?, approved_at = CURRENT_TIMESTAMP, applied_at = CURRENT_TIMESTAMP WHERE id = ?`)
+      .bind(creditsUsed, user.email, amendment.id)
+      .run();
+    await logAudit(db, user, 'APPLY_AMENDMENT_ADD', amendment.studentId, `${amendment.id} x${sessionCount} (credit)`, true);
+    return {
+      message: `เพิ่มชั่วโมงเรียน ${sessionCount} คาบแล้ว — ใช้เครดิตเต็มจำนวน ไม่ต้องชำระเงิน`,
+      paymentUrl: null,
+    };
+  }
+
+  // Remainder needs payment.
+  let paymentUrl: string | null = null;
+  let paymentLinkId: number | null = null;
+  let warning: string | null = null;
+  const student = await db.prepare(`SELECT name FROM students WHERE id = ?`).bind(amendment.studentId).first<{ name: string }>();
+  const studentName = student?.name ?? amendment.studentId;
+
+  if (c.env.STRIPE_SECRET_KEY) {
+    try {
+      const productName = `เพิ่มชั่วโมงเรียนเดือน ${schedule.month} - ${studentName} (${chargeCount} ครั้ง)`;
+      const description = `คาบเรียนที่เพิ่ม: ${formatSessionsThai(amendment.sessions)}`;
+      const link = await createStripePaymentLink(c.env.STRIPE_SECRET_KEY, {
+        productName,
+        productDescription: withPolicyNote(description),
+        amountSatang: Math.round(chargeAmount * 100),
+        currency: 'thb',
+        metadata: { student_id: amendment.studentId, amendment_id: String(amendment.id), created_by: user.email },
+      });
+      const linkRow = await db
+        .prepare(
+          `INSERT INTO payment_links (stripe_payment_link_id, url, student_id, customer_name, description, amount, currency, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, 'thb', ?)`,
+        )
+        .bind(link.id, link.url, amendment.studentId, studentName, productName, chargeAmount, user.email)
+        .run();
+      paymentLinkId = Number(linkRow.meta.last_row_id);
+      paymentUrl = link.url;
+    } catch (err) {
+      warning = err instanceof StripeError ? `สร้างลิงก์ชำระเงินไม่สำเร็จ (Stripe: ${err.message})` : 'สร้างลิงก์ชำระเงินไม่สำเร็จ';
+    }
+  }
+
+  await db
+    .prepare(
+      `UPDATE schedule_amendments SET status = 'awaiting_payment', credits_used = ?, charge_amount = ?, payment_link_id = ?,
+         approved_by = ?, approved_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    )
+    .bind(creditsUsed, chargeAmount, paymentLinkId, user.email, amendment.id)
+    .run();
+  await logAudit(db, user, 'APPROVE_AMENDMENT_ADD', amendment.studentId, `${amendment.id} x${sessionCount}`, true);
+
+  let message = `เพิ่มชั่วโมงเรียน ${sessionCount} คาบ`;
+  if (creditsUsed > 0) message += ` (ใช้เครดิต ${creditsUsed} ชม. เหลือเก็บ ${chargeAmount.toLocaleString()} บาท)`;
+  else message += ` รวม ${chargeAmount.toLocaleString()} บาท`;
+  message += paymentUrl
+    ? ' — ส่งลิงก์ชำระเงินให้ผู้ปกครองได้เลย จะเพิ่มคาบเรียนทันทีเมื่อชำระสำเร็จ'
+    : warning
+      ? ` — ${warning} จะเพิ่มคาบเรียนเมื่อบันทึกการชำระเงินในระบบ`
+      : ' — จะเพิ่มคาบเรียนเมื่อบันทึกการชำระเงินในระบบ';
+
+  return { message, paymentUrl };
+}
+
+// Activates a paid 'awaiting_payment' add-amendment: inserts its sessions
+// (and bookings, if the schedule is active) and marks it applied. Called
+// from the Stripe webhook (via metadata.amendment_id) and from the manual
+// payment hook below.
+export async function activateAmendment(db: D1Database, amendmentId: number): Promise<boolean> {
+  const amendment = await db
+    .prepare(`SELECT id, schedule_id AS scheduleId, sessions FROM schedule_amendments WHERE id = ? AND status = 'awaiting_payment' AND type = 'add'`)
+    .bind(amendmentId)
+    .first<{ id: number; scheduleId: number; sessions: string }>();
+  if (!amendment) return false;
+
+  const schedule = await db
+    .prepare(`SELECT id, student_id AS studentId, month, rate_per_session AS rate, status FROM monthly_schedules WHERE id = ?`)
+    .bind(amendment.scheduleId)
+    .first<ScheduleRow>();
+  if (!schedule) return false;
+
+  const sessions = JSON.parse(amendment.sessions) as CleanSession[];
+  await applyAddSessions(db, schedule, sessions, 'system');
+  await db
+    .prepare(`UPDATE schedule_amendments SET status = 'applied', applied_at = CURRENT_TIMESTAMP WHERE id = ?`)
+    .bind(amendment.id)
+    .run();
+  return true;
+}
+
+// A manual payment without a specific amendment reference activates every
+// awaiting-payment add-amendment for that student (mirrors
+// activateApprovedSchedulesForStudent).
+export async function activateAwaitingAmendmentsForStudent(db: D1Database, studentId: string): Promise<number> {
+  const { results } = await db
+    .prepare(`SELECT id FROM schedule_amendments WHERE student_id = ? AND status = 'awaiting_payment' AND type = 'add'`)
+    .bind(studentId)
+    .all<{ id: number }>();
+  let activated = 0;
+  for (const row of results ?? []) {
+    if (await activateAmendment(db, row.id)) activated++;
+  }
+  return activated;
+}
+
+async function loadEditableSchedule(c: Context<AppBindings>, scheduleId: number): Promise<ScheduleRow | null> {
+  return c.env.DB.prepare(`SELECT id, student_id AS studentId, month, rate_per_session AS rate, status FROM monthly_schedules WHERE id = ?`)
+    .bind(scheduleId)
+    .first<ScheduleRow>();
+}
+
+// Teacher requests, or admin directly performs, an add/withdraw-hours change
+// on a schedule that is already approved or active.
+manage.post('/schedules/:id/amend', requirePermission('data:write'), async (c) => {
+  const scheduleId = Number(c.req.param('id'));
+  const user = c.get('user');
+  const admin = isAdmin(user);
+
+  const schedule = await loadEditableSchedule(c, scheduleId);
+  if (!schedule) return c.json({ error: 'ไม่พบตารางเรียน' }, 404);
+  if (!['approved', 'active'].includes(schedule.status)) {
+    return c.json({ error: 'ขอเพิ่ม/ถอนชั่วโมงได้เฉพาะตารางเรียนที่อนุมัติแล้ว' }, 400);
+  }
+  const visible = await visibleStudentIds(c.env.DB, user);
+  if (!canSeeStudent(visible, schedule.studentId)) return c.json({ error: 'Forbidden' }, 403);
+
+  const body = await c.req.json<{ type?: string; sessions?: Array<{ date?: string; time?: string }>; note?: string }>();
+  if (body.type !== 'add' && body.type !== 'remove') return c.json({ error: 'ระบุประเภทคำร้อง add หรือ remove' }, 400);
+
+  const parsed = parseSessions(schedule.month, body.sessions);
+  if ('error' in parsed) return c.json({ error: parsed.error }, 400);
+  const { sessions } = parsed;
+
+  const { results: existing } = await c.env.DB.prepare(
+    `SELECT session_date AS date, session_time AS time FROM schedule_sessions WHERE schedule_id = ?`,
+  )
+    .bind(scheduleId)
+    .all<CleanSession>();
+  const existingKeys = new Set((existing ?? []).map((s) => `${s.date} ${s.time}`));
+
+  if (body.type === 'add') {
+    const dup = sessions.find((s) => existingKeys.has(`${s.date} ${s.time}`));
+    if (dup) return c.json({ error: `คาบเรียนวันที่ ${dup.date} เวลา ${dup.time} มีอยู่แล้วในตาราง` }, 409);
+  } else {
+    const missing = sessions.find((s) => !existingKeys.has(`${s.date} ${s.time}`));
+    if (missing) return c.json({ error: `ไม่พบคาบเรียนวันที่ ${missing.date} เวลา ${missing.time} ในตารางนี้` }, 400);
+  }
+
+  const inserted = await c.env.DB.prepare(
+    `INSERT INTO schedule_amendments (schedule_id, student_id, type, sessions, rate_per_session, note, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(scheduleId, schedule.studentId, body.type, JSON.stringify(sessions), schedule.rate, body.note?.trim() || null, user.email)
+    .run();
+  const amendmentId = Number(inserted.meta.last_row_id);
+
+  if (!admin) {
+    await logAudit(c.env.DB, user, 'REQUEST_AMENDMENT', schedule.studentId, `${amendmentId} ${body.type} x${sessions.length}`, true);
+    return c.json({
+      ok: true,
+      id: amendmentId,
+      message: `ส่งคำร้อง${body.type === 'add' ? 'เพิ่ม' : 'ถอน'}ชั่วโมงเรียน (${sessions.length} คาบ) ให้แอดมินอนุมัติแล้ว`,
+    });
+  }
+
+  // Admin acting directly: decide immediately, no pending state.
+  const decision = await decideAmendment(
+    c,
+    { id: amendmentId, scheduleId, studentId: schedule.studentId, type: body.type, sessions, rate: schedule.rate },
+    schedule,
+  );
+  return c.json({ ok: true, id: amendmentId, ...decision });
+});
+
+manage.get('/schedules/:id/amendments', requirePermission('data:read'), async (c) => {
+  const scheduleId = Number(c.req.param('id'));
+  const { results } = await c.env.DB.prepare(
+    `SELECT sa.id, sa.schedule_id AS scheduleId, sa.type, sa.sessions, sa.rate_per_session AS rate,
+            sa.credits_used AS creditsUsed, sa.charge_amount AS chargeAmount, sa.status, sa.note,
+            sa.reject_reason AS rejectReason, sa.created_by AS createdBy, COALESCE(st.name, sa.created_by) AS createdByName,
+            sa.approved_by AS approvedBy, sa.created_at AS createdAt, pl.url AS paymentUrl
+     FROM schedule_amendments sa
+     LEFT JOIN staff st ON st.identity = sa.created_by COLLATE NOCASE
+     LEFT JOIN payment_links pl ON pl.id = sa.payment_link_id
+     WHERE sa.schedule_id = ? ORDER BY sa.id DESC`,
+  )
+    .bind(scheduleId)
+    .all<{ sessions: string }>();
+  const rows = (results ?? []).map((r) => ({ ...r, sessions: JSON.parse(r.sessions) }));
+  return c.json(rows);
+});
+
+// Admin's approval queue / history across all schedules; teachers see their own.
+manage.get('/schedule-amendments', requirePermission('data:read'), async (c) => {
+  const user = c.get('user');
+  const admin = isAdmin(user);
+  const status = c.req.query('status');
+
+  let sql = `SELECT sa.id, sa.schedule_id AS scheduleId, ms.student_id AS studentId,
+                    COALESCE(s.name, ms.student_id) AS studentName, ms.month, sa.type, sa.sessions,
+                    sa.rate_per_session AS rate, sa.credits_used AS creditsUsed, sa.charge_amount AS chargeAmount,
+                    sa.status, sa.note, sa.reject_reason AS rejectReason,
+                    sa.created_by AS createdBy, COALESCE(st.name, sa.created_by) AS createdByName,
+                    sa.approved_by AS approvedBy, sa.created_at AS createdAt, pl.url AS paymentUrl
+             FROM schedule_amendments sa
+             JOIN monthly_schedules ms ON ms.id = sa.schedule_id
+             LEFT JOIN students s ON s.id = ms.student_id
+             LEFT JOIN staff st ON st.identity = sa.created_by COLLATE NOCASE
+             LEFT JOIN payment_links pl ON pl.id = sa.payment_link_id`;
+  const where: string[] = [];
+  const binds: unknown[] = [];
+  if (!admin) {
+    where.push('sa.created_by = ? COLLATE NOCASE');
+    binds.push(user.email);
+  }
+  if (status && (AMENDMENT_STATUSES as readonly string[]).includes(status)) {
+    where.push('sa.status = ?');
+    binds.push(status);
+  }
+  if (where.length) sql += ' WHERE ' + where.join(' AND ');
+  sql += ' ORDER BY sa.id DESC LIMIT 50';
+
+  const { results } = await c.env.DB.prepare(sql).bind(...binds).all<{ sessions: string }>();
+  const rows = (results ?? []).map((r) => ({ ...r, sessions: JSON.parse(r.sessions) }));
+  return c.json(rows);
+});
+
+manage.post('/schedule-amendments/:id/approve', requireAdmin, async (c) => {
+  const id = Number(c.req.param('id'));
+  const amendment = await c.env.DB.prepare(
+    `SELECT id, schedule_id AS scheduleId, student_id AS studentId, type, sessions, rate_per_session AS rate
+     FROM schedule_amendments WHERE id = ? AND status = 'pending'`,
+  )
+    .bind(id)
+    .first<{ id: number; scheduleId: number; studentId: string; type: string; sessions: string; rate: number }>();
+  if (!amendment) return c.json({ error: 'ไม่พบคำร้องที่รออนุมัติ' }, 404);
+
+  const schedule = await loadEditableSchedule(c, amendment.scheduleId);
+  if (!schedule) return c.json({ error: 'ไม่พบตารางเรียน' }, 404);
+
+  const decision = await decideAmendment(
+    c,
+    { id: amendment.id, scheduleId: amendment.scheduleId, studentId: amendment.studentId, type: amendment.type, sessions: JSON.parse(amendment.sessions), rate: amendment.rate },
+    schedule,
+  );
+  return c.json({ ok: true, ...decision });
+});
+
+manage.post('/schedule-amendments/:id/reject', requireAdmin, async (c) => {
+  const id = Number(c.req.param('id'));
+  const body = await c.req.json<{ reason?: string }>().catch(() => ({ reason: undefined }));
+  const user = c.get('user');
+
+  const result = await c.env.DB.prepare(
+    `UPDATE schedule_amendments SET status = 'rejected', reject_reason = ?, approved_by = ?, approved_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND status = 'pending'`,
+  )
+    .bind(body.reason?.trim() || null, user.email, id)
+    .run();
+  if (result.meta.changes === 0) return c.json({ error: 'ไม่พบคำร้องที่รออนุมัติ' }, 404);
+
+  await logAudit(c.env.DB, user, 'REJECT_AMENDMENT', null, String(id), true);
+  return c.json({ ok: true, message: 'ปฏิเสธคำร้องแล้ว' });
+});
+
+// Teacher cancels their own pending request; admin can cancel a pending or
+// not-yet-paid request (releasing any reserved credit and disabling any
+// Stripe link that was created for it).
+manage.post('/schedule-amendments/:id/cancel', requirePermission('data:write'), async (c) => {
+  const id = Number(c.req.param('id'));
+  const user = c.get('user');
+  const admin = isAdmin(user);
+
+  const amendment = await c.env.DB.prepare(
+    `SELECT id, schedule_id AS scheduleId, student_id AS studentId, status, credits_used AS creditsUsed,
+            payment_link_id AS paymentLinkId, created_by AS createdBy
+     FROM schedule_amendments WHERE id = ?`,
+  )
+    .bind(id)
+    .first<{ id: number; scheduleId: number; studentId: string; status: string; creditsUsed: number; paymentLinkId: number | null; createdBy: string | null }>();
+  if (!amendment) return c.json({ error: 'ไม่พบคำร้อง' }, 404);
+
+  const cancellable = admin ? ['pending', 'awaiting_payment'] : ['pending'];
+  if (!cancellable.includes(amendment.status)) return c.json({ error: 'คำร้องนี้ยกเลิกไม่ได้แล้ว' }, 400);
+  if (!admin && (amendment.createdBy ?? '').toLowerCase() !== user.email.toLowerCase()) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+
+  if (amendment.creditsUsed > 0) {
+    const schedule = await loadEditableSchedule(c, amendment.scheduleId);
+    await c.env.DB.prepare(`INSERT INTO student_credits (student_id, hours, reason, schedule_id, created_by) VALUES (?, ?, ?, ?, ?)`)
+      .bind(amendment.studentId, amendment.creditsUsed, `คืนเครดิตจากคำร้องที่ยกเลิก เดือน ${schedule?.month ?? ''}`, amendment.scheduleId, user.email)
+      .run();
+  }
+  if (amendment.paymentLinkId && c.env.STRIPE_SECRET_KEY) {
+    const link = await c.env.DB.prepare(`SELECT stripe_payment_link_id AS plId, status FROM payment_links WHERE id = ?`)
+      .bind(amendment.paymentLinkId)
+      .first<{ plId: string; status: string }>();
+    if (link && link.status === 'active') {
+      await deactivateStripePaymentLink(c.env.STRIPE_SECRET_KEY, link.plId).catch(() => {});
+      await c.env.DB.prepare(`UPDATE payment_links SET status = 'deactivated' WHERE id = ?`).bind(amendment.paymentLinkId).run();
+    }
+  }
+
+  await c.env.DB.prepare(`UPDATE schedule_amendments SET status = 'cancelled' WHERE id = ?`).bind(id).run();
+  await logAudit(c.env.DB, user, 'CANCEL_AMENDMENT', amendment.studentId, String(id), true);
+  return c.json({ ok: true, message: 'ยกเลิกคำร้องแล้ว' });
+});
+
 // ===== Teacher visibility management (admin only) =====
 
 // The identities the Worker has actually seen (from the audit log), so the
@@ -666,6 +1135,7 @@ manage.get('/finance', requireAdmin, async (c) => {
     ).bind(month),
     c.env.DB.prepare(
       `SELECT p.id, p.paid_date AS date, p.amount, p.method, p.source,
+              p.proof_url AS proof, p.stripe_session_id AS stripeSessionId,
               COALESCE(s.name, pl.customer_name, p.student_id, 'ลูกค้า') AS studentName, p.student_id AS studentId,
               COALESCE(st.name, p.recorded_by, '-') AS recordedBy
        FROM payments p

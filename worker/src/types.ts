@@ -6,6 +6,9 @@ export interface Env {
   AUTH0_EMAIL_CLAIM: string;
   AUTH0_NAME_CLAIM: string;
   ALLOWED_ORIGIN: string;
+  // Public-facing domain for shareable file links (same Worker, different
+  // hostname). Falls back to the request's own origin if unset.
+  PUBLIC_FILES_ORIGIN?: string;
   STUDENT_EMAIL_DOMAIN: string;
   AUTH0_DB_CONNECTION: string;
   // Secrets (set via `wrangler secret put`, absent in plain `wrangler dev`)

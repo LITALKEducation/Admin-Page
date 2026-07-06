@@ -38,6 +38,16 @@ export interface CreatedPaymentLink {
   url: string;
 }
 
+// Shown on every Stripe checkout page this system creates — paying is
+// treated as accepting this policy, so it's appended rather than optional.
+export const STRIPE_POLICY_NOTE = 'หากชำระเงินแล้วแสดงว่ายอมรับนโยบายของเรา และไม่มีการเรียกขอเงินคืน';
+
+// Appends the policy note to a (possibly empty) description.
+export function withPolicyNote(text?: string): string {
+  const base = (text ?? '').trim();
+  return base ? `${base} · ${STRIPE_POLICY_NOTE}` : STRIPE_POLICY_NOTE;
+}
+
 // Payment Links require a Price object, so create an inline product+price
 // first, then the link. The link is single-use (one completed session) since
 // each link is an invoice for one specific student/customer.
@@ -45,6 +55,7 @@ export async function createStripePaymentLink(
   secretKey: string,
   opts: {
     productName: string;
+    productDescription?: string;
     amountSatang: number; // THB x100
     currency: string;
     metadata: Record<string, string>;
@@ -54,6 +65,7 @@ export async function createStripePaymentLink(
     unit_amount: String(opts.amountSatang),
     currency: opts.currency,
     'product_data[name]': opts.productName,
+    ...(opts.productDescription ? { 'product_data[description]': opts.productDescription } : {}),
   });
 
   const params: Record<string, string> = {
