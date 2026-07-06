@@ -133,3 +133,43 @@ self.addEventListener('fetch', event => {
       })
   );
 });
+
+// Web Push — shows a notification for a payload sent via the Worker's
+// dispatchPush() ({ title, body, url }); falls back gracefully if the
+// payload isn't JSON.
+self.addEventListener('push', event => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (err) {
+    data = { title: 'LITALK Admin', body: event.data ? event.data.text() : '' };
+  }
+  const title = data.title || 'LITALK Admin';
+  const options = {
+    body: data.body || '',
+    icon: '/img/icon-192.png',
+    badge: '/img/icon-192.png',
+    data: { url: data.url || '/' }
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Focuses an already-open tab if one exists, otherwise opens a new one — the
+// URL is resolved relative to this service worker's own origin, so both the
+// admin console's internal deep links (?screen=...&student=...) and full
+// external URLs (e.g. a Stripe link) work.
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+      for (const client of windowClients) {
+        if ('focus' in client) {
+          if ('navigate' in client) client.navigate(url);
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) return clients.openWindow(url);
+    })
+  );
+});

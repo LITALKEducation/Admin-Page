@@ -14,6 +14,7 @@ import manage, {
 } from './manage';
 import { verifyStripeSignature } from './stripe';
 import notifications, { notifyStudent } from './notifications';
+import { savePushSubscription, deletePushSubscription } from './push';
 
 const app = new Hono<AppBindings>();
 
@@ -25,6 +26,27 @@ app.use('*', async (c, next) => cors({
 })(c, next));
 
 // ===== Public routes (registered before verifyAuth) =====
+
+// The VAPID public key is not secret — it's the applicationServerKey every
+// subscribing browser needs, for both the admin console and the student
+// portal (which has no auth token to attach here).
+app.get('/push/vapid-public-key', (c) => c.json({ publicKey: c.env.VAPID_PUBLIC_KEY ?? null }));
+
+// Student portal push subscriptions — public by student id, same trust
+// model as the rest of this portal (see the /portal/:studentId note below).
+app.post('/portal/:studentId/push/subscribe', async (c) => {
+  const studentId = c.req.param('studentId');
+  const body = await c.req.json<{ endpoint?: string; keys?: { p256dh?: string; auth?: string } }>().catch(() => ({}) as Record<string, never>);
+  if (!body.endpoint || !body.keys?.p256dh || !body.keys?.auth) return c.json({ error: 'Invalid subscription' }, 400);
+  await savePushSubscription(c.env.DB, 'student', studentId, { endpoint: body.endpoint, p256dh: body.keys.p256dh, auth: body.keys.auth });
+  return c.json({ ok: true });
+});
+
+app.post('/portal/:studentId/push/unsubscribe', async (c) => {
+  const body = await c.req.json<{ endpoint?: string }>().catch(() => ({ endpoint: undefined }));
+  if (body.endpoint) await deletePushSubscription(c.env.DB, body.endpoint);
+  return c.json({ ok: true });
+});
 
 // Stripe calls this with a signature header, not a Bearer token.
 app.post('/stripe/webhook', async (c) => {
@@ -78,19 +100,19 @@ app.post('/stripe/webhook', async (c) => {
       let scheduleActivated = false;
       if (Number.isFinite(amendmentId) && amendmentId > 0) {
         // activateAmendment sends its own "hours added" notification.
-        await activateAmendment(c.env.DB, amendmentId);
+        await activateAmendment(c.env, amendmentId);
       } else if (Number.isFinite(scheduleId) && scheduleId > 0) {
-        scheduleActivated = await activateSchedule(c.env.DB, scheduleId);
+        scheduleActivated = await activateSchedule(c.env, scheduleId);
       } else if (meta.student_id) {
-        scheduleActivated = (await activateApprovedSchedulesForStudent(c.env.DB, meta.student_id)) > 0;
-        await activateAwaitingAmendmentsForStudent(c.env.DB, meta.student_id);
+        scheduleActivated = (await activateApprovedSchedulesForStudent(c.env, meta.student_id)) > 0;
+        await activateAwaitingAmendmentsForStudent(c.env, meta.student_id);
       }
       await logAudit(c.env.DB, null, 'STRIPE_PAYMENT', meta.student_id || null, session.id, true);
 
       if (meta.student_id) {
         let payBody = `ยอด ${(session.amount_total / 100).toLocaleString()} บาท ผ่าน Stripe`;
         if (scheduleActivated) payBody += ' — ตารางเรียนเริ่มทำงานแล้ว';
-        await notifyStudent(c.env.DB, meta.student_id, { title: 'ชำระเงินสำเร็จ', body: payBody, category: 'payment_received' }).catch(() => {});
+        await notifyStudent(c.env, meta.student_id, { title: 'ชำระเงินสำเร็จ', body: payBody, category: 'payment_received' }).catch(() => {});
       }
     }
   }

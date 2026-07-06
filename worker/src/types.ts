@@ -11,11 +11,16 @@ export interface Env {
   PUBLIC_FILES_ORIGIN?: string;
   STUDENT_EMAIL_DOMAIN: string;
   AUTH0_DB_CONNECTION: string;
+  // Web Push (VAPID). Public key + subject are not secret (the public key is
+  // shipped to browsers as the applicationServerKey); the private key is.
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_SUBJECT?: string;
   // Secrets (set via `wrangler secret put`, absent in plain `wrangler dev`)
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   AUTH0_MGMT_CLIENT_ID?: string;
   AUTH0_MGMT_CLIENT_SECRET?: string;
+  VAPID_PRIVATE_KEY?: string;
 }
 
 export interface AuthUser {

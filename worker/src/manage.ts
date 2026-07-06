@@ -3,7 +3,7 @@
 
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import type { AppBindings, AuthUser } from './types';
+import type { AppBindings, AuthUser, Env } from './types';
 import { requirePermission, requireAdmin, isAdmin } from './auth';
 import { logAudit } from './db';
 import { bangkokToday, bangkokMonth, isYm, isYmd, isHm, formatSessionsThai } from './dates';
@@ -81,7 +81,8 @@ async function releaseScheduleCredits(db: D1Database, scheduleId: number, actor:
 // A successful payment turns an approved schedule live immediately: each
 // planned session becomes a booking (INSERT OR IGNORE — a slot that is
 // already taken is skipped rather than failing the whole activation).
-export async function activateSchedule(db: D1Database, scheduleId: number): Promise<boolean> {
+export async function activateSchedule(env: Env, scheduleId: number): Promise<boolean> {
+  const db = env.DB;
   const sched = await db
     .prepare(`SELECT id, student_id, month, created_by FROM monthly_schedules WHERE id = ? AND status = 'approved'`)
     .bind(scheduleId)
@@ -106,14 +107,14 @@ export async function activateSchedule(db: D1Database, scheduleId: number): Prom
 // A payment without an explicit schedule reference (manual record, or a
 // Stripe link created outside the approval flow) activates every approved
 // schedule of that student — in practice at most one per month.
-export async function activateApprovedSchedulesForStudent(db: D1Database, studentId: string): Promise<number> {
-  const { results } = await db
+export async function activateApprovedSchedulesForStudent(env: Env, studentId: string): Promise<number> {
+  const { results } = await env.DB
     .prepare(`SELECT id FROM monthly_schedules WHERE student_id = ? AND status = 'approved'`)
     .bind(studentId)
     .all<{ id: number }>();
   let activated = 0;
   for (const row of results ?? []) {
-    if (await activateSchedule(db, row.id)) activated++;
+    if (await activateSchedule(env, row.id)) activated++;
   }
   return activated;
 }
@@ -193,7 +194,7 @@ manage.post('/students/:id/credits/adjust', requireAdmin, async (c) => {
   await logAudit(c.env.DB, user, 'ADJUST_CREDIT', studentId, `${hours > 0 ? '+' : ''}${hours} (${reason})`, true);
 
   const sign = hours > 0 ? '+' : '';
-  await notifyStudent(c.env.DB, studentId, {
+  await notifyStudent(c.env, studentId, {
     title: hours > 0 ? 'ได้รับเครดิตชั่วโมงเรียนเพิ่ม' : 'เครดิตชั่วโมงเรียนถูกปรับลด',
     body: `${sign}${hours} ชม. (${reason}) ยอดคงเหลือ ${balance} ชม.`,
     category: 'credit_adjusted',
@@ -383,7 +384,7 @@ manage.post('/schedules', requirePermission('data:write'), async (c) => {
     .bind(total, creditsUsed, scheduleId)
     .run();
   await logAudit(c.env.DB, user, 'CREATE_SCHEDULE', body.studentId, `${body.month} x${sessions.length}`, true);
-  await notifyAdmins(c.env.DB, {
+  await notifyAdmins(c.env, {
     title: 'ตารางเรียนใหม่รออนุมัติ',
     body: `${student.name} เดือน ${body.month} (${sessions.length} ครั้ง) โดย ${user.name}`,
     linkUrl: `?screen=schedule&student=${encodeURIComponent(body.studentId)}`,
@@ -587,17 +588,17 @@ manage.post('/schedules/:id/approve', requireAdmin, async (c) => {
     await c.env.DB.prepare(`UPDATE monthly_schedules SET status = 'approved', approved_by = ?, approved_at = CURRENT_TIMESTAMP WHERE id = ?`)
       .bind(user.email, id)
       .run();
-    await activateSchedule(c.env.DB, id);
+    await activateSchedule(c.env, id);
     await logAudit(c.env.DB, user, 'APPROVE_SCHEDULE', sched.studentId, `${id} (credit)`, true);
     if (sched.createdBy) {
-      await notifyStaff(c.env.DB, sched.createdBy, {
+      await notifyStaff(c.env, sched.createdBy, {
         title: 'ตารางเรียนได้รับการอนุมัติแล้ว',
         body: `เดือน ${sched.month} ของ ${sched.studentName} — ใช้เครดิตเต็มจำนวน เริ่มเรียนทันที`,
         linkUrl: scheduleLink,
         category: 'schedule_approved',
       }).catch(() => {});
     }
-    await notifyStudent(c.env.DB, sched.studentId, {
+    await notifyStudent(c.env, sched.studentId, {
       title: 'ตารางเรียนเริ่มทำงานแล้ว',
       body: `ตารางเรียนเดือน ${sched.month} ได้รับการอนุมัติและใช้เครดิตครบแล้ว ไม่ต้องชำระเงินเพิ่ม`,
       category: 'schedule_activated',
@@ -661,14 +662,14 @@ manage.post('/schedules/:id/approve', requireAdmin, async (c) => {
     .run();
   await logAudit(c.env.DB, user, 'APPROVE_SCHEDULE', sched.studentId, String(id), true);
   if (sched.createdBy) {
-    await notifyStaff(c.env.DB, sched.createdBy, {
+    await notifyStaff(c.env, sched.createdBy, {
       title: 'ตารางเรียนได้รับการอนุมัติแล้ว',
       body: `เดือน ${sched.month} ของ ${sched.studentName} — รอผู้ปกครองชำระเงิน`,
       linkUrl: scheduleLink,
       category: 'schedule_approved',
     }).catch(() => {});
   }
-  await notifyStudent(c.env.DB, sched.studentId, {
+  await notifyStudent(c.env, sched.studentId, {
     title: 'ตารางเรียนได้รับการอนุมัติ กรุณาชำระเงิน',
     body: `เดือน ${sched.month} ยอด ${sched.total.toLocaleString()} บาท`,
     linkUrl: paymentUrl,
@@ -706,7 +707,7 @@ manage.post('/schedules/:id/reject', requireAdmin, async (c) => {
 
   await logAudit(c.env.DB, user, 'REJECT_SCHEDULE', null, String(id), true);
   if (sched.createdBy) {
-    await notifyStaff(c.env.DB, sched.createdBy, {
+    await notifyStaff(c.env, sched.createdBy, {
       title: 'ตารางเรียนถูกปฏิเสธ',
       body: `เดือน ${sched.month} ของ ${sched.studentName}${body.reason ? `: ${body.reason}` : ''}`,
       linkUrl: `?screen=schedule&student=${encodeURIComponent(sched.studentId)}`,
@@ -742,7 +743,7 @@ manage.post('/schedules/:id/revise', requireAdmin, async (c) => {
 
   await logAudit(c.env.DB, user, 'REVISE_SCHEDULE', null, String(id), true);
   if (sched.createdBy) {
-    await notifyStaff(c.env.DB, sched.createdBy, {
+    await notifyStaff(c.env, sched.createdBy, {
       title: 'แอดมินขอให้แก้ไขตารางเรียน',
       body: `เดือน ${sched.month} ของ ${sched.studentName}${body.note ? `: ${body.note}` : ''}`,
       linkUrl: `?screen=schedule&student=${encodeURIComponent(sched.studentId)}`,
@@ -857,7 +858,7 @@ async function decideAmendment(
   const user = c.get('user');
   const scheduleLink = `?screen=hours&student=${encodeURIComponent(amendment.studentId)}`;
   const notifyTeacher = (title: string, body: string, category: string) =>
-    amendment.createdBy ? notifyStaff(db, amendment.createdBy, { title, body, linkUrl: scheduleLink, category }).catch(() => {}) : Promise.resolve();
+    amendment.createdBy ? notifyStaff(c.env, amendment.createdBy, { title, body, linkUrl: scheduleLink, category }).catch(() => {}) : Promise.resolve();
 
   if (amendment.type === 'remove') {
     await applyRemoveSessions(db, schedule, amendment.sessions, user.email);
@@ -871,7 +872,7 @@ async function decideAmendment(
       `เดือน ${schedule.month} — ถอน ${amendment.sessions.length} คาบ`,
       'amendment_approved',
     );
-    await notifyStudent(db, amendment.studentId, {
+    await notifyStudent(c.env, amendment.studentId, {
       title: 'ตารางเรียนมีการเปลี่ยนแปลง',
       body: `ถอนคาบเรียน ${amendment.sessions.length} คาบในเดือน ${schedule.month} — เพิ่มเป็นเครดิตชั่วโมงเรียนให้แล้ว`,
       category: 'schedule_changed',
@@ -905,7 +906,7 @@ async function decideAmendment(
       `เดือน ${schedule.month} — เพิ่ม ${sessionCount} คาบ ใช้เครดิตเต็มจำนวน`,
       'amendment_approved',
     );
-    await notifyStudent(db, amendment.studentId, {
+    await notifyStudent(c.env, amendment.studentId, {
       title: 'เพิ่มชั่วโมงเรียนแล้ว',
       body: `เพิ่มคาบเรียน ${sessionCount} คาบในเดือน ${schedule.month} — ใช้เครดิตเต็มจำนวน ไม่ต้องชำระเงิน`,
       category: 'schedule_changed',
@@ -961,7 +962,7 @@ async function decideAmendment(
     `เดือน ${schedule.month} — รอผู้ปกครองชำระเงิน ${chargeAmount.toLocaleString()} บาท`,
     'amendment_approved',
   );
-  await notifyStudent(db, amendment.studentId, {
+  await notifyStudent(c.env, amendment.studentId, {
     title: 'มีรายการชำระเงินใหม่ — เพิ่มชั่วโมงเรียน',
     body: `เดือน ${schedule.month} ยอด ${chargeAmount.toLocaleString()} บาท`,
     linkUrl: paymentUrl,
@@ -984,7 +985,8 @@ async function decideAmendment(
 // (and bookings, if the schedule is active) and marks it applied. Called
 // from the Stripe webhook (via metadata.amendment_id) and from the manual
 // payment hook below.
-export async function activateAmendment(db: D1Database, amendmentId: number): Promise<boolean> {
+export async function activateAmendment(env: Env, amendmentId: number): Promise<boolean> {
+  const db = env.DB;
   const amendment = await db
     .prepare(`SELECT id, schedule_id AS scheduleId, sessions FROM schedule_amendments WHERE id = ? AND status = 'awaiting_payment' AND type = 'add'`)
     .bind(amendmentId)
@@ -1003,7 +1005,7 @@ export async function activateAmendment(db: D1Database, amendmentId: number): Pr
     .prepare(`UPDATE schedule_amendments SET status = 'applied', applied_at = CURRENT_TIMESTAMP WHERE id = ?`)
     .bind(amendment.id)
     .run();
-  await notifyStudent(db, schedule.studentId, {
+  await notifyStudent(env, schedule.studentId, {
     title: 'ชำระเงินสำเร็จ — เพิ่มชั่วโมงเรียนแล้ว',
     body: `เพิ่มคาบเรียน ${sessions.length} คาบในเดือน ${schedule.month}`,
     category: 'schedule_activated',
@@ -1014,14 +1016,14 @@ export async function activateAmendment(db: D1Database, amendmentId: number): Pr
 // A manual payment without a specific amendment reference activates every
 // awaiting-payment add-amendment for that student (mirrors
 // activateApprovedSchedulesForStudent).
-export async function activateAwaitingAmendmentsForStudent(db: D1Database, studentId: string): Promise<number> {
-  const { results } = await db
+export async function activateAwaitingAmendmentsForStudent(env: Env, studentId: string): Promise<number> {
+  const { results } = await env.DB
     .prepare(`SELECT id FROM schedule_amendments WHERE student_id = ? AND status = 'awaiting_payment' AND type = 'add'`)
     .bind(studentId)
     .all<{ id: number }>();
   let activated = 0;
   for (const row of results ?? []) {
-    if (await activateAmendment(db, row.id)) activated++;
+    if (await activateAmendment(env, row.id)) activated++;
   }
   return activated;
 }
@@ -1080,7 +1082,7 @@ manage.post('/schedules/:id/amend', requirePermission('data:write'), async (c) =
   if (!admin) {
     await logAudit(c.env.DB, user, 'REQUEST_AMENDMENT', schedule.studentId, `${amendmentId} ${body.type} x${sessions.length}`, true);
     const studentName = (await c.env.DB.prepare(`SELECT name FROM students WHERE id = ?`).bind(schedule.studentId).first<{ name: string }>())?.name ?? schedule.studentId;
-    await notifyAdmins(c.env.DB, {
+    await notifyAdmins(c.env, {
       title: `คำร้อง${body.type === 'add' ? 'เพิ่ม' : 'ถอน'}ชั่วโมงเรียนใหม่รออนุมัติ`,
       body: `${studentName} เดือน ${schedule.month} (${sessions.length} คาบ) โดย ${user.name}`,
       linkUrl: `?screen=hours&student=${encodeURIComponent(schedule.studentId)}`,
@@ -1208,7 +1210,7 @@ manage.post('/schedule-amendments/:id/reject', requireAdmin, async (c) => {
 
   await logAudit(c.env.DB, user, 'REJECT_AMENDMENT', null, String(id), true);
   if (amendment.createdBy) {
-    await notifyStaff(c.env.DB, amendment.createdBy, {
+    await notifyStaff(c.env, amendment.createdBy, {
       title: 'คำร้องปรับชั่วโมงเรียนถูกปฏิเสธ',
       body: `เดือน ${amendment.month} ของ ${amendment.studentName}${body.reason ? `: ${body.reason}` : ''}`,
       linkUrl: `?screen=hours&student=${encodeURIComponent(amendment.studentId)}`,

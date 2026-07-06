@@ -10,6 +10,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply litalk --remote"
   },
   "dependencies": {
+    "@block65/webcrypto-web-push": "^1.0.2",
     "hono": "^4.6.14",
     "jose": "^5.9.6"
   },
