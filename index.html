@@ -51,9 +51,18 @@
             --badge-text: #111318;
         }
 
+        /* Native form controls (date-picker popover, spin buttons, scrollbars)
+           follow this so Safari/Chrome render them in the current theme
+           instead of always-light chrome on a dark page. */
+        :root {
+            color-scheme: light;
+        }
+
         /* Dark theme (manual toggle & system preference fallback) */
         @media (prefers-color-scheme: dark) {
             :root:not([data-theme="light"]) {
+                color-scheme: dark;
+                --date-icon-filter: invert(1) brightness(1.6);
                 --bg-primary: #0b0c0f;
                 --bg-secondary: #131418;
                 --bg-tertiary: #1c1e24;
@@ -74,6 +83,8 @@
             }
         }
         :root[data-theme="dark"] {
+            color-scheme: dark;
+            --date-icon-filter: invert(1) brightness(1.6);
             --bg-primary: #0b0c0f;
             --bg-secondary: #131418;
             --bg-tertiary: #1c1e24;
@@ -1610,12 +1621,74 @@
             font-weight: 600;
         }
 
+        .dropdown-option.disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .dropdown-option.disabled:hover {
+            background-color: transparent;
+            color: var(--text-secondary);
+        }
+
         .dropdown-no-results {
             padding: 14px;
             font-size: 13px;
             color: var(--text-muted);
             text-align: center;
             font-style: italic;
+        }
+
+        /* Generic custom <select> replacement (see enhanceSelect() below).
+           Reuses .dropdown-trigger/.dropdown-menu-panel/.dropdown-option so it
+           matches the searchable student picker; no native OS picker wheel on
+           mobile, and no free browser-chrome divergence on desktop Safari. */
+        .simple-select {
+            position: relative;
+            width: 100%;
+        }
+
+        .simple-select-native {
+            display: none !important;
+        }
+
+        .simple-select-trigger {
+            width: 100%;
+        }
+
+        .simple-select-trigger.disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .simple-select-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .simple-select.active .simple-select-trigger .arrow-icon {
+            transform: rotate(180deg);
+        }
+
+        .simple-select.active .simple-select-panel {
+            display: flex;
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .simple-select.is-closing .simple-select-panel {
+            display: flex;
+            transform: scale(var(--dropdown-closing-scale));
+            opacity: 0;
+            transition:
+                transform var(--dropdown-close-dur) var(--dropdown-ease),
+                opacity   var(--dropdown-close-dur) var(--dropdown-ease);
+        }
+
+        .select-wrapper.js-enhanced::after {
+            display: none;
         }
 
         /* Student Indicator */
@@ -1763,9 +1836,71 @@
             border-radius: var(--radius-sm);
             font-family: inherit;
             font-size: 13px;
+            line-height: 1.4;
             background-color: var(--bg-tertiary);
             color: var(--text-primary);
             transition: all 0.15s ease;
+        }
+
+        /* Reset native chrome only on text-like fields — checkbox/radio/file
+           inputs elsewhere in the app rely on their default appearance. */
+        .form-group input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]),
+        .form-group select {
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        /* Safari gives type=date/time a taller intrinsic line-box and its own
+           font metrics than a text input, so the two end up misaligned side
+           by side; pin both to the same box model as everything else. */
+        .form-group input[type="date"],
+        .form-group input[type="time"],
+        .form-group input[type="datetime-local"],
+        .form-group input[type="month"],
+        .form-group input[type="number"] {
+            min-height: 40px;
+            box-sizing: border-box;
+        }
+
+        .form-group input[type="date"]::-webkit-datetime-edit,
+        .form-group input[type="time"]::-webkit-datetime-edit,
+        .form-group input[type="datetime-local"]::-webkit-datetime-edit,
+        .form-group input[type="month"]::-webkit-datetime-edit {
+            padding: 0;
+        }
+
+        /* Safari/Chrome render the calendar icon as solid black regardless of
+           theme; invert it in dark mode so it doesn't disappear against a
+           dark field, and dim it slightly to match the muted-icon look used
+           elsewhere in the form. */
+        .form-group input[type="date"]::-webkit-calendar-picker-indicator,
+        .form-group input[type="time"]::-webkit-calendar-picker-indicator,
+        .form-group input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+        .form-group input[type="month"]::-webkit-calendar-picker-indicator {
+            opacity: 0.65;
+            cursor: pointer;
+            filter: var(--date-icon-filter, none);
+        }
+
+        .form-group input[type="date"]::-webkit-calendar-picker-indicator:hover,
+        .form-group input[type="time"]::-webkit-calendar-picker-indicator:hover,
+        .form-group input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+        .form-group input[type="month"]::-webkit-calendar-picker-indicator:hover {
+            opacity: 1;
+        }
+
+        /* Firefox number spinner */
+        .form-group input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
+        /* Chrome/Safari number spinner — hidden so the field matches a plain
+           text input; inputmode="decimal" already gives mobile users the
+           right keyboard, so nothing is lost. */
+        .form-group input[type="number"]::-webkit-outer-spin-button,
+        .form-group input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
         }
 
         .form-group input:focus,
@@ -3261,6 +3396,25 @@
             border: 1px solid var(--border-color);
         }
 
+        /* Profile photo variant of .card-icon / .avatar — circular, can hold
+           an <img> (set via setAvatarImage()) instead of just an icon glyph. */
+        .profile-avatar {
+            border-radius: 50%;
+            overflow: hidden;
+        }
+
+        .profile-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .avatar-xl {
+            width: 64px;
+            height: 64px;
+            font-size: 22px;
+        }
+
         .student-cell .s-name {
             font-weight: var(--weight-semibold);
             color: var(--text-primary);
@@ -3799,6 +3953,9 @@
                     </button>
                     <div class="sidebar-nav-section-items" id="nav-section-admin">
                         <div class="nav-items-inner">
+                            <button class="sidebar-nav-item" data-screen="staff" onclick="goScreen('staff')" title="ครูและพนักงาน">
+                                <i class="fas fa-users-gear"></i> <span class="sidebar-label">ครูและพนักงาน</span>
+                            </button>
                             <button class="sidebar-nav-item" data-screen="access" onclick="goScreen('access')" title="สิทธิ์การมองเห็น">
                                 <i class="fas fa-user-shield"></i> <span class="sidebar-label">สิทธิ์การมองเห็น</span>
                             </button>
@@ -4586,7 +4743,7 @@
                         <div data-profile-panel="overview" class="active">
                         <div class="admin-card">
                             <div class="card-title-bar">
-                                <span class="card-icon"><i class="fas fa-id-card"></i></span>
+                                <span class="card-icon profile-avatar" id="check-avatar-wrap"><i class="fas fa-id-card"></i></span>
                                 <div>
                                     <h3 id="check-student-name">-</h3>
                                     <p id="check-student-meta">-</p>
@@ -4598,9 +4755,80 @@
                                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                                     <button class="btn btn-primary" onclick="goCheckStudyLog()"><i class="fas fa-pen"></i> เขียน Study Log</button>
                                     <button class="btn btn-secondary" onclick="copyStudyLogLink(this)"><i class="fas fa-link"></i> คัดลอกลิงก์ Study Log</button>
+                                    <button class="btn btn-secondary" data-admin-only style="display: none;" onclick="toggleStudentEditPanel()"><i class="fas fa-user-pen"></i> แก้ไขข้อมูลนักเรียน</button>
                                     <button class="btn btn-danger" data-admin-only style="display: none;" onclick="deleteSelectedStudent()"><i class="fas fa-user-slash"></i> ลบนักเรียนออกจากระบบ</button>
                                 </div>
                                 <div class="form-hint" data-admin-only style="display: none;">การลบนักเรียนจะลบเฉพาะข้อมูลในระบบนี้ ไม่ลบบัญชีเข้าสู่ระบบของนักเรียน</div>
+                            </div>
+                        </div>
+
+                        <div class="admin-card" id="student-edit-card" style="display: none;">
+                            <div class="card-title-bar">
+                                <span class="card-icon"><i class="fas fa-user-pen"></i></span>
+                                <div>
+                                    <h3>แก้ไขข้อมูลนักเรียน</h3>
+                                    <p>ชื่อ รูปโปรไฟล์ อีเมล เบอร์โทร คอร์สเรียน และบัญชีเข้าสู่ระบบ</p>
+                                </div>
+                            </div>
+                            <div class="form-body">
+                                <div style="display: flex; align-items: center; gap: 16px;">
+                                    <span class="card-icon profile-avatar avatar-xl" id="student-edit-avatar-wrap"><i class="fas fa-user"></i></span>
+                                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                                        <input type="file" id="student-edit-avatar-input" accept="image/*" style="display: none;" onchange="uploadStudentAvatar()">
+                                        <button class="btn btn-secondary" type="button" onclick="document.getElementById('student-edit-avatar-input').click()"><i class="fas fa-camera"></i> เปลี่ยนรูปโปรไฟล์</button>
+                                        <span class="form-hint" style="margin: 0;">ไฟล์รูปภาพ ขนาดไม่เกิน 5MB</span>
+                                    </div>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                    <div class="form-group">
+                                        <label><i class="fas fa-user"></i> ชื่อ-นามสกุล</label>
+                                        <input type="text" id="edit-student-name">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-face-smile"></i> ชื่อเล่น</label>
+                                        <input type="text" id="edit-student-nickname">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-envelope"></i> อีเมลติดต่อ</label>
+                                        <input type="email" id="edit-student-email">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-phone"></i> เบอร์โทรศัพท์</label>
+                                        <input type="tel" id="edit-student-phone">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-graduation-cap"></i> คอร์สเรียน</label>
+                                        <div class="select-wrapper">
+                                            <select id="edit-student-course">
+                                                <option value="">-- เลือกคอร์สเรียน --</option>
+                                                <option value="General English A2">General English A2</option>
+                                                <option value="General English B2">General English B2</option>
+                                                <option value="Business English B1">Business English B1</option>
+                                                <option value="IELTS Prep">IELTS Prep</option>
+                                                <option value="Kids English Vol.1">Kids English Vol.1</option>
+                                                <option value="Kids English Vol.2">Kids English Vol.2</option>
+                                                <option value="Kids English Vol.3">Kids English Vol.3</option>
+                                                <option value="Conversation A2">Conversation A2</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-id-badge"></i> Username (บัญชีเข้าสู่ระบบ)</label>
+                                        <input type="text" id="edit-student-username" placeholder="เว้นว่างไว้หากไม่ต้องการเปลี่ยน">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-key"></i> ตั้งรหัสผ่านใหม่ (บัญชีเข้าสู่ระบบ)</label>
+                                    <div style="display: flex; gap: 8px;">
+                                        <input type="text" id="edit-student-password" placeholder="เว้นว่างไว้หากไม่ต้องการเปลี่ยนรหัสผ่าน" style="flex: 1;">
+                                        <button class="btn btn-secondary" type="button" onclick="generateStudentPassword()"><i class="fas fa-dice"></i> สุ่มรหัสผ่าน</button>
+                                    </div>
+                                    <div class="form-hint">อีเมลเข้าสู่ระบบของนักเรียน (รูปแบบ &lt;รหัสนักเรียน&gt;@...) จะไม่ถูกเปลี่ยนโดยฟอร์มนี้</div>
+                                </div>
+                                <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                                    <button class="btn btn-secondary" type="button" onclick="toggleStudentEditPanel(false)">ยกเลิก</button>
+                                    <button class="btn btn-primary" type="button" onclick="saveStudentEdit()"><i class="fas fa-save"></i> บันทึกข้อมูล</button>
+                                </div>
                             </div>
                         </div>
                         </div>
@@ -4889,6 +5117,70 @@
                     </div>
                 </div>
 
+                <!-- ============ TEACHER / STAFF ACCOUNTS (ADMIN) ============ -->
+                <div id="screen-staff" class="tab-content" data-screen-panel="staff">
+                    <div class="screen-header">
+                        <h1>ครูและพนักงาน</h1>
+                        <p>สร้างบัญชีเข้าสู่ระบบให้ครูและพนักงาน แก้ไขข้อมูล อัปโหลดรูปโปรไฟล์ และส่งลิงก์เปลี่ยนรหัสผ่าน/ลงทะเบียน Passkey</p>
+                    </div>
+
+                    <div class="admin-card">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-user-plus"></i></span>
+                            <div>
+                                <h3>สร้างบัญชีใหม่</h3>
+                                <p>ระบบจะสร้างบัญชีเข้าสู่ระบบใน Auth0 พร้อมรหัสผ่านชั่วคราว (แสดงครั้งเดียว)</p>
+                            </div>
+                        </div>
+                        <div class="form-body">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div class="form-group">
+                                    <label><i class="fas fa-user"></i> ชื่อ-นามสกุล</label>
+                                    <input type="text" id="staff-new-name">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-envelope"></i> อีเมล (ใช้เข้าสู่ระบบ)</label>
+                                    <input type="email" id="staff-new-email" placeholder="teacher@example.com">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-user-tag"></i> บทบาท</label>
+                                    <div class="select-wrapper">
+                                        <select id="staff-new-role">
+                                            <option value="teacher">ครู (Teacher)</option>
+                                            <option value="staff">พนักงาน (Staff)</option>
+                                            <option value="admin">แอดมิน (Admin)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-id-badge"></i> ตำแหน่ง (ถ้ามี)</label>
+                                    <input type="text" id="staff-new-title" placeholder="เช่น หัวหน้าครู, ธุรการ">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-phone"></i> เบอร์โทรศัพท์ (ถ้ามี)</label>
+                                    <input type="tel" id="staff-new-phone">
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: flex-end;">
+                                <button class="btn btn-primary" onclick="createStaffAccount()"><i class="fas fa-user-plus"></i> สร้างบัญชี</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="admin-card" style="margin-top: 24px;">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-users-gear"></i></span>
+                            <div>
+                                <h3>รายชื่อครูและพนักงาน</h3>
+                                <p>บัญชีที่ระบบเคยเห็น (เข้าสู่ระบบแล้ว หรือสร้างจากหน้านี้)</p>
+                            </div>
+                        </div>
+                        <div class="row-list" id="staff-list">
+                            <div class="form-hint">กำลังโหลดข้อมูล...</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- ============ TEACHER VISIBILITY (ADMIN) ============ -->
                 <div id="screen-access" class="tab-content" data-screen-panel="access">
                     <div class="screen-header">
@@ -5093,6 +5385,22 @@
         </div>
     </div>
 
+    <!-- Custom confirm()/prompt() replacement — see confirmDialog()/promptDialog() -->
+    <div id="confirm-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div id="confirm-modal-icon" class="modal-icon info"><i class="fas fa-circle-question"></i></div>
+            <h3 id="confirm-modal-title" class="modal-title">ยืนยันการทำรายการ</h3>
+            <div id="confirm-modal-message" class="modal-message"></div>
+            <div id="confirm-modal-input-wrap" class="form-group" style="display: none; text-align: left; margin: 4px 0 0;">
+                <input type="text" id="confirm-modal-input">
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+                <button class="btn btn-secondary" id="confirm-modal-cancel" style="flex: 1;">ยกเลิก</button>
+                <button class="btn btn-primary" id="confirm-modal-ok" style="flex: 1;">ยืนยัน</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Mobile Menu Overlay -->
     <div class="mobile-menu-overlay" id="mobile-menu-overlay" onclick="closeMobileMenu(event)">
         <div class="mobile-menu-panel" onclick="event.stopPropagation()">
@@ -5126,6 +5434,7 @@
                 <a href="javascript:void(0)" data-screen="payments" onclick="goScreen('payments')"><i class="fas fa-money-bill-wave"></i> บันทึกการชำระเงิน</a>
                 <a href="javascript:void(0)" data-screen="finance" data-admin-only style="display: none;" onclick="goScreen('finance')"><i class="fas fa-chart-line"></i> สรุปการเงิน</a>
                 <div class="sidebar-nav-heading" data-admin-only style="margin-top: 10px; display: none;">ผู้ดูแลระบบ</div>
+                <a href="javascript:void(0)" data-screen="staff" data-admin-only style="display: none;" onclick="goScreen('staff')"><i class="fas fa-users-gear"></i> ครูและพนักงาน</a>
                 <a href="javascript:void(0)" data-screen="access" data-admin-only style="display: none;" onclick="goScreen('access')"><i class="fas fa-user-shield"></i> สิทธิ์การมองเห็น</a>
                 <a href="javascript:void(0)" data-screen="credits" data-admin-only style="display: none;" onclick="goScreen('credits')"><i class="fas fa-coins"></i> แก้ไขเครดิต</a>
             </nav>
@@ -5206,6 +5515,7 @@
             const minBookingDate = new Date();
             minBookingDate.setDate(minBookingDate.getDate() + 1);
             document.getElementById('booking-date').min = minBookingDate.toISOString().split('T')[0];
+            enhanceSelectsIn(document);
             goScreen('dashboard');
             await loadFilesPermissions();
             updateAdminUI();
@@ -5401,6 +5711,91 @@
             setTimeout(() => modal.classList.remove('is-closing'), closeMs);
         }
 
+        // ===== Custom confirm()/prompt() replacements =====
+        // The browser's native confirm()/prompt() are blocking and unstyled
+        // (and on iOS Safari, confirm() inside certain contexts can be
+        // suppressed entirely). These render through the same modal-overlay
+        // markup as showModal() and resolve a Promise, so call sites just
+        // add `await`.
+        function _closeConfirmModalEl() {
+            const modal = document.getElementById('confirm-modal');
+            const closeMs = parseFloat(
+                getComputedStyle(document.documentElement).getPropertyValue("--modal-close-dur")
+            ) || 150;
+            modal.classList.remove('active');
+            modal.classList.add('is-closing');
+            setTimeout(() => modal.classList.remove('is-closing'), closeMs);
+        }
+
+        function _openConfirmModalEl(title, message, danger) {
+            const modal = document.getElementById('confirm-modal');
+            document.getElementById('confirm-modal-title').innerText = title;
+            document.getElementById('confirm-modal-message').innerText = message || '';
+            const iconContainer = document.getElementById('confirm-modal-icon');
+            iconContainer.className = 'modal-icon ' + (danger ? 'error' : 'info');
+            iconContainer.innerHTML = danger ? '<i class="fas fa-triangle-exclamation"></i>' : '<i class="fas fa-circle-question"></i>';
+            modal.classList.remove('is-closing');
+            modal.classList.add('active');
+        }
+
+        // Promise<boolean> — resolves true on confirm, false on cancel/backdrop/Escape.
+        function confirmDialog(message, opts = {}) {
+            const { title = 'ยืนยันการทำรายการ', okLabel = 'ยืนยัน', cancelLabel = 'ยกเลิก', danger = false } = opts;
+            return new Promise((resolve) => {
+                _openConfirmModalEl(title, message, danger);
+                document.getElementById('confirm-modal-input-wrap').style.display = 'none';
+                const okBtn = document.getElementById('confirm-modal-ok');
+                const cancelBtn = document.getElementById('confirm-modal-cancel');
+                okBtn.textContent = okLabel;
+                okBtn.className = danger ? 'btn btn-danger' : 'btn btn-primary';
+                okBtn.style.flex = '1';
+                cancelBtn.textContent = cancelLabel;
+                const onKey = (e) => { if (e.key === 'Escape') cleanup(false); };
+                const cleanup = (result) => {
+                    okBtn.onclick = null; cancelBtn.onclick = null;
+                    document.removeEventListener('keydown', onKey);
+                    _closeConfirmModalEl();
+                    resolve(result);
+                };
+                okBtn.onclick = () => cleanup(true);
+                cancelBtn.onclick = () => cleanup(false);
+                document.addEventListener('keydown', onKey);
+            });
+        }
+
+        // Promise<string|null> — resolves the typed value on confirm, null on cancel.
+        function promptDialog(message, opts = {}) {
+            const { title = 'กรอกข้อมูล', defaultValue = '', placeholder = '', okLabel = 'ตกลง', cancelLabel = 'ยกเลิก' } = opts;
+            return new Promise((resolve) => {
+                _openConfirmModalEl(title, message, false);
+                const inputWrap = document.getElementById('confirm-modal-input-wrap');
+                const input = document.getElementById('confirm-modal-input');
+                inputWrap.style.display = '';
+                input.value = defaultValue || '';
+                input.placeholder = placeholder || '';
+                const okBtn = document.getElementById('confirm-modal-ok');
+                const cancelBtn = document.getElementById('confirm-modal-cancel');
+                okBtn.textContent = okLabel;
+                okBtn.className = 'btn btn-primary';
+                okBtn.style.flex = '1';
+                cancelBtn.textContent = cancelLabel;
+                const onKey = (e) => {
+                    if (e.key === 'Enter') cleanup(input.value);
+                    if (e.key === 'Escape') cleanup(null);
+                };
+                const cleanup = (result) => {
+                    okBtn.onclick = null; cancelBtn.onclick = null;
+                    input.removeEventListener('keydown', onKey);
+                    _closeConfirmModalEl();
+                    resolve(result);
+                };
+                okBtn.onclick = () => cleanup(input.value);
+                cancelBtn.onclick = () => cleanup(null);
+                input.addEventListener('keydown', onKey);
+                setTimeout(() => input.focus(), 50);
+            });
+        }
+
         // Non-blocking confirmation for routine actions (save/approve/copy/etc).
         // Use showModal() instead when the message holds something the user
         // must actively read and keep — e.g. a one-time generated password —
@@ -5447,6 +5842,128 @@
             arm();
         }
 
+        // ===== Generic custom <select> replacement =====
+        // Progressively enhances a native <select> into a custom HTML
+        // dropdown (no native OS picker wheel on mobile, consistent look on
+        // desktop). The native <select> stays in the DOM (hidden) as the
+        // single source of truth — existing code reads/writes `.value` and
+        // listens for 'change' exactly as before; only the dropdown's own
+        // trigger/options are new markup.
+        const enhancedSelects = new WeakMap();
+
+        function enhanceSelect(select) {
+            if (!select || select.tagName !== 'SELECT' || select.multiple) return;
+            if (enhancedSelects.has(select)) { renderSimpleSelectOptions(select); return; }
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'simple-select';
+            select.parentNode.insertBefore(wrapper, select);
+            wrapper.appendChild(select);
+            select.classList.add('simple-select-native');
+            select.tabIndex = -1;
+
+            const parentWrapper = wrapper.parentElement;
+            if (parentWrapper && parentWrapper.classList.contains('select-wrapper')) {
+                parentWrapper.classList.add('js-enhanced');
+            }
+
+            const trigger = document.createElement('div');
+            trigger.className = 'dropdown-trigger simple-select-trigger';
+            trigger.setAttribute('role', 'button');
+            trigger.setAttribute('tabindex', '0');
+            trigger.innerHTML = `<span class="simple-select-label"></span><div class="dropdown-actions"><i class="fas fa-chevron-down arrow-icon"></i></div>`;
+            wrapper.appendChild(trigger);
+
+            const panel = document.createElement('div');
+            panel.className = 'dropdown-menu-panel simple-select-panel';
+            const list = document.createElement('div');
+            list.className = 'dropdown-options-list';
+            panel.appendChild(list);
+            wrapper.appendChild(panel);
+
+            enhancedSelects.set(select, { wrapper, trigger, label: trigger.querySelector('.simple-select-label'), list });
+
+            trigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (select.disabled) return;
+                toggleSimpleSelect(select);
+            });
+            trigger.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSimpleSelect(select); }
+                else if (e.key === 'Escape') closeSimpleSelect(select);
+            });
+
+            renderSimpleSelectOptions(select);
+        }
+
+        function renderSimpleSelectOptions(select) {
+            const state = enhancedSelects.get(select);
+            if (!state) return;
+            state.trigger.classList.toggle('disabled', !!select.disabled);
+            state.list.innerHTML = '';
+            Array.from(select.options).forEach((opt) => {
+                const item = document.createElement('div');
+                item.className = 'dropdown-option' + (opt.selected ? ' selected' : '') + (opt.disabled ? ' disabled' : '');
+                item.textContent = opt.textContent;
+                if (!opt.disabled) {
+                    item.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (select.value !== opt.value) {
+                            select.value = opt.value;
+                            select.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        syncSimpleSelectLabel(select);
+                        closeSimpleSelect(select);
+                    });
+                }
+                state.list.appendChild(item);
+            });
+            syncSimpleSelectLabel(select);
+        }
+
+        function syncSimpleSelectLabel(select) {
+            const state = enhancedSelects.get(select);
+            if (!state) return;
+            const opt = select.options[select.selectedIndex];
+            state.label.textContent = opt ? opt.textContent : '';
+            Array.from(state.list.children).forEach((el, i) => {
+                el.classList.toggle('selected', !!select.options[i] && select.options[i].selected);
+            });
+        }
+
+        function toggleSimpleSelect(select) {
+            const state = enhancedSelects.get(select);
+            if (!state) return;
+            if (state.wrapper.classList.contains('active')) { closeSimpleSelect(select); return; }
+            document.querySelectorAll('.simple-select.active').forEach((w) => w.classList.remove('active'));
+            state.wrapper.classList.remove('is-closing');
+            state.wrapper.classList.add('active');
+        }
+
+        function closeSimpleSelect(select) {
+            const state = enhancedSelects.get(select);
+            if (!state || !state.wrapper.classList.contains('active')) return;
+            const closeMs = parseFloat(
+                getComputedStyle(document.documentElement).getPropertyValue('--dropdown-close-dur')
+            ) || 150;
+            state.wrapper.classList.remove('active');
+            state.wrapper.classList.add('is-closing');
+            setTimeout(() => state.wrapper.classList.remove('is-closing'), closeMs);
+        }
+
+        // Enhances every not-yet-enhanced <select> under `root` (defaults to
+        // the whole document) — call after inserting new HTML that contains
+        // <select> elements (e.g. a dynamic session row).
+        function enhanceSelectsIn(root) {
+            (root || document).querySelectorAll('select').forEach(enhanceSelect);
+        }
+
+        document.addEventListener('click', (e) => {
+            document.querySelectorAll('.simple-select.active').forEach((w) => {
+                if (!w.contains(e.target)) w.classList.remove('active');
+            });
+        });
+
         // ===== Screen router (sidebar SPA) =====
         let currentScreen = 'dashboard';
 
@@ -5463,6 +5980,7 @@
             logs: { group: 'การเรียนการสอน', title: 'บันทึกการเรียน' },
             payments: { group: 'การเงิน', title: 'บันทึกการชำระเงิน' },
             finance: { group: 'การเงิน', title: 'สรุปการเงิน' },
+            staff: { group: 'ผู้ดูแลระบบ', title: 'ครูและพนักงาน' },
             access: { group: 'ผู้ดูแลระบบ', title: 'สิทธิ์การมองเห็น' },
             credits: { group: 'ผู้ดูแลระบบ', title: 'แก้ไขเครดิต' }
         };
@@ -5577,6 +6095,9 @@
             }
             if (screen === 'access') {
                 loadTeacherAssignments();
+            }
+            if (screen === 'staff') {
+                loadStaffScreen();
             }
 
             closeMobileMenuIfOpen();
@@ -6184,7 +6705,7 @@
         }
 
         async function deleteStudentFile(fileId) {
-            if (!confirm('ยืนยันการลบไฟล์นี้?')) return;
+            if (!(await confirmDialog('ยืนยันการลบไฟล์นี้?', { danger: true, okLabel: 'ลบไฟล์' }))) return;
 
             showLoading();
             try {
@@ -6257,6 +6778,9 @@
             document.getElementById('check-student-name').textContent = `${s.name}${s.nickname ? ' (' + s.nickname + ')' : ''}`;
             document.getElementById('check-student-meta').textContent =
                 `[${s.id}] · ${s.course || 'ไม่ระบุคอร์ส'}${s.phone ? ' · ' + s.phone : ''}${s.email ? ' · ' + s.email : ''}`;
+            toggleStudentEditPanel(false);
+            loadAvatarInto('check-avatar-wrap', `/students/${encodeURIComponent(s.id)}/avatar`, s.name);
+            loadAvatarInto('student-edit-avatar-wrap', `/students/${encodeURIComponent(s.id)}/avatar`, s.name);
 
             const p = d.payment || {};
             const admin = isAdminUser();
@@ -6371,7 +6895,7 @@
 
         // Admin: correct a recorded payment's amount.
         async function editPayment(paymentId, currentAmount) {
-            const input = prompt('แก้ไขจำนวนเงิน (บาท):', String(currentAmount || ''));
+            const input = await promptDialog('แก้ไขจำนวนเงิน (บาท):', { title: 'แก้ไขจำนวนเงิน', defaultValue: String(currentAmount || '') });
             if (input === null) return;
             const amount = Number(input);
             if (!amount || amount <= 0) { showModal('จำนวนเงินไม่ถูกต้อง', 'กรุณากรอกจำนวนเงินให้ถูกต้อง', 'error'); return; }
@@ -6462,10 +6986,135 @@
             }
         }
 
+        // Fetches a profile photo through the authenticated /avatar route and
+        // renders it as a blob URL inside `wrapId` (falls back to initials if
+        // none is set yet — a 404 here just means "no photo uploaded").
+        const avatarBlobUrls = {};
+        async function loadAvatarInto(wrapId, path, nameForInitials) {
+            const wrap = document.getElementById(wrapId);
+            if (!wrap) return;
+            wrap.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
+            if (avatarBlobUrls[wrapId]) { URL.revokeObjectURL(avatarBlobUrls[wrapId]); delete avatarBlobUrls[wrapId]; }
+            try {
+                const response = await apiFetch(path);
+                if (!response.ok) throw new Error('no avatar');
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                avatarBlobUrls[wrapId] = url;
+                wrap.innerHTML = `<img src="${url}" alt="รูปโปรไฟล์">`;
+            } catch (error) {
+                wrap.textContent = nameForInitials ? studentInitials(nameForInitials) : '';
+                if (!nameForInitials) wrap.innerHTML = '<i class="fas fa-user"></i>';
+            }
+        }
+
+        function generateClientPassword() {
+            const sets = ['ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghjkmnpqrstuvwxyz', '23456789', '!@#$%'];
+            const all = sets.join('');
+            const bytes = crypto.getRandomValues(new Uint8Array(16));
+            const chars = sets.map((s, i) => s[bytes[i] % s.length]);
+            for (let i = sets.length; i < bytes.length; i++) chars.push(all[bytes[i] % all.length]);
+            return chars.sort(() => Math.random() - 0.5).join('');
+        }
+
+        function generateStudentPassword() {
+            document.getElementById('edit-student-password').value = generateClientPassword();
+        }
+
+        function toggleStudentEditPanel(show) {
+            const card = document.getElementById('student-edit-card');
+            if (!card) return;
+            const willShow = show === undefined ? card.style.display === 'none' : !!show;
+            card.style.display = willShow ? '' : 'none';
+            if (!willShow) return;
+            const s = checkData && checkData.student;
+            if (!s) return;
+            document.getElementById('edit-student-name').value = s.name || '';
+            document.getElementById('edit-student-nickname').value = s.nickname || '';
+            document.getElementById('edit-student-email').value = s.email || '';
+            document.getElementById('edit-student-phone').value = s.phone || '';
+            const courseSelect = document.getElementById('edit-student-course');
+            courseSelect.value = s.course || '';
+            syncSimpleSelectLabel(courseSelect);
+            document.getElementById('edit-student-username').value = '';
+            document.getElementById('edit-student-password').value = '';
+        }
+
+        async function uploadStudentAvatar() {
+            const fileInput = document.getElementById('student-edit-avatar-input');
+            const file = fileInput.files[0];
+            if (!file || !selectedStudentId) return;
+            showLoading();
+            try {
+                const token = await getFilesApiToken();
+                const formData = new FormData();
+                formData.append('file', file);
+                const response = await fetch(`${filesApiUrl}/students/${encodeURIComponent(selectedStudentId)}/avatar`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` },
+                    body: formData
+                });
+                const result = await response.json().catch(() => ({}));
+                hideLoading();
+                fileInput.value = '';
+                if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+                showToast('อัปโหลดรูปสำเร็จ', result.message, 'success');
+                loadAvatarInto('check-avatar-wrap', `/students/${encodeURIComponent(selectedStudentId)}/avatar`, checkData?.student?.name);
+                loadAvatarInto('student-edit-avatar-wrap', `/students/${encodeURIComponent(selectedStudentId)}/avatar`, checkData?.student?.name);
+                loadStudentList();
+            } catch (error) {
+                hideLoading();
+                console.error('uploadStudentAvatar:', error);
+                showModal('อัปโหลดรูปไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
+            }
+        }
+
+        async function saveStudentEdit() {
+            if (!selectedStudentId) return;
+            const name = document.getElementById('edit-student-name').value.trim();
+            if (!name) { triggerFieldError('edit-student-name', 'กรุณากรอกชื่อ'); return; }
+
+            const payload = {
+                name,
+                nickname: document.getElementById('edit-student-nickname').value.trim(),
+                email: document.getElementById('edit-student-email').value.trim(),
+                phone: document.getElementById('edit-student-phone').value.trim(),
+                course: document.getElementById('edit-student-course').value,
+            };
+            const username = document.getElementById('edit-student-username').value.trim();
+            const password = document.getElementById('edit-student-password').value.trim();
+            if (username) payload.username = username;
+            if (password) payload.password = password;
+
+            showLoading();
+            try {
+                const response = await apiFetch(`/students/${encodeURIComponent(selectedStudentId)}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                hideLoading();
+                if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+
+                if (result.credentials && result.credentials.password) {
+                    showModal('บันทึกข้อมูลสำเร็จ', `${result.message}\n\nรหัสผ่านใหม่: ${result.credentials.password}\n(กรุณาคัดลอกไว้ — จะไม่แสดงอีก)`, 'success');
+                } else {
+                    showToast('บันทึกข้อมูลสำเร็จ', result.message, 'success');
+                }
+                toggleStudentEditPanel(false);
+                loadStudentCheck();
+                loadStudentList();
+            } catch (error) {
+                hideLoading();
+                console.error('saveStudentEdit:', error);
+                showModal('บันทึกข้อมูลไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
+            }
+        }
+
         async function deleteSelectedStudent() {
             const student = allStudentsData.find(s => s.id === selectedStudentId);
             if (!student) return;
-            if (!confirm(`ยืนยันการลบนักเรียน ${student.name} (${student.id}) ออกจากระบบ?\n\nประวัติการเรียนและการชำระเงินจะยังถูกเก็บไว้ และบัญชีเข้าสู่ระบบของนักเรียนจะไม่ถูกลบ`)) return;
+            if (!(await confirmDialog(`ยืนยันการลบนักเรียน ${student.name} (${student.id}) ออกจากระบบ?\n\nประวัติการเรียนและการชำระเงินจะยังถูกเก็บไว้ และบัญชีเข้าสู่ระบบของนักเรียนจะไม่ถูกลบ`, { title: 'ลบนักเรียนออกจากระบบ', danger: true, okLabel: 'ลบนักเรียน' }))) return;
 
             showLoading();
             try {
@@ -6540,6 +7189,7 @@
                     <button class="btn btn-secondary" style="padding: 8px 10px;" onclick="copyScheduleSession(${i})" title="คัดลอกเวลานี้เป็นคาบใหม่"><i class="fas fa-copy"></i></button>
                     <button class="btn btn-danger" style="padding: 8px 10px;" onclick="removeScheduleSession(${i})" title="ลบคาบนี้"><i class="fas fa-trash"></i></button>
                 </div>`).join('');
+            enhanceSelectsIn(list);
             updateSchedTotal();
         }
 
@@ -6710,7 +7360,7 @@
         }
 
         async function reviseSchedule(id) {
-            const note = prompt('ข้อความถึงครู (บอกว่าต้องปรับปรุงอะไร):');
+            const note = await promptDialog('ข้อความถึงครู (บอกว่าต้องปรับปรุงอะไร):', { title: 'ขอให้ปรับปรุงตารางเรียน' });
             if (note === null) return;
             showLoading();
             try {
@@ -6731,7 +7381,7 @@
         }
 
         async function approveSchedule(id) {
-            if (!confirm('อนุมัติตารางเรียนนี้? ระบบจะสร้างลิงก์ชำระเงินสำหรับส่งให้ผู้ปกครอง และตารางจะเริ่มทำงานทันทีเมื่อชำระสำเร็จ')) return;
+            if (!(await confirmDialog('อนุมัติตารางเรียนนี้? ระบบจะสร้างลิงก์ชำระเงินสำหรับส่งให้ผู้ปกครอง และตารางจะเริ่มทำงานทันทีเมื่อชำระสำเร็จ', { title: 'อนุมัติตารางเรียน', okLabel: 'อนุมัติ' }))) return;
             showLoading();
             try {
                 const response = await apiFetch(`/schedules/${id}/approve`, { method: 'POST' });
@@ -6756,7 +7406,7 @@
         }
 
         async function rejectSchedule(id) {
-            const reason = prompt('เหตุผลที่ปฏิเสธ (ครูจะเห็นข้อความนี้):');
+            const reason = await promptDialog('เหตุผลที่ปฏิเสธ (ครูจะเห็นข้อความนี้):', { title: 'ปฏิเสธตารางเรียน' });
             if (reason === null) return;
             showLoading();
             try {
@@ -6777,7 +7427,7 @@
         }
 
         async function cancelSchedule(id) {
-            if (!confirm('ยกเลิกตารางเรียนนี้หรือไม่?')) return;
+            if (!(await confirmDialog('ยกเลิกตารางเรียนนี้หรือไม่?', { title: 'ยกเลิกตารางเรียน', danger: true, okLabel: 'ยกเลิกตาราง' }))) return;
             showLoading();
             try {
                 const response = await apiFetch(`/schedules/${id}/cancel`, { method: 'POST' });
@@ -6815,6 +7465,7 @@
             select.innerHTML = '<option value="">-- เลือกตารางเรียนที่อนุมัติแล้ว --</option>' +
                 eligible.map(r => `<option value="${r.id}">${escapeHtml(r.studentName)} · เดือน ${escapeHtml(r.month)} (${r.sessionCount} ครั้ง)</option>`).join('');
             if (eligible.some(r => String(r.id) === current)) select.value = current;
+            enhanceSelect(select);
             onAmendScheduleChange();
         }
 
@@ -6890,6 +7541,7 @@
                     </div>
                     <button class="btn btn-danger" style="padding: 8px 10px;" onclick="removeAmendSession(${i})" title="ลบแถวนี้"><i class="fas fa-trash"></i></button>
                 </div>`).join('');
+            enhanceSelectsIn(list);
         }
 
         function renderAmendRemoveList() {
@@ -7007,7 +7659,7 @@
         }
 
         async function approveAmendment(id) {
-            if (!confirm('อนุมัติคำร้องนี้?')) return;
+            if (!(await confirmDialog('อนุมัติคำร้องนี้?', { title: 'อนุมัติคำร้อง', okLabel: 'อนุมัติ' }))) return;
             showLoading();
             try {
                 const response = await apiFetch(`/schedule-amendments/${id}/approve`, { method: 'POST' });
@@ -7028,7 +7680,7 @@
         }
 
         async function rejectAmendment(id) {
-            const reason = prompt('เหตุผลที่ปฏิเสธ:');
+            const reason = await promptDialog('เหตุผลที่ปฏิเสธ:', { title: 'ปฏิเสธคำร้อง' });
             if (reason === null) return;
             showLoading();
             try {
@@ -7049,7 +7701,7 @@
         }
 
         async function cancelAmendment(id) {
-            if (!confirm('ยกเลิกคำร้องนี้หรือไม่?')) return;
+            if (!(await confirmDialog('ยกเลิกคำร้องนี้หรือไม่?', { title: 'ยกเลิกคำร้อง', danger: true, okLabel: 'ยกเลิกคำร้อง' }))) return;
             showLoading();
             try {
                 const response = await apiFetch(`/schedule-amendments/${id}/cancel`, { method: 'POST' });
@@ -7096,6 +7748,195 @@
             } catch (error) {
                 console.error('loadAccessDiagnostics:', error);
                 chipsEl.innerHTML = '';
+            }
+        }
+
+        // ===== Teacher / staff accounts (admin) =====
+
+        const STAFF_ROLE_LABEL = { admin: 'แอดมิน', teacher: 'ครู', staff: 'พนักงาน' };
+
+        async function createStaffAccount() {
+            const name = document.getElementById('staff-new-name').value.trim();
+            const email = document.getElementById('staff-new-email').value.trim();
+            if (!name) { triggerFieldError('staff-new-name', 'กรุณากรอกชื่อ'); return; }
+            if (!email) { triggerFieldError('staff-new-email', 'กรุณากรอกอีเมล'); return; }
+
+            const payload = {
+                name,
+                email,
+                role: document.getElementById('staff-new-role').value,
+                title: document.getElementById('staff-new-title').value.trim(),
+                phone: document.getElementById('staff-new-phone').value.trim(),
+            };
+            showLoading();
+            try {
+                const response = await apiFetch('/staff', { method: 'POST', body: JSON.stringify(payload) });
+                const result = await response.json();
+                hideLoading();
+                if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+                showModal('สร้างบัญชีสำเร็จ', result.message, 'success');
+                ['staff-new-name', 'staff-new-email', 'staff-new-title', 'staff-new-phone'].forEach(id => { document.getElementById(id).value = ''; });
+                loadStaffScreen();
+            } catch (error) {
+                hideLoading();
+                console.error('createStaffAccount:', error);
+                showModal('สร้างบัญชีไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
+            }
+        }
+
+        async function loadStaffScreen() {
+            const listEl = document.getElementById('staff-list');
+            try {
+                const response = await apiFetch('/staff');
+                const rows = await response.json();
+                if (!response.ok) throw new Error(rows.error || `HTTP ${response.status}`);
+                renderStaffList(Array.isArray(rows) ? rows : []);
+            } catch (error) {
+                console.error('loadStaffScreen:', error);
+                listEl.innerHTML = '<div class="form-hint">โหลดรายชื่อไม่สำเร็จ (ต้องเป็นแอดมินเท่านั้น)</div>';
+            }
+        }
+
+        function staffRowKey(identity) {
+            return 'staff-row-' + identity.replace(/[^a-zA-Z0-9]/g, '_');
+        }
+
+        function renderStaffList(rows) {
+            const listEl = document.getElementById('staff-list');
+            if (!rows.length) { listEl.innerHTML = '<div class="form-hint">ยังไม่มีข้อมูลบุคลากร</div>'; return; }
+            listEl.innerHTML = rows.map(r => {
+                const key = staffRowKey(r.identity);
+                const roleLabel = STAFF_ROLE_LABEL[r.role] || (r.isAdmin ? 'แอดมิน' : '-');
+                const metaBits = [r.title, r.phone, r.identity].filter(Boolean);
+                return `
+                <div class="admin-card" style="margin-top: 12px;" id="${key}">
+                    <div class="card-title-bar">
+                        <span class="card-icon profile-avatar" id="${key}-avatar"><i class="fas fa-user"></i></span>
+                        <div>
+                            <h3>${escapeHtml(r.name || r.identity)} <span class="badge-soft">${escapeHtml(roleLabel)}</span></h3>
+                            <p>${escapeHtml(metaBits.join(' · '))}</p>
+                        </div>
+                    </div>
+                    <div class="form-body">
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <input type="file" id="${key}-avatar-input" accept="image/*" style="display: none;" onchange="uploadStaffAvatar('${escapeJs(r.identity)}')">
+                            <button class="btn btn-secondary" onclick="document.getElementById('${key}-avatar-input').click()"><i class="fas fa-camera"></i> เปลี่ยนรูปโปรไฟล์</button>
+                            <button class="btn btn-secondary" onclick="toggleStaffEditRow('${escapeJs(r.identity)}')"><i class="fas fa-user-pen"></i> แก้ไขข้อมูล</button>
+                            <button class="btn btn-secondary" onclick="sendStaffPasswordTicket('${escapeJs(r.identity)}', this)"><i class="fas fa-key"></i> เปลี่ยนรหัสผ่าน</button>
+                            <button class="btn btn-secondary" onclick="sendStaffPasskeyTicket('${escapeJs(r.identity)}', this)"><i class="fas fa-fingerprint"></i> ลงทะเบียน Passkey</button>
+                        </div>
+                        <div id="${key}-edit" style="display: none; margin-top: 8px;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div class="form-group">
+                                    <label><i class="fas fa-user"></i> ชื่อ-นามสกุล</label>
+                                    <input type="text" id="${key}-name" value="${escapeHtml(r.name || '')}">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-id-badge"></i> ตำแหน่ง</label>
+                                    <input type="text" id="${key}-title" value="${escapeHtml(r.title || '')}">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-phone"></i> เบอร์โทรศัพท์</label>
+                                    <input type="tel" id="${key}-phone" value="${escapeHtml(r.phone || '')}">
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                                <button class="btn btn-secondary" onclick="toggleStaffEditRow('${escapeJs(r.identity)}', false)">ยกเลิก</button>
+                                <button class="btn btn-primary" onclick="saveStaffEdit('${escapeJs(r.identity)}')"><i class="fas fa-save"></i> บันทึก</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            rows.forEach(r => loadAvatarInto(`${staffRowKey(r.identity)}-avatar`, `/staff/${encodeURIComponent(r.identity)}/avatar`, r.name || r.identity));
+        }
+
+        function toggleStaffEditRow(identity, show) {
+            const el = document.getElementById(`${staffRowKey(identity)}-edit`);
+            if (!el) return;
+            el.style.display = (show === undefined ? el.style.display === 'none' : show) ? '' : 'none';
+        }
+
+        async function saveStaffEdit(identity) {
+            const key = staffRowKey(identity);
+            const payload = {
+                name: document.getElementById(`${key}-name`).value.trim(),
+                title: document.getElementById(`${key}-title`).value.trim(),
+                phone: document.getElementById(`${key}-phone`).value.trim(),
+            };
+            if (!payload.name) { triggerFieldError(`${key}-name`, 'กรุณากรอกชื่อ'); return; }
+            showLoading();
+            try {
+                const response = await apiFetch(`/staff/${encodeURIComponent(identity)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+                const result = await response.json();
+                hideLoading();
+                if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+                showToast('บันทึกสำเร็จ', result.message, 'success');
+                loadStaffScreen();
+            } catch (error) {
+                hideLoading();
+                console.error('saveStaffEdit:', error);
+                showModal('บันทึกไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
+            }
+        }
+
+        async function uploadStaffAvatar(identity) {
+            const key = staffRowKey(identity);
+            const fileInput = document.getElementById(`${key}-avatar-input`);
+            const file = fileInput.files[0];
+            if (!file) return;
+            showLoading();
+            try {
+                const token = await getFilesApiToken();
+                const formData = new FormData();
+                formData.append('file', file);
+                const response = await fetch(`${filesApiUrl}/staff/${encodeURIComponent(identity)}/avatar`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` },
+                    body: formData
+                });
+                const result = await response.json().catch(() => ({}));
+                hideLoading();
+                fileInput.value = '';
+                if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+                showToast('อัปโหลดรูปสำเร็จ', result.message, 'success');
+                loadAvatarInto(`${key}-avatar`, `/staff/${encodeURIComponent(identity)}/avatar`, identity);
+            } catch (error) {
+                hideLoading();
+                console.error('uploadStaffAvatar:', error);
+                showModal('อัปโหลดรูปไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
+            }
+        }
+
+        async function sendStaffPasswordTicket(identity, btn) {
+            showLoading();
+            try {
+                const response = await apiFetch(`/staff/${encodeURIComponent(identity)}/password-ticket`, { method: 'POST' });
+                const result = await response.json();
+                hideLoading();
+                if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+                await copyPaymentLink(result.url, btn);
+                showToast('คัดลอกลิงก์แล้ว', 'ส่งลิงก์นี้ให้ผู้ใช้เพื่อตั้งรหัสผ่านใหม่ด้วยตนเอง (ลิงก์นี้ใช้ได้ 7 วัน)', 'success');
+            } catch (error) {
+                hideLoading();
+                console.error('sendStaffPasswordTicket:', error);
+                showModal('สร้างลิงก์ไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
+            }
+        }
+
+        async function sendStaffPasskeyTicket(identity, btn) {
+            showLoading();
+            try {
+                const response = await apiFetch(`/staff/${encodeURIComponent(identity)}/passkey-ticket`, { method: 'POST' });
+                const result = await response.json();
+                hideLoading();
+                if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+                await copyPaymentLink(result.url, btn);
+                showToast('คัดลอกลิงก์แล้ว', 'ส่งลิงก์นี้ให้ผู้ใช้เพื่อลงทะเบียน Passkey บนอุปกรณ์ของตนเอง', 'success');
+            } catch (error) {
+                hideLoading();
+                console.error('sendStaffPasskeyTicket:', error);
+                showModal('สร้างลิงก์ไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
             }
         }
 
@@ -7685,7 +8526,9 @@
                         showModal('สร้างบัญชีสำเร็จ', result.message, 'success');
                         ['new-name', 'new-nickname', 'new-email', 'new-phone', 'new-course'].forEach(id => {
                             const el = document.getElementById(id);
-                            if (el) el.value = '';
+                            if (!el) return;
+                            el.value = '';
+                            if (el.tagName === 'SELECT') syncSimpleSelectLabel(el);
                         });
                         loadStudentList();
                     } else {
@@ -7854,7 +8697,7 @@
         }
 
         async function deactivatePaymentLink(id) {
-            if (!confirm('ยกเลิกลิงก์ชำระเงินนี้หรือไม่? ลูกค้าจะไม่สามารถใช้ลิงก์นี้ชำระเงินได้อีก')) return;
+            if (!(await confirmDialog('ยกเลิกลิงก์ชำระเงินนี้หรือไม่? ลูกค้าจะไม่สามารถใช้ลิงก์นี้ชำระเงินได้อีก', { title: 'ยกเลิกลิงก์ชำระเงิน', danger: true, okLabel: 'ยกเลิกลิงก์' }))) return;
             showLoading();
             try {
                 const response = await apiFetch(`/payment-links/${id}/deactivate`, { method: 'POST' });
@@ -8115,6 +8958,7 @@
             select.innerHTML = '<option value="">คอร์สทั้งหมด</option>' +
                 courses.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
             if (courses.includes(current)) select.value = current;
+            enhanceSelect(select);
         }
 
         // Sort / pagination / row-selection state for the students table.
@@ -8215,7 +9059,7 @@
         async function bulkDeleteStudents() {
             const ids = [...studentsSelected];
             if (!ids.length) return;
-            if (!confirm(`ยืนยันการลบนักเรียน ${ids.length} คนออกจากระบบ?\n\nประวัติการเรียนและการชำระเงินจะยังถูกเก็บไว้ และบัญชีเข้าสู่ระบบของนักเรียนจะไม่ถูกลบ`)) return;
+            if (!(await confirmDialog(`ยืนยันการลบนักเรียน ${ids.length} คนออกจากระบบ?\n\nประวัติการเรียนและการชำระเงินจะยังถูกเก็บไว้ และบัญชีเข้าสู่ระบบของนักเรียนจะไม่ถูกลบ`, { title: 'ลบนักเรียนออกจากระบบ', danger: true, okLabel: 'ลบนักเรียน' }))) return;
 
             showLoading();
             let okCount = 0;

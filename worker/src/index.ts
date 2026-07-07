@@ -12,6 +12,7 @@ import manage, {
   visibleStudentIds,
   canSeeStudent,
 } from './manage';
+import accounts from './accounts';
 import { verifyStripeSignature } from './stripe';
 
 const app = new Hono<AppBindings>();
@@ -172,6 +173,7 @@ app.use('*', verifyAuth);
 
 app.route('/', core);
 app.route('/', manage);
+app.route('/', accounts);
 
 app.get('/me', (c) => c.json(c.get('user')));
 

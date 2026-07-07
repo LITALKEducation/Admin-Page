@@ -65,8 +65,12 @@ changes in this repo for that wiring.
 admin UI), matching the old GAS behaviour:
 
 1. Auth0 Dashboard → **Applications → Create Application → Machine to
-   Machine**, authorize it for the **Auth0 Management API** with the
-   `create:users` scope.
+   Machine**, authorize it for the **Auth0 Management API** with these
+   scopes: `create:users`, `read:users`, `update:users`,
+   `create:role_members`, `create:user_tickets`,
+   `create:guardian_enrollment_tickets`. (The last four are only needed for
+   the account-management routes below — student auto-create only needs
+   `create:users`.)
 2. Store its credentials as Worker secrets:
    ```sh
    npx wrangler secret put AUTH0_MGMT_CLIENT_ID
@@ -78,6 +82,33 @@ admin UI), matching the old GAS behaviour:
 
 If the secrets are not set, student creation still works — it just skips the
 Auth0 account and says so in the success message.
+
+### Editing student accounts, and creating teacher/staff accounts
+
+With the same Management API credentials, the admin panel can also:
+
+- Edit a student's name, nickname, contact email, phone, course, Auth0
+  `username`, and Auth0 password (`PATCH /students/:id`,
+  `POST /students/:id/reset-password`) and upload a profile photo
+  (`POST /students/:id/avatar`, stored in R2 under `avatars/students/...`).
+  The student's *login* email (`<id>@STUDENT_EMAIL_DOMAIN`) is never changed
+  by these routes — that convention is load-bearing for the student portal.
+- Create teacher/staff login accounts in-app (`POST /staff`) and edit their
+  name/phone/title/photo (`PATCH /staff/:identity`,
+  `POST /staff/:identity/avatar`).
+- Send a self-service password-change link
+  (`POST /staff/:identity/password-ticket`) or passkey/MFA enrollment link
+  (`POST /staff/:identity/passkey-ticket`) for the teacher/staff member to
+  open on their own device — a WebAuthn passkey ceremony can only run on the
+  enrolling user's own device, so these return a link for the admin to send
+  rather than performing the enrollment directly.
+
+To let `POST /staff` also assign the right Auth0 role, set the role ids in
+`wrangler.toml` (`AUTH0_ADMIN_ROLE_ID` / `AUTH0_TEACHER_ROLE_ID` /
+`AUTH0_STAFF_ROLE_ID`, from step 4 above). If a role id isn't set, the
+account is still created — the response just says to assign the role
+manually. New teacher/staff accounts land in `AUTH0_STAFF_CONNECTION` (falls
+back to `AUTH0_DB_CONNECTION` if unset).
 
 ## Stripe setup (payment links)
 
@@ -204,7 +235,18 @@ permissions scoped to this account.
 | DELETE | `/files/:fileId`         | `files:delete` | Soft-deletes (D1) + deletes from R2 |
 | GET    | `/students`              | `data:read`    | Non-deleted students, filtered by teacher visibility |
 | POST   | `/students`              | admin          | Creates student (+ Auth0 login if configured) |
+| PATCH  | `/students/:id`          | admin          | Edit name/nickname/email/phone/course + Auth0 username/password (login email unchanged) |
+| POST   | `/students/:id/reset-password` | admin    | Sets (or generates) a new Auth0 password, returned once |
+| POST   | `/students/:id/avatar`   | admin          | multipart form: `file` (image, ≤5MB) — profile photo |
+| GET    | `/students/:id/avatar`   | `data:read`+visibility | Streams the student's profile photo from R2 |
 | DELETE | `/students/:id`          | admin          | Soft-deletes the student in-app; Auth0 login untouched |
+| GET    | `/staff`                 | admin          | List staff/teacher directory (login identities + profile) |
+| POST   | `/staff`                 | admin          | Creates a teacher/staff Auth0 login (+ role if configured) |
+| PATCH  | `/staff/:identity`       | admin          | Edit name/phone/title |
+| POST   | `/staff/:identity/avatar` | admin         | multipart form: `file` (image, ≤5MB) — profile photo |
+| GET    | `/staff/:identity/avatar` | (any valid token) | Streams the staff member's profile photo from R2 |
+| POST   | `/staff/:identity/password-ticket` | admin  | Returns a self-service password-change link |
+| POST   | `/staff/:identity/passkey-ticket` | admin   | Returns a self-service passkey/MFA enrollment link |
 | GET    | `/student-check/:id`     | `data:read`    | Check screen data: payment, study days, logs, schedules, credit balance |
 | POST   | `/schedules`             | `data:write`   | Teacher submits a monthly schedule (credits applied first) |
 | GET    | `/schedules?status=`     | `data:read`    | Teachers see own submissions; admins see all |

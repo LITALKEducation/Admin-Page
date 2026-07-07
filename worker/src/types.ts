@@ -11,6 +11,15 @@ export interface Env {
   PUBLIC_FILES_ORIGIN?: string;
   STUDENT_EMAIL_DOMAIN: string;
   AUTH0_DB_CONNECTION: string;
+  // Database connection new teacher/staff accounts are created in. Falls
+  // back to AUTH0_DB_CONNECTION if unset.
+  AUTH0_STAFF_CONNECTION?: string;
+  // Role ids (User Management → Roles → [role] → copy the id from the URL)
+  // assigned to accounts created via POST /staff. Role assignment is
+  // skipped (with a message) for any that are unset.
+  AUTH0_ADMIN_ROLE_ID?: string;
+  AUTH0_TEACHER_ROLE_ID?: string;
+  AUTH0_STAFF_ROLE_ID?: string;
   // Secrets (set via `wrangler secret put`, absent in plain `wrangler dev`)
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
