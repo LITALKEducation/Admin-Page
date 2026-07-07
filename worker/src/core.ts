@@ -48,6 +48,7 @@ core.post('/students', requireAdmin, async (c) => {
       if (c.env.AUTH0_MGMT_CLIENT_ID && c.env.AUTH0_MGMT_CLIENT_SECRET) {
         try {
           const creds = await createStudentAuth0User(c.env, id, body.name);
+          await c.env.DB.prepare(`UPDATE students SET auth0_user_id = ? WHERE id = ?`).bind(creds.userId, id).run();
           message += ` — บัญชีเข้าสู่ระบบ: ${creds.email} รหัสผ่านชั่วคราว: ${creds.password}`;
         } catch (err) {
           message += ` — แต่สร้างบัญชีเข้าสู่ระบบไม่สำเร็จ (${err instanceof Error ? err.message : 'Auth0 error'}) กรุณาสร้างใน Auth0 เอง`;
