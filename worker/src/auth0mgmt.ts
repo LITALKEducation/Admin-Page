@@ -182,15 +182,18 @@ export async function createPasswordChangeTicket(env: Env, userId: string): Prom
   return json.ticket;
 }
 
-// Creates a Guardian MFA enrollment ticket. WebAuthn/passkey registration is
-// a browser ceremony bound to the enrolling user's own device, so this
-// cannot be done "on behalf of" someone from the admin's browser — instead
+// Creates a Guardian MFA enrollment ticket scoped to `webauthn-platform`
+// (Auth0's factor id for a device's built-in authenticator — Face ID,
+// Windows Hello, etc., i.e. a passkey) so the link the admin sends opens
+// straight into passkey registration instead of a pick-any-factor screen.
+// WebAuthn is a browser ceremony bound to the enrolling user's own device,
+// so this cannot be done "on behalf of" someone from the admin's browser —
 // the admin sends this link to the teacher/staff member, who opens it on
-// their own device to register a passkey (or other enabled MFA factor).
+// their own device.
 export async function createGuardianEnrollmentTicket(env: Env, userId: string): Promise<string> {
   const res = await mgmtFetch(env, '/guardian/enrollments/ticket', {
     method: 'POST',
-    body: JSON.stringify({ user_id: userId, send_mail: false }),
+    body: JSON.stringify({ user_id: userId, send_mail: false, factor: 'webauthn-platform' }),
   });
   if (!res.ok) await mgmtError(res, 'Auth0 MFA enrollment ticket failed');
   const json = (await res.json()) as { ticket_url: string };
