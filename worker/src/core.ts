@@ -6,6 +6,7 @@ import { createStripePaymentLink, deactivateStripePaymentLink, StripeError, with
 import { createStudentAuth0User } from './auth0mgmt';
 import { bangkokToday, bangkokMonth, daysAgo, isYmd } from './dates';
 import { visibleStudentIds, canSeeStudent, activateApprovedSchedulesForStudent, activateAwaitingAmendmentsForStudent } from './manage';
+import { createMeetEvent } from './googlemeet';
 
 export { bangkokToday, bangkokMonth } from './dates';
 
@@ -146,8 +147,8 @@ core.post('/payments', requirePermission('data:write'), async (c) => {
 
   // A successful payment starts the student's approved monthly schedule (or
   // add-hours request) immediately (sessions become bookings).
-  const activated = await activateApprovedSchedulesForStudent(c.env.DB, body.studentId);
-  const amendmentsActivated = await activateAwaitingAmendmentsForStudent(c.env.DB, body.studentId);
+  const activated = await activateApprovedSchedulesForStudent(c.env.DB, c.env, body.studentId);
+  const amendmentsActivated = await activateAwaitingAmendmentsForStudent(c.env.DB, c.env, body.studentId);
   let message = 'บันทึกการชำระเงินสำเร็จ';
   if (activated > 0) message += ' — ตารางเรียนที่อนุมัติไว้เริ่มทำงานแล้ว';
   if (amendmentsActivated > 0) message += ' — เพิ่มคาบเรียนตามคำร้องเรียบร้อยแล้ว';
@@ -189,11 +190,29 @@ core.post('/bookings', requirePermission('data:write'), async (c) => {
   const user = c.get('user');
   const visible = await visibleStudentIds(c.env.DB, user);
   if (!canSeeStudent(visible, body.studentId)) return c.json({ error: 'Forbidden' }, 403);
+
+  const taken = await c.env.DB.prepare(
+    `SELECT 1 FROM bookings WHERE booking_date = ? AND booking_time = ? AND status = 'booked'`,
+  )
+    .bind(body.bookingDate, body.bookingTime)
+    .first();
+  if (taken) return c.json({ error: 'ช่วงเวลานี้ถูกจองแล้ว กรุณาเลือกเวลาอื่น' }, 409);
+
+  const student = await c.env.DB.prepare(`SELECT name, course FROM students WHERE id = ?`)
+    .bind(body.studentId)
+    .first<{ name: string; course: string | null }>();
+  const meet = await createMeetEvent(c.env, {
+    studentName: student?.name ?? body.studentId,
+    course: student?.course,
+    date: body.bookingDate!,
+    time: body.bookingTime!,
+  });
+
   try {
     await c.env.DB.prepare(
-      `INSERT INTO bookings (student_id, booking_date, booking_time, notes, created_by) VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO bookings (student_id, booking_date, booking_time, notes, created_by, meet_link, calendar_event_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
-      .bind(body.studentId, body.bookingDate, body.bookingTime, body.notes ?? null, user.email)
+      .bind(body.studentId, body.bookingDate, body.bookingTime, body.notes ?? null, user.email, meet?.meetLink ?? null, meet?.eventId ?? null)
       .run();
   } catch (err) {
     if (String(err).includes('UNIQUE')) {
@@ -202,7 +221,9 @@ core.post('/bookings', requirePermission('data:write'), async (c) => {
     throw err;
   }
   await logAudit(c.env.DB, user, 'CREATE_BOOKING', body.studentId, null, true);
-  return c.json({ ok: true, message: `จองเวลาเรียนวันที่ ${body.bookingDate} เวลา ${body.bookingTime} สำเร็จ` });
+  let message = `จองเวลาเรียนวันที่ ${body.bookingDate} เวลา ${body.bookingTime} สำเร็จ`;
+  if (meet?.meetLink) message += ' — สร้างลิงก์ Google Meet ให้แล้ว';
+  return c.json({ ok: true, message, meetLink: meet?.meetLink ?? null });
 });
 
 // ===== Dashboard =====
@@ -244,6 +265,7 @@ core.get('/dashboard', requirePermission('data:read'), async (c) => {
     ).bind(month, month),
     c.env.DB.prepare(
       `SELECT b.booking_time AS time, COALESCE(s.name, b.student_id) AS name, s.course AS course, b.student_id AS studentId,
+              b.meet_link AS meetLink,
               EXISTS(SELECT 1 FROM study_logs l WHERE l.student_id = b.student_id AND l.log_date = ?) AS done
        FROM bookings b LEFT JOIN students s ON s.id = b.student_id
        WHERE b.booking_date = ? AND b.status = 'booked'

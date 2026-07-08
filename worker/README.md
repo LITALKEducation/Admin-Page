@@ -143,6 +143,63 @@ student id + creator email as metadata; when Stripe reports the session as
 paid, the webhook records a `payments` row automatically (source `stripe`)
 and marks the link `paid`. Amounts are THB.
 
+## Google Meet auto-creation (booking)
+
+Every time a class is booked — the manual "จองเวลาเรียน" wizard, a monthly
+schedule activating on payment, or an add-hours amendment — the Worker
+creates a Google Calendar event for that session with a Google Meet
+conference attached, and stores the link on the booking row
+(`bookings.meet_link`). Cancelling that booking (student deletion, schedule
+resync, a "withdraw hours" amendment) deletes the Calendar event too. If
+Google Meet isn't configured, or the API call fails, the booking is still
+created — it's just missing a link.
+
+**Auth approach:** this uses a plain OAuth "refresh token" — not a service
+account, since service accounts can only impersonate other users (and thus
+create Meet links) via Google Workspace domain-wide delegation, which a
+personal/plain Gmail account doesn't have. Instead, one human logs into the
+Google account that should own the class calendar (a teacher's Gmail, or a
+dedicated one you create for this, e.g. `litalk.classes@gmail.com`) **once**,
+which mints a refresh token the Worker reuses indefinitely.
+
+1. In [Google Cloud Console](https://console.cloud.google.com/) (any Google
+   account works — no Workspace needed), create a project, then
+   **APIs & Services → Library** → enable the **Google Calendar API**.
+2. **APIs & Services → OAuth consent screen**:
+   - User type: **External**.
+   - Fill in the required fields (app name, your email as support/developer
+     contact) — anything reasonable is fine, this app is only ever used by
+     you.
+   - Scopes: add `https://www.googleapis.com/auth/calendar.events`.
+   - Under **Audience**, click **Publish App** to move it from "Testing" to
+     "In production". **This matters**: refresh tokens minted while the
+     consent screen is still "Testing" expire after 7 days. Publishing
+     doesn't require Google's verification review for this use case — you'll
+     just see an "unverified app" warning during login in the next step
+     (click **Advanced → Go to [app name] (unsafe)** to continue), which is
+     expected and fine for a single-account internal tool.
+3. **APIs & Services → Credentials → Create Credentials → OAuth client ID**.
+   - Application type: **Desktop app**.
+   - Copy the **Client ID** and **Client secret** it generates.
+4. Run the helper script from `worker/`, which opens a login page, catches
+   the redirect locally, and prints the refresh token:
+   ```sh
+   npm run google-oauth-setup
+   ```
+   Paste the Client ID / Client secret when prompted, then open the printed
+   URL and log into the Google account that should own the class calendar
+   (approve the "unverified app" warning as noted above). It prints three
+   values — store them as Worker secrets exactly as it shows:
+   ```sh
+   npx wrangler secret put GOOGLE_OAUTH_CLIENT_ID
+   npx wrangler secret put GOOGLE_OAUTH_CLIENT_SECRET
+   npx wrangler secret put GOOGLE_OAUTH_REFRESH_TOKEN
+   ```
+
+`GOOGLE_CALENDAR_ID` is optional and defaults to that account's own
+`primary` calendar; set it only if events should land on a different
+calendar the account has write access to.
+
 ## 2. One-time Cloudflare resource setup
 
 If `litalk` (D1) and `files-litalk` (R2) don't already exist:
@@ -285,8 +342,8 @@ permissions scoped to this account.
 | PATCH  | `/study-logs/:id`        | `data:write`   | Edit an existing study log         |
 | POST   | `/payments`              | `data:write`   | Manual payment record              |
 | PATCH  | `/payments/:id`          | admin          | Correct a payment's amount/method/date |
-| POST   | `/bookings`              | `data:write`   | 409 if the date+time slot is taken |
-| GET    | `/bookings?from=`        | `data:read`    | Upcoming bookings (visibility-filtered) |
+| POST   | `/bookings`              | `data:write`   | 409 if the date+time slot is taken; response includes `meetLink` if Google Meet is configured |
+| GET    | `/bookings?from=`        | `data:read`    | Upcoming bookings (visibility-filtered), each with `meetLink` |
 | GET    | `/dashboard?range=`      | `data:read`    | `today` \| `week` \| `month` \| `year`; includes weekly classes |
 | GET    | `/earnings?month=`       | `data:read`    | Admin: full totals. Teacher: assigned-students total only |
 | POST   | `/payment-links`         | admin          | Creates a Stripe payment link      |

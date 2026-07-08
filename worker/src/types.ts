@@ -25,6 +25,16 @@ export interface Env {
   STRIPE_WEBHOOK_SECRET?: string;
   AUTH0_MGMT_CLIENT_ID?: string;
   AUTH0_MGMT_CLIENT_SECRET?: string;
+  // Google Meet auto-creation (see worker/README.md). Booking still works
+  // without these — it just skips the Meet link. OAuth "refresh token" flow
+  // (not a service account — that needs Google Workspace domain-wide
+  // delegation): one-time login by the Google account that should own the
+  // class calendar mints GOOGLE_OAUTH_REFRESH_TOKEN via
+  // `npm run google-oauth-setup`.
+  GOOGLE_OAUTH_CLIENT_ID?: string;
+  GOOGLE_OAUTH_CLIENT_SECRET?: string; // secret
+  GOOGLE_OAUTH_REFRESH_TOKEN?: string; // secret
+  GOOGLE_CALENDAR_ID?: string; // defaults to that account's "primary" calendar
 }
 
 export interface AuthUser {

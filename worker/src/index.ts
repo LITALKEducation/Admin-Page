@@ -83,12 +83,12 @@ app.post('/stripe/webhook', async (c) => {
         const scheduleId = Number(meta.schedule_id);
         const amendmentId = Number(meta.amendment_id);
         if (Number.isFinite(amendmentId) && amendmentId > 0) {
-          await activateAmendment(c.env.DB, amendmentId);
+          await activateAmendment(c.env.DB, c.env, amendmentId);
         } else if (Number.isFinite(scheduleId) && scheduleId > 0) {
-          await activateSchedule(c.env.DB, scheduleId);
+          await activateSchedule(c.env.DB, c.env, scheduleId);
         } else if (meta.student_id) {
-          await activateApprovedSchedulesForStudent(c.env.DB, meta.student_id);
-          await activateAwaitingAmendmentsForStudent(c.env.DB, meta.student_id);
+          await activateApprovedSchedulesForStudent(c.env.DB, c.env, meta.student_id);
+          await activateAwaitingAmendmentsForStudent(c.env.DB, c.env, meta.student_id);
         }
         await logAudit(c.env.DB, null, 'STRIPE_PAYMENT', meta.student_id || null, session.id, true);
       }
