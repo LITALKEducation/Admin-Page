@@ -5490,7 +5490,7 @@
 
         // Cloudflare Worker API — all admin data now lives here (D1), replacing
         // the old Google Apps Script / Google Sheets backend.
-        const filesApiUrl = 'https://litalk-files-api.n62c5gwghk.workers.dev';
+        const filesApiUrl = 'https://api.litalkeducation.com';
 
         async function getFilesApiToken() {
             return auth0Client.getTokenSilently({ authorizationParams: { audience: filesApiAudience } });
