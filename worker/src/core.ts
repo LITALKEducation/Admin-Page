@@ -6,7 +6,7 @@ import { createStripePaymentLink, deactivateStripePaymentLink, StripeError, with
 import { createStudentAuth0User } from './auth0mgmt';
 import { bangkokToday, bangkokMonth, daysAgo, isYmd } from './dates';
 import { visibleStudentIds, canSeeStudent, activateApprovedSchedulesForStudent, activateAwaitingAmendmentsForStudent } from './manage';
-import { createMeetEvent } from './googlemeet';
+import { createMeetEvent, deleteMeetEvent } from './googlemeet';
 
 export { bangkokToday, bangkokMonth } from './dates';
 
@@ -224,6 +224,66 @@ core.post('/bookings', requirePermission('data:write'), async (c) => {
   let message = `จองเวลาเรียนวันที่ ${body.bookingDate} เวลา ${body.bookingTime} สำเร็จ`;
   if (meet?.meetLink) message += ' — สร้างลิงก์ Google Meet ให้แล้ว';
   return c.json({ ok: true, message, meetLink: meet?.meetLink ?? null });
+});
+
+// A booking may only be edited/cancelled by whoever created it, or by an
+// admin — everyone else's rows are read-only (requested "ลบของตนเองได้,
+// ของผู้อื่นแก้ไม่ได้ ยกเว้นแอดมิน"). Returns the row when allowed, else the
+// HTTP response to short-circuit with.
+async function loadOwnedBooking(c: import('hono').Context<AppBindings>, id: number) {
+  if (!Number.isFinite(id)) return { error: c.json({ error: 'Invalid booking id' }, 400) };
+  const booking = await c.env.DB.prepare(
+    `SELECT id, student_id AS studentId, booking_date AS date, booking_time AS time,
+            created_by AS createdBy, calendar_event_id AS calendarEventId, status
+     FROM bookings WHERE id = ?`,
+  )
+    .bind(id)
+    .first<{ id: number; studentId: string; date: string; time: string; createdBy: string | null; calendarEventId: string | null; status: string }>();
+  if (!booking) return { error: c.json({ error: 'ไม่พบรายการจองนี้' }, 404) };
+
+  const user = c.get('user');
+  const owns = !!booking.createdBy && booking.createdBy.toLowerCase() === user.email.toLowerCase();
+  if (!owns && !isAdmin(user)) {
+    await logAudit(c.env.DB, user, 'FORBIDDEN:BOOKING_OWNER', booking.studentId, String(id), false);
+    return { error: c.json({ error: 'แก้ไขได้เฉพาะรายการที่คุณสร้างเอง (หรือแอดมิน)' }, 403) };
+  }
+  return { booking };
+}
+
+// Set/replace a booking's meeting link by hand (Google Meet, Zoom, Teams, …).
+// Any http(s) URL is accepted; an empty value clears it.
+core.patch('/bookings/:id', requirePermission('data:write'), async (c) => {
+  const id = Number(c.req.param('id'));
+  const { booking, error } = await loadOwnedBooking(c, id);
+  if (error) return error;
+
+  const body = await c.req.json<{ meetLink?: string | null }>();
+  const raw = (body.meetLink ?? '').trim();
+  if (raw && !/^https?:\/\/\S+$/i.test(raw)) {
+    return c.json({ error: 'ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https://' }, 400);
+  }
+  const meetLink = raw || null;
+
+  const user = c.get('user');
+  await c.env.DB.prepare(`UPDATE bookings SET meet_link = ? WHERE id = ?`).bind(meetLink, id).run();
+  await logAudit(c.env.DB, user, 'EDIT_BOOKING_LINK', booking!.studentId, String(id), true);
+  return c.json({ ok: true, meetLink, message: meetLink ? 'บันทึกลิงก์เรียนแล้ว' : 'ลบลิงก์เรียนแล้ว' });
+});
+
+// Cancel a booking (parity with the withdraw flow: status -> 'cancelled', so
+// it drops off the student's schedule) and tear down its Google Calendar/Meet
+// event. History is kept rather than hard-deleted.
+core.delete('/bookings/:id', requirePermission('data:write'), async (c) => {
+  const id = Number(c.req.param('id'));
+  const { booking, error } = await loadOwnedBooking(c, id);
+  if (error) return error;
+
+  const user = c.get('user');
+  await c.env.DB.prepare(`UPDATE bookings SET status = 'cancelled' WHERE id = ?`).bind(id).run();
+  // Best-effort: a failed calendar cleanup shouldn't block the cancellation.
+  await deleteMeetEvent(c.env, booking!.calendarEventId).catch(() => {});
+  await logAudit(c.env.DB, user, 'CANCEL_BOOKING', booking!.studentId, String(id), true);
+  return c.json({ ok: true, message: `ยกเลิกคลาสวันที่ ${booking!.date} เวลา ${booking!.time} แล้ว` });
 });
 
 // ===== Dashboard =====
