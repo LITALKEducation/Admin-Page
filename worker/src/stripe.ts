@@ -75,6 +75,10 @@ export async function createStripePaymentLink(
     'line_items[0][price]': price.id,
     'line_items[0][quantity]': '1',
     'restrictions[completed_sessions][limit]': '1',
+    // Lets the payer enter a Stripe promotion code on the checkout page.
+    // Stripe applies the discount itself; the webhook already records
+    // whatever `amount_total` it reports, so no other change is needed.
+    allow_promotion_codes: 'true',
     // The description belongs on the resulting PaymentIntent instead, where
     // it shows up on the checkout page, receipt, and dashboard.
     ...(opts.productDescription ? { 'payment_intent_data[description]': opts.productDescription } : {}),
@@ -88,6 +92,17 @@ export async function createStripePaymentLink(
 
 export async function deactivateStripePaymentLink(secretKey: string, paymentLinkId: string): Promise<void> {
   await stripeRequest(secretKey, 'POST', `/v1/payment_links/${paymentLinkId}`, { active: 'false' });
+}
+
+// Payment Links have no create-time "apply this coupon" parameter (that's
+// Checkout-Sessions-only, and mutually exclusive with allow_promotion_codes
+// anyway). Instead Stripe pre-fills the promo code field via a URL param —
+// the payer can still edit or clear it before paying.
+export function withPrefilledPromoCode(url: string, promoCode?: string): string {
+  if (!promoCode) return url;
+  const withParam = new URL(url);
+  withParam.searchParams.set('prefilled_promo_code', promoCode);
+  return withParam.toString();
 }
 
 function timingSafeEqualHex(a: string, b: string): boolean {

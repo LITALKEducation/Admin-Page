@@ -42,6 +42,7 @@ app.post('/stripe/webhook', async (c) => {
         payment_link?: string | null;
         payment_status?: string;
         amount_total?: number | null;
+        total_details?: { amount_discount?: number | null } | null;
         metadata?: Record<string, string>;
       };
     };
@@ -58,6 +59,7 @@ app.post('/stripe/webhook', async (c) => {
       const session = event.data.object;
       if (session.payment_status === 'paid' && session.amount_total) {
         const meta = session.metadata ?? {};
+        const discountAmount = session.total_details?.amount_discount ? session.total_details.amount_discount / 100 : null;
         // UNIQUE(stripe_session_id) makes redelivered webhooks a no-op.
         await c.env.DB.prepare(
           `INSERT OR IGNORE INTO payments
@@ -74,8 +76,8 @@ app.post('/stripe/webhook', async (c) => {
           )
           .run();
         if (session.payment_link) {
-          await c.env.DB.prepare(`UPDATE payment_links SET status = 'paid' WHERE stripe_payment_link_id = ?`)
-            .bind(session.payment_link)
+          await c.env.DB.prepare(`UPDATE payment_links SET status = 'paid', discount_amount = ? WHERE stripe_payment_link_id = ?`)
+            .bind(discountAmount, session.payment_link)
             .run();
         }
         // A successful payment starts the approved schedule (or amendment)

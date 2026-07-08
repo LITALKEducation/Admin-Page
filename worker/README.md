@@ -143,6 +143,20 @@ student id + creator email as metadata; when Stripe reports the session as
 paid, the webhook records a `payments` row automatically (source `stripe`)
 and marks the link `paid`. Amounts are THB.
 
+Every payment link allows promotion codes, so the checkout page shows an
+"Add promotion code" field. To create a discount, add a **Coupon** and a
+**Promotion Code** for it in the Stripe Dashboard (**Product catalog →
+Coupons**); Stripe applies the discount and reports the discounted
+`amount_total` to the webhook, so the recorded payment already reflects it.
+
+The "สร้างลิงก์ชำระเงิน" admin form also has an optional promo code field —
+filling it pre-fills (via `?prefilled_promo_code=`) that code on the
+checkout page so the customer doesn't have to type it themselves; they can
+still edit or clear it. Payment Links have no API parameter to force-apply
+a coupon, so this pre-fill is the closest equivalent. Once paid, the actual
+discount amount (from `total_details.amount_discount`) is stored on the
+link and shown in the "ลิงก์ล่าสุด" list.
+
 ## Google Meet auto-creation (booking)
 
 Every time a class is booked — the manual "จองเวลาเรียน" wizard, a monthly
