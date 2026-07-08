@@ -59,6 +59,32 @@ export async function verifyAuth(c: Context<AppBindings>, next: Next) {
   }
 }
 
+// Best-effort ownership check for the public student portal. Unlike
+// verifyAuth this never rejects the request — it returns whether the caller
+// presented a valid Auth0 token whose login identity is this very student
+// (`<studentId>@STUDENT_EMAIL_DOMAIN`). The portal stays public for basic
+// data but unlocks sensitive fields (files, Meet links) only for the
+// authenticated student themselves.
+export async function portalTokenMatchesStudent(c: Context<AppBindings>, studentId: string): Promise<boolean> {
+  const authHeader = c.req.header('Authorization') || '';
+  const [scheme, token] = authHeader.split(' ');
+  if (scheme !== 'Bearer' || !token) return false;
+  try {
+    const { payload } = await jwtVerify(token, getJwks(c.env.AUTH0_DOMAIN), {
+      issuer: `https://${c.env.AUTH0_DOMAIN}/`,
+      audience: c.env.AUTH0_AUDIENCE,
+    });
+    const email =
+      (payload[c.env.AUTH0_EMAIL_CLAIM] as string | undefined) ??
+      (payload.email as string | undefined) ??
+      '';
+    const localPart = email.split('@')[0];
+    return !!localPart && localPart.toLowerCase() === studentId.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 export function requirePermission(permission: string) {
   return async (c: Context<AppBindings>, next: Next) => {
     const user = c.get('user');

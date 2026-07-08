@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { AppBindings } from './types';
-import { verifyAuth, requirePermission } from './auth';
+import { verifyAuth, requirePermission, portalTokenMatchesStudent } from './auth';
 import { DOCUMENT_TYPES, extname, insertFileWithUniqueName, logAudit, todayCode } from './db';
 import core, { bangkokToday } from './core';
 import manage, {
@@ -11,6 +11,7 @@ import manage, {
   activateAwaitingAmendmentsForStudent,
   visibleStudentIds,
   canSeeStudent,
+  creditBalance,
 } from './manage';
 import accounts from './accounts';
 import { verifyStripeSignature } from './stripe';
@@ -110,32 +111,41 @@ app.post('/stripe/webhook', async (c) => {
 });
 
 // Student portal data for the public website (litalkeducation.com/student.html).
-// Deliberately unauthenticated and keyed by student id — this mirrors the GAS
-// endpoint it replaces (the student site "logs in" client-side only), so it
-// exposes exactly the same data the old Sheet endpoint did.
+// Public and keyed by student id (the student site "logs in" client-side only),
+// exposing the basic profile / study / payment data the old GAS Sheet endpoint
+// did, plus credit balance. Sensitive fields — private files and Google Meet
+// links — are returned only when the caller presents a valid Auth0 token for
+// this same student (see portalTokenMatchesStudent).
 app.get('/portal/:studentId', async (c) => {
   const studentId = c.req.param('studentId');
   // NOCASE: the id comes from the Auth0 email local part, which is lowercased.
-  const student = await c.env.DB.prepare(`SELECT id, name, course FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`)
+  const student = await c.env.DB.prepare(
+    `SELECT id, name, nickname, course, avatar_key AS avatarKey FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+  )
     .bind(studentId)
-    .first<{ id: string; name: string; course: string | null }>();
+    .first<{ id: string; name: string; nickname: string | null; course: string | null; avatarKey: string | null }>();
   if (!student) {
     return c.json({ status: 'error', message: 'ไม่พบข้อมูลนักเรียนรหัสนี้ในระบบ' }, 404);
   }
 
+  // The portal is public by student id, but files and Meet links are only
+  // returned to the authenticated student themselves (Auth0 token whose login
+  // identity matches this id). Everything else stays visible to the ?id= link.
+  const authed = await portalTokenMatchesStudent(c, student.id);
+
   const today = bangkokToday();
   const [logs, pays, upcoming, pendingLinks] = await c.env.DB.batch([
     c.env.DB.prepare(
-      `SELECT log_date AS timestamp, feedback, video_url AS video FROM study_logs WHERE student_id = ? ORDER BY log_date DESC, id DESC`,
+      `SELECT log_date AS timestamp, feedback, video_url AS video FROM study_logs WHERE student_id = ? ORDER BY log_date DESC, id DESC LIMIT 300`,
     ).bind(student.id),
     c.env.DB.prepare(
-      `SELECT paid_date AS timestamp, method, amount AS total, proof_url AS proof FROM payments WHERE student_id = ? ORDER BY paid_date DESC, id DESC`,
+      `SELECT paid_date AS timestamp, method, amount AS total, proof_url AS proof FROM payments WHERE student_id = ? ORDER BY paid_date DESC, id DESC LIMIT 200`,
     ).bind(student.id),
     // Only 'booked' rows: a withdrawn hour flips its booking to 'cancelled'
     // (see applyRemoveSessions in manage.ts), so that day simply stops
     // showing up here — no separate "removed" state to reconcile.
     c.env.DB.prepare(
-      `SELECT booking_date AS date, booking_time AS time FROM bookings
+      `SELECT booking_date AS date, booking_time AS time, meet_link AS meet FROM bookings
        WHERE student_id = ? AND status = 'booked' AND booking_date >= ? ORDER BY booking_date, booking_time LIMIT 60`,
     ).bind(student.id, today),
     // Payment links the system is waiting on this student to pay (schedule
@@ -145,19 +155,89 @@ app.get('/portal/:studentId', async (c) => {
     ).bind(student.id),
   ]);
 
+  const balance = await creditBalance(c.env.DB, student.id);
+
+  // Meet links are a join-the-class capability — strip them unless the caller
+  // proved they are this student.
+  const schedule = ((upcoming.results ?? []) as Array<{ date: string; time: string; meet: string | null }>).map((s) =>
+    authed ? s : { date: s.date, time: s.time, meet: null },
+  );
+
+  // Downloadable documents (homework, certificates, …) — authenticated only.
+  let files: unknown[] = [];
+  if (authed) {
+    const { results } = await c.env.DB.prepare(
+      `SELECT id, filename, file_type AS fileType, size, uploaded_at AS uploadedAt
+       FROM student_files WHERE student_id = ? AND deleted_at IS NULL ORDER BY uploaded_at DESC LIMIT 100`,
+    )
+      .bind(student.id)
+      .all();
+    files = results ?? [];
+  }
+
   const payments = (pays.results ?? []) as Array<{ timestamp: string }>;
   return c.json({
     status: 'success',
     data: {
       info: {
         name: student.name,
+        nickname: student.nickname ?? null,
         course: student.course ?? '-',
         lastPaid: payments[0]?.timestamp ?? '-',
+        creditBalance: balance,
+        hasAvatar: !!student.avatarKey,
+        authed,
       },
       studyLogs: logs.results ?? [],
       payments,
-      schedule: upcoming.results ?? [],
+      schedule,
       pendingPayments: pendingLinks.results ?? [],
+      files,
+    },
+  });
+});
+
+// Public avatar for the student portal — the student's own photo is basic
+// profile data, so no auth (parity with the rest of the public portal).
+app.get('/portal/:studentId/avatar', async (c) => {
+  const studentId = c.req.param('studentId');
+  const student = await c.env.DB.prepare(
+    `SELECT avatar_key AS avatarKey FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+  )
+    .bind(studentId)
+    .first<{ avatarKey: string | null }>();
+  if (!student?.avatarKey) return c.json({ error: 'ยังไม่มีรูปภาพ' }, 404);
+  const object = await c.env.BUCKET.get(student.avatarKey);
+  if (!object) return c.json({ error: 'ไม่พบไฟล์รูปภาพ' }, 404);
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': object.httpMetadata?.contentType || 'image/jpeg',
+      'Cache-Control': 'private, max-age=300',
+    },
+  });
+});
+
+// Student-portal file download. Gated by the student's own Auth0 token (the
+// admin `/files/:fileId` route needs a staff permission the student lacks).
+app.get('/portal/:studentId/files/:fileId', async (c) => {
+  const studentId = c.req.param('studentId');
+  const fileId = c.req.param('fileId');
+  if (!(await portalTokenMatchesStudent(c, studentId))) return c.json({ error: 'Unauthorized' }, 401);
+
+  const row = await c.env.DB.prepare(
+    `SELECT r2_key, filename, mime_type, student_id FROM student_files WHERE id = ? AND deleted_at IS NULL`,
+  )
+    .bind(fileId)
+    .first<{ r2_key: string; filename: string; mime_type: string; student_id: string }>();
+  if (!row || row.student_id.toLowerCase() !== studentId.toLowerCase()) return c.json({ error: 'Not found' }, 404);
+
+  const object = await c.env.BUCKET.get(row.r2_key);
+  if (!object) return c.json({ error: 'File missing in storage' }, 404);
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': row.mime_type || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${row.filename}"`,
+      'Cache-Control': 'private, max-age=300',
     },
   });
 });

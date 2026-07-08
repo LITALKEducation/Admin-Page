@@ -480,12 +480,20 @@ when the current token carries no email. Setting up the Action from step
 - `GET /portal/:studentId` is **public by student id**, mirroring the GAS
   endpoint it replaces (the student site "logs in" client-side only). It
   exposes the same data the old Sheet endpoint did — name, course, study
-  logs, and payment history — plus two additions for the student site:
+  logs, and payment history — plus additions for the student site:
+  `nickname`/`avatar`, `creditBalance` (remaining class hours),
   `schedule` (upcoming `booked` classes only; a withdrawn hour flips its
   booking to `cancelled` and simply disappears from this list) and
   `pendingPayments` (active Stripe payment links awaiting checkout, so the
-  site can show a "pay now" prompt). Locking this endpoint down properly
-  would mean issuing student-audience Auth0 tokens and verifying them here
-  — a separate piece of work.
+  site can show a "pay now" prompt).
+  Two fields are **sensitive** and are returned only when the request carries
+  a valid Auth0 access token whose login identity is this same student
+  (`portalTokenMatchesStudent`): each schedule row's `meet` (Google Meet join
+  link) and the `files` list. Those tokens are minted by the student site via
+  `getTokenSilently({ audience: AUTH0_AUDIENCE })`; students who arrive through
+  the `?id=` / cookie shortcut (no Auth0 login) simply don't see those two.
+  `GET /portal/:studentId/avatar` streams the profile photo (public), and
+  `GET /portal/:studentId/files/:fileId` streams a document (token-gated, same
+  ownership check).
 - `ALLOWED_ORIGIN` (comma-separated) must include both the admin panel and
   the public site origins.
