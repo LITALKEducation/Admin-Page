@@ -25,6 +25,14 @@ export interface Env {
   STRIPE_WEBHOOK_SECRET?: string;
   AUTH0_MGMT_CLIENT_ID?: string;
   AUTH0_MGMT_CLIENT_SECRET?: string;
+  // Google Meet auto-creation (see worker/README.md). Booking still works
+  // without these — it just skips the Meet link.
+  GOOGLE_SERVICE_ACCOUNT_EMAIL?: string;
+  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?: string; // secret; PEM (\n-escaped is fine)
+  // Workspace user the service account impersonates via domain-wide
+  // delegation — Meet links can only be created on a real user's calendar.
+  GOOGLE_CALENDAR_ORGANIZER_EMAIL?: string;
+  GOOGLE_CALENDAR_ID?: string; // defaults to the organizer's "primary" calendar
 }
 
 export interface AuthUser {

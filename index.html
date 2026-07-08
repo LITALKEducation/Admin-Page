@@ -6202,6 +6202,7 @@
                     <div class="class-time">${escapeHtml(row.time || '-')}</div>
                     <div class="class-info"><div class="name">${escapeHtml(row.name)}</div><div class="course">${escapeHtml(row.course || '')}</div></div>
                     <span class="class-status ${row.done ? 'done' : 'pending'}"><i class="${row.done ? 'fas fa-check-circle' : 'far fa-clock'}"></i> ${row.done ? 'บันทึกแล้ว' : 'รอบันทึกผล'}</span>
+                    ${row.meetLink ? `<a href="${escapeHtml(row.meetLink)}" target="_blank" rel="noopener" class="class-log-btn"><i class="fas fa-video"></i> Meet</a>` : ''}
                     <button class="class-log-btn" onclick="goToStudentAndScreen('${escapeJs(row.studentId)}', 'logs')"><i class="fas fa-pen"></i> บันทึกผล</button>
                 </div>`).join('') : '<div class="form-hint">ไม่มีคลาสเรียนวันนี้</div>');
 
@@ -8269,6 +8270,7 @@
                 if (response.ok && result.ok) {
                     showToast('จองเวลาเรียนสำเร็จ', result.message, 'success');
                     resetBookingWizard();
+                    loadBookingTable();
                 } else {
                     showModal('ไม่สามารถดำเนินการได้', result.error || result.message || 'เกิดข้อผิดพลาด', 'error');
                 }
@@ -8305,7 +8307,7 @@
                 }
                 wrap.innerHTML = `
                     <table class="data-table">
-                        <thead><tr><th>วันที่</th><th>เวลา</th><th>นักเรียน</th><th>คอร์ส</th></tr></thead>
+                        <thead><tr><th>วันที่</th><th>เวลา</th><th>นักเรียน</th><th>คอร์ส</th><th>Google Meet</th></tr></thead>
                         <tbody>
                             ${rows.map(b => `
                                 <tr>
@@ -8313,6 +8315,9 @@
                                     <td>${escapeHtml(b.time)}</td>
                                     <td>${escapeHtml(b.studentName)}</td>
                                     <td>${escapeHtml(b.course || '-')}</td>
+                                    <td>${b.meetLink
+                    ? `<a href="${escapeHtml(b.meetLink)}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;"><i class="fas fa-video"></i> เข้าร่วม</a>`
+                    : '<span class="form-hint" style="margin: 0;">-</span>'}</td>
                                 </tr>`).join('')}
                         </tbody>
                     </table>`;

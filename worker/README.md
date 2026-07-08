@@ -143,6 +143,53 @@ student id + creator email as metadata; when Stripe reports the session as
 paid, the webhook records a `payments` row automatically (source `stripe`)
 and marks the link `paid`. Amounts are THB.
 
+## Google Meet auto-creation (booking)
+
+Every time a class is booked — the manual "จองเวลาเรียน" wizard, a monthly
+schedule activating on payment, or an add-hours amendment — the Worker
+creates a Google Calendar event for that session with a Google Meet
+conference attached, and stores the link on the booking row
+(`bookings.meet_link`). Cancelling that booking (student deletion, schedule
+resync, a "withdraw hours" amendment) deletes the Calendar event too. If
+Google Meet isn't configured, or the API call fails, the booking is still
+created — it's just missing a link.
+
+**Note:** a plain service account cannot create Meet links on its own
+calendar (no Meet license). It must impersonate a real Google Workspace user
+via domain-wide delegation, and the event is created on *that user's*
+calendar.
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), create (or
+   pick) a project, then **APIs & Services → Library** → enable the
+   **Google Calendar API**.
+2. **APIs & Services → Credentials → Create Credentials → Service account**.
+   Give it any name; no project role is needed. Open it, **Keys → Add Key →
+   Create new key → JSON**, and download it.
+3. Note the service account's **Client ID** (numeric, on the service
+   account's Details tab) and its email
+   (`...@<project>.iam.gserviceaccount.com`, from the same JSON key).
+4. In the Google Workspace Admin console (requires a Workspace *super
+   admin*, not just a Cloud project owner) → **Security → Access and data
+   control → API controls → Domain-wide delegation → Add new**:
+   - Client ID: the numeric one from step 3.
+   - Scopes: `https://www.googleapis.com/auth/calendar`
+5. Pick the Workspace user whose calendar should host these events (a
+   teacher or a shared "LITALK Classes" mailbox) and store its email as
+   `GOOGLE_CALENDAR_ORGANIZER_EMAIL` in `wrangler.toml`.
+6. Store the service account's credentials as Worker secrets — from the JSON
+   key downloaded in step 2, `client_email` and `private_key`:
+   ```sh
+   npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_EMAIL
+   npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+   ```
+   Paste the `private_key` value exactly as it appears in the JSON
+   (including the `-----BEGIN/END PRIVATE KEY-----` lines and its `\n`
+   escapes) — the Worker parses that format directly.
+
+`GOOGLE_CALENDAR_ID` is optional and defaults to the organizer's own
+`primary` calendar; set it only if events should land on a different
+calendar the organizer has write access to.
+
 ## 2. One-time Cloudflare resource setup
 
 If `litalk` (D1) and `files-litalk` (R2) don't already exist:
@@ -285,8 +332,8 @@ permissions scoped to this account.
 | PATCH  | `/study-logs/:id`        | `data:write`   | Edit an existing study log         |
 | POST   | `/payments`              | `data:write`   | Manual payment record              |
 | PATCH  | `/payments/:id`          | admin          | Correct a payment's amount/method/date |
-| POST   | `/bookings`              | `data:write`   | 409 if the date+time slot is taken |
-| GET    | `/bookings?from=`        | `data:read`    | Upcoming bookings (visibility-filtered) |
+| POST   | `/bookings`              | `data:write`   | 409 if the date+time slot is taken; response includes `meetLink` if Google Meet is configured |
+| GET    | `/bookings?from=`        | `data:read`    | Upcoming bookings (visibility-filtered), each with `meetLink` |
 | GET    | `/dashboard?range=`      | `data:read`    | `today` \| `week` \| `month` \| `year`; includes weekly classes |
 | GET    | `/earnings?month=`       | `data:read`    | Admin: full totals. Teacher: assigned-students total only |
 | POST   | `/payment-links`         | admin          | Creates a Stripe payment link      |

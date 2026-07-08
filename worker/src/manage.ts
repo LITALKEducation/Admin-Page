@@ -3,11 +3,43 @@
 
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import type { AppBindings, AuthUser } from './types';
+import type { AppBindings, AuthUser, Env } from './types';
 import { requirePermission, requireAdmin, isAdmin } from './auth';
 import { logAudit } from './db';
 import { bangkokToday, bangkokMonth, isYm, isYmd, isHm, formatSessionsThai } from './dates';
 import { createStripePaymentLink, deactivateStripePaymentLink, StripeError, withPolicyNote } from './stripe';
+import { createMeetEvent, deleteMeetEvent } from './googlemeet';
+
+// Cancels every 'booked' row matching a WHERE clause (student_id, dates,
+// notes label, ...) and best-effort deletes each one's Google Calendar
+// event. Used everywhere a booking is dropped (student deletion, schedule
+// resync, amendment withdrawal) so the Meet event never outlives its booking.
+async function cancelBookings(db: D1Database, env: Env, whereSql: string, params: unknown[]): Promise<void> {
+  const { results } = await db
+    .prepare(`SELECT id, calendar_event_id AS calendarEventId FROM bookings WHERE status = 'booked' AND ${whereSql}`)
+    .bind(...params)
+    .all<{ id: number; calendarEventId: string | null }>();
+  const rows = results ?? [];
+  if (!rows.length) return;
+  await db
+    .prepare(`UPDATE bookings SET status = 'cancelled' WHERE status = 'booked' AND ${whereSql}`)
+    .bind(...params)
+    .run();
+  await Promise.allSettled(rows.map((r) => deleteMeetEvent(env, r.calendarEventId)));
+}
+
+// Creates a Google Meet event for each session (in parallel) and returns
+// them in the same order, so callers can zip them into their INSERT binds.
+// Never throws — createMeetEvent already degrades to null per-session.
+async function createMeetEvents(
+  env: Env,
+  studentId: string,
+  studentName: string,
+  course: string | null | undefined,
+  sessions: Array<{ date: string; time: string }>,
+) {
+  return Promise.all(sessions.map((s) => createMeetEvent(env, { studentName, course, date: s.date, time: s.time })));
+}
 
 // ===== Per-teacher student visibility =====
 // Admin sees everyone (returns null = unrestricted). A non-admin teacher
@@ -80,7 +112,7 @@ async function releaseScheduleCredits(db: D1Database, scheduleId: number, actor:
 // A successful payment turns an approved schedule live immediately: each
 // planned session becomes a booking (INSERT OR IGNORE — a slot that is
 // already taken is skipped rather than failing the whole activation).
-export async function activateSchedule(db: D1Database, scheduleId: number): Promise<boolean> {
+export async function activateSchedule(db: D1Database, env: Env, scheduleId: number): Promise<boolean> {
   const sched = await db
     .prepare(`SELECT id, student_id, month, created_by FROM monthly_schedules WHERE id = ? AND status = 'approved'`)
     .bind(scheduleId)
@@ -91,11 +123,23 @@ export async function activateSchedule(db: D1Database, scheduleId: number): Prom
     .prepare(`SELECT session_date, session_time FROM schedule_sessions WHERE schedule_id = ? ORDER BY session_date, session_time`)
     .bind(scheduleId)
     .all<{ session_date: string; session_time: string }>();
+  const rows = sessions ?? [];
 
-  const stmts: D1PreparedStatement[] = (sessions ?? []).map((s) =>
+  const student = await db.prepare(`SELECT name, course FROM students WHERE id = ?`).bind(sched.student_id).first<{ name: string; course: string | null }>();
+  const meets = await createMeetEvents(
+    env,
+    sched.student_id,
+    student?.name ?? sched.student_id,
+    student?.course,
+    rows.map((s) => ({ date: s.session_date, time: s.session_time })),
+  );
+
+  const stmts: D1PreparedStatement[] = rows.map((s, i) =>
     db
-      .prepare(`INSERT OR IGNORE INTO bookings (student_id, booking_date, booking_time, notes, created_by) VALUES (?, ?, ?, ?, ?)`)
-      .bind(sched.student_id, s.session_date, s.session_time, `ตารางเรียนเดือน ${sched.month}`, sched.created_by),
+      .prepare(
+        `INSERT OR IGNORE INTO bookings (student_id, booking_date, booking_time, notes, created_by, meet_link, calendar_event_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(sched.student_id, s.session_date, s.session_time, `ตารางเรียนเดือน ${sched.month}`, sched.created_by, meets[i]?.meetLink ?? null, meets[i]?.eventId ?? null),
   );
   stmts.push(db.prepare(`UPDATE monthly_schedules SET status = 'active', activated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(scheduleId));
   await db.batch(stmts);
@@ -105,14 +149,14 @@ export async function activateSchedule(db: D1Database, scheduleId: number): Prom
 // A payment without an explicit schedule reference (manual record, or a
 // Stripe link created outside the approval flow) activates every approved
 // schedule of that student — in practice at most one per month.
-export async function activateApprovedSchedulesForStudent(db: D1Database, studentId: string): Promise<number> {
+export async function activateApprovedSchedulesForStudent(db: D1Database, env: Env, studentId: string): Promise<number> {
   const { results } = await db
     .prepare(`SELECT id FROM monthly_schedules WHERE student_id = ? AND status = 'approved'`)
     .bind(studentId)
     .all<{ id: number }>();
   let activated = 0;
   for (const row of results ?? []) {
-    if (await activateSchedule(db, row.id)) activated++;
+    if (await activateSchedule(db, env, row.id)) activated++;
   }
   return activated;
 }
@@ -133,11 +177,8 @@ manage.delete('/students/:id', requireAdmin, async (c) => {
     .run();
   if (result.meta.changes === 0) return c.json({ error: 'ไม่พบนักเรียนรหัสนี้ในระบบ' }, 404);
 
-  await c.env.DB.batch([
-    c.env.DB.prepare(`UPDATE bookings SET status = 'cancelled' WHERE student_id = ? AND booking_date >= ? AND status = 'booked'`)
-      .bind(studentId, bangkokToday()),
-    c.env.DB.prepare(`DELETE FROM teacher_students WHERE student_id = ?`).bind(studentId),
-  ]);
+  await cancelBookings(c.env.DB, c.env, `student_id = ? AND booking_date >= ?`, [studentId, bangkokToday()]);
+  await c.env.DB.prepare(`DELETE FROM teacher_students WHERE student_id = ?`).bind(studentId).run();
   await logAudit(c.env.DB, user, 'DELETE_STUDENT', studentId, null, true);
   return c.json({ ok: true, message: `ลบนักเรียน ${studentId} ออกจากระบบแล้ว (บัญชีเข้าสู่ระบบใน Auth0 ไม่ถูกลบ)` });
 });
@@ -465,13 +506,17 @@ manage.patch('/schedules/:id', requirePermission('data:write'), async (c) => {
     // the ones it created, then re-add for the new set.
     if (sched.status === 'active') {
       const label = `ตารางเรียนเดือน ${sched.month}`;
-      await c.env.DB.prepare(`UPDATE bookings SET status = 'cancelled' WHERE student_id = ? AND notes = ? AND status = 'booked'`)
-        .bind(sched.studentId, label)
-        .run();
+      await cancelBookings(c.env.DB, c.env, `student_id = ? AND notes = ?`, [sched.studentId, label]);
+      const student = await c.env.DB.prepare(`SELECT name, course FROM students WHERE id = ?`)
+        .bind(sched.studentId)
+        .first<{ name: string; course: string | null }>();
+      const meets = await createMeetEvents(c.env, sched.studentId, student?.name ?? sched.studentId, student?.course, sessions);
       await c.env.DB.batch(
-        sessions.map((s) =>
-          c.env.DB.prepare(`INSERT OR IGNORE INTO bookings (student_id, booking_date, booking_time, notes, created_by) VALUES (?, ?, ?, ?, ?)`)
-            .bind(sched.studentId, s.date, s.time, label, user.email),
+        sessions.map((s, i) =>
+          c.env.DB.prepare(
+            `INSERT OR IGNORE INTO bookings (student_id, booking_date, booking_time, notes, created_by, meet_link, calendar_event_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          )
+            .bind(sched.studentId, s.date, s.time, label, user.email, meets[i]?.meetLink ?? null, meets[i]?.eventId ?? null),
         ),
       );
     }
@@ -574,7 +619,7 @@ manage.post('/schedules/:id/approve', requireAdmin, async (c) => {
     await c.env.DB.prepare(`UPDATE monthly_schedules SET status = 'approved', approved_by = ?, approved_at = CURRENT_TIMESTAMP WHERE id = ?`)
       .bind(user.email, id)
       .run();
-    await activateSchedule(c.env.DB, id);
+    await activateSchedule(c.env.DB, c.env, id);
     await logAudit(c.env.DB, user, 'APPROVE_SCHEDULE', sched.studentId, `${id} (credit)`, true);
     return c.json({
       ok: true,
@@ -721,6 +766,7 @@ type ScheduleRow = { id: number; studentId: string; month: string; rate: number;
 
 async function applyAddSessions(
   db: D1Database,
+  env: Env,
   schedule: ScheduleRow,
   sessions: CleanSession[],
   actor: string,
@@ -731,10 +777,15 @@ async function applyAddSessions(
   );
   if (schedule.status === 'active') {
     const label = `ตารางเรียนเดือน ${schedule.month}`;
+    const student = await db.prepare(`SELECT name, course FROM students WHERE id = ?`).bind(schedule.studentId).first<{ name: string; course: string | null }>();
+    const meets = await createMeetEvents(env, schedule.studentId, student?.name ?? schedule.studentId, student?.course, sessions);
     stmts.push(
-      ...sessions.map((s) =>
-        db.prepare(`INSERT OR IGNORE INTO bookings (student_id, booking_date, booking_time, notes, created_by) VALUES (?, ?, ?, ?, ?)`)
-          .bind(schedule.studentId, s.date, s.time, label, actor),
+      ...sessions.map((s, i) =>
+        db
+          .prepare(
+            `INSERT OR IGNORE INTO bookings (student_id, booking_date, booking_time, notes, created_by, meet_link, calendar_event_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .bind(schedule.studentId, s.date, s.time, label, actor, meets[i]?.meetLink ?? null, meets[i]?.eventId ?? null),
       ),
     );
   }
@@ -743,6 +794,7 @@ async function applyAddSessions(
 
 async function applyRemoveSessions(
   db: D1Database,
+  env: Env,
   schedule: ScheduleRow,
   sessions: CleanSession[],
   actor: string,
@@ -751,8 +803,18 @@ async function applyRemoveSessions(
     db.prepare(`DELETE FROM schedule_sessions WHERE schedule_id = ? AND session_date = ? AND session_time = ?`)
       .bind(schedule.id, s.date, s.time),
   );
-  if (schedule.status === 'active') {
+  let cancelledEventIds: (string | null)[] = [];
+  if (schedule.status === 'active' && sessions.length > 0) {
     const label = `ตารางเรียนเดือน ${schedule.month}`;
+    const { results } = await db
+      .prepare(
+        `SELECT calendar_event_id AS calendarEventId FROM bookings
+         WHERE student_id = ? AND status = 'booked' AND notes = ?
+           AND (${sessions.map(() => '(booking_date = ? AND booking_time = ?)').join(' OR ')})`,
+      )
+      .bind(schedule.studentId, label, ...sessions.flatMap((s) => [s.date, s.time]))
+      .all<{ calendarEventId: string | null }>();
+    cancelledEventIds = (results ?? []).map((r) => r.calendarEventId);
     stmts.push(
       ...sessions.map((s) =>
         db.prepare(`UPDATE bookings SET status = 'cancelled' WHERE student_id = ? AND booking_date = ? AND booking_time = ? AND notes = ? AND status = 'booked'`)
@@ -765,6 +827,7 @@ async function applyRemoveSessions(
       .bind(schedule.studentId, sessions.length, `ถอนชั่วโมงจากตารางเรียนเดือน ${schedule.month}`, schedule.id, actor),
   );
   await db.batch(stmts);
+  await Promise.allSettled(cancelledEventIds.map((id) => deleteMeetEvent(env, id)));
 }
 
 // Runs the credit-then-charge decision for an amendment and updates its row.
@@ -786,7 +849,7 @@ async function decideAmendment(
   const user = c.get('user');
 
   if (amendment.type === 'remove') {
-    await applyRemoveSessions(db, schedule, amendment.sessions, user.email);
+    await applyRemoveSessions(db, c.env, schedule, amendment.sessions, user.email);
     await db
       .prepare(`UPDATE schedule_amendments SET status = 'applied', approved_by = ?, approved_at = CURRENT_TIMESTAMP, applied_at = CURRENT_TIMESTAMP WHERE id = ?`)
       .bind(user.email, amendment.id)
@@ -810,7 +873,7 @@ async function decideAmendment(
   }
 
   if (chargeAmount <= 0) {
-    await applyAddSessions(db, schedule, amendment.sessions, user.email);
+    await applyAddSessions(db, c.env, schedule, amendment.sessions, user.email);
     await db
       .prepare(`UPDATE schedule_amendments SET status = 'applied', credits_used = ?, charge_amount = 0, approved_by = ?, approved_at = CURRENT_TIMESTAMP, applied_at = CURRENT_TIMESTAMP WHERE id = ?`)
       .bind(creditsUsed, user.email, amendment.id)
@@ -879,7 +942,7 @@ async function decideAmendment(
 // (and bookings, if the schedule is active) and marks it applied. Called
 // from the Stripe webhook (via metadata.amendment_id) and from the manual
 // payment hook below.
-export async function activateAmendment(db: D1Database, amendmentId: number): Promise<boolean> {
+export async function activateAmendment(db: D1Database, env: Env, amendmentId: number): Promise<boolean> {
   const amendment = await db
     .prepare(`SELECT id, schedule_id AS scheduleId, sessions FROM schedule_amendments WHERE id = ? AND status = 'awaiting_payment' AND type = 'add'`)
     .bind(amendmentId)
@@ -893,7 +956,7 @@ export async function activateAmendment(db: D1Database, amendmentId: number): Pr
   if (!schedule) return false;
 
   const sessions = JSON.parse(amendment.sessions) as CleanSession[];
-  await applyAddSessions(db, schedule, sessions, 'system');
+  await applyAddSessions(db, env, schedule, sessions, 'system');
   await db
     .prepare(`UPDATE schedule_amendments SET status = 'applied', applied_at = CURRENT_TIMESTAMP WHERE id = ?`)
     .bind(amendment.id)
@@ -904,14 +967,14 @@ export async function activateAmendment(db: D1Database, amendmentId: number): Pr
 // A manual payment without a specific amendment reference activates every
 // awaiting-payment add-amendment for that student (mirrors
 // activateApprovedSchedulesForStudent).
-export async function activateAwaitingAmendmentsForStudent(db: D1Database, studentId: string): Promise<number> {
+export async function activateAwaitingAmendmentsForStudent(db: D1Database, env: Env, studentId: string): Promise<number> {
   const { results } = await db
     .prepare(`SELECT id FROM schedule_amendments WHERE student_id = ? AND status = 'awaiting_payment' AND type = 'add'`)
     .bind(studentId)
     .all<{ id: number }>();
   let activated = 0;
   for (const row of results ?? []) {
-    if (await activateAmendment(db, row.id)) activated++;
+    if (await activateAmendment(db, env, row.id)) activated++;
   }
   return activated;
 }
@@ -1164,7 +1227,7 @@ manage.get('/bookings', requirePermission('data:read'), async (c) => {
   const from = isYmd(c.req.query('from')) ? c.req.query('from')! : bangkokToday();
   const { results } = await c.env.DB.prepare(
     `SELECT b.id, b.student_id AS studentId, COALESCE(s.name, b.student_id) AS studentName, s.course AS course,
-            b.booking_date AS date, b.booking_time AS time, b.notes, b.created_by AS createdBy
+            b.booking_date AS date, b.booking_time AS time, b.notes, b.created_by AS createdBy, b.meet_link AS meetLink
      FROM bookings b LEFT JOIN students s ON s.id = b.student_id
      WHERE b.status = 'booked' AND b.booking_date >= ?
      ORDER BY b.booking_date, b.booking_time LIMIT 200`,
