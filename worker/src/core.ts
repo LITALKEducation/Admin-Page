@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { AppBindings } from './types';
 import { requirePermission, requireAdmin, isAdmin } from './auth';
 import { logAudit } from './db';
-import { createStripePaymentLink, deactivateStripePaymentLink, StripeError, withPolicyNote } from './stripe';
+import { createStripePaymentLink, deactivateStripePaymentLink, StripeError, withPolicyNote, withPrefilledPromoCode } from './stripe';
 import { createStudentAuth0User } from './auth0mgmt';
 import { bangkokToday, bangkokMonth, daysAgo, isYmd } from './dates';
 import { visibleStudentIds, canSeeStudent, activateApprovedSchedulesForStudent, activateAwaitingAmendmentsForStudent } from './manage';
@@ -392,7 +392,7 @@ core.get('/earnings', requirePermission('data:read'), async (c) => {
 core.post('/payment-links', requireAdmin, async (c) => {
   if (!c.env.STRIPE_SECRET_KEY) return c.json({ error: 'Stripe is not configured (missing STRIPE_SECRET_KEY secret)' }, 503);
 
-  const body = await c.req.json<{ studentId?: string; customerName?: string; amount?: number | string; description?: string }>();
+  const body = await c.req.json<{ studentId?: string; customerName?: string; amount?: number | string; description?: string; promoCode?: string }>();
   const amount = Number(body.amount);
   if (!Number.isFinite(amount) || amount <= 0) return c.json({ error: 'Invalid amount' }, 400);
   if (!body.studentId && !body.customerName) return c.json({ error: 'Missing studentId or customerName' }, 400);
@@ -406,6 +406,7 @@ core.post('/payment-links', requireAdmin, async (c) => {
 
   const user = c.get('user');
   const description = body.description?.trim() || `ค่าเรียน LITALK Education - ${customerName}`;
+  const promoCode = body.promoCode?.trim() || null;
 
   let link;
   try {
@@ -424,22 +425,24 @@ core.post('/payment-links', requireAdmin, async (c) => {
     if (err instanceof StripeError) return c.json({ error: `Stripe: ${err.message}` }, 502);
     throw err;
   }
+  const url = withPrefilledPromoCode(link.url, promoCode ?? undefined);
 
   const result = await c.env.DB.prepare(
-    `INSERT INTO payment_links (stripe_payment_link_id, url, student_id, customer_name, description, amount, currency, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, 'thb', ?)`,
+    `INSERT INTO payment_links (stripe_payment_link_id, url, student_id, customer_name, description, amount, currency, promo_code, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, 'thb', ?, ?)`,
   )
-    .bind(link.id, link.url, body.studentId ?? null, customerName, description, amount, user.email)
+    .bind(link.id, url, body.studentId ?? null, customerName, description, amount, promoCode, user.email)
     .run();
   await logAudit(c.env.DB, user, 'CREATE_PAYMENT_LINK', body.studentId ?? null, link.id, true);
 
-  return c.json({ ok: true, id: Number(result.meta.last_row_id), url: link.url, paymentLinkId: link.id });
+  return c.json({ ok: true, id: Number(result.meta.last_row_id), url, paymentLinkId: link.id });
 });
 
 core.get('/payment-links', requirePermission('data:read'), async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT pl.id, pl.url, pl.student_id AS studentId, pl.customer_name AS customerName, pl.description,
-            pl.amount, pl.status, pl.created_by AS createdBy, pl.created_at AS createdAt
+            pl.amount, pl.status, pl.promo_code AS promoCode, pl.discount_amount AS discountAmount,
+            pl.created_by AS createdBy, pl.created_at AS createdAt
      FROM payment_links pl ORDER BY pl.id DESC LIMIT 30`,
   ).all();
   return c.json(results);

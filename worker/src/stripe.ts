@@ -94,6 +94,17 @@ export async function deactivateStripePaymentLink(secretKey: string, paymentLink
   await stripeRequest(secretKey, 'POST', `/v1/payment_links/${paymentLinkId}`, { active: 'false' });
 }
 
+// Payment Links have no create-time "apply this coupon" parameter (that's
+// Checkout-Sessions-only, and mutually exclusive with allow_promotion_codes
+// anyway). Instead Stripe pre-fills the promo code field via a URL param —
+// the payer can still edit or clear it before paying.
+export function withPrefilledPromoCode(url: string, promoCode?: string): string {
+  if (!promoCode) return url;
+  const withParam = new URL(url);
+  withParam.searchParams.set('prefilled_promo_code', promoCode);
+  return withParam.toString();
+}
+
 function timingSafeEqualHex(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;

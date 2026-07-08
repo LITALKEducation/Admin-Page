@@ -4391,6 +4391,11 @@
                                 <label><i class="fas fa-align-left"></i> รายละเอียด (แสดงบนหน้าชำระเงิน)</label>
                                 <input type="text" id="link-description" placeholder="เช่น ค่าเรียนคอร์ส IELTS Prep เดือนกรกฎาคม">
                             </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-tag"></i> รหัสโปรโมชั่น (ถ้ามี)</label>
+                                <input type="text" id="link-promo-code" placeholder="เว้นว่างได้ — ลูกค้าใส่โค้ดเองที่หน้าชำระเงินได้เสมอ">
+                                <div class="form-hint">ต้องสร้างโค้ดนี้ใน Stripe Dashboard ก่อน (Product catalog → Coupons) ระบบจะกรอกโค้ดให้ล่วงหน้า ลูกค้ายังแก้ไขได้</div>
+                            </div>
                             <div style="display: flex; justify-content: flex-end;">
                                 <button class="btn btn-primary" onclick="createPaymentLink()" id="create-link-btn">
                                     <i class="fas fa-link"></i> สร้างลิงก์ชำระเงิน
@@ -8625,7 +8630,7 @@
                     <div class="payment-row">
                         <div class="payment-info">
                             <div class="name">${escapeHtml(l.customerName || l.studentId || '-')}</div>
-                            <div class="meta">${escapeHtml(LINK_STATUS_LABEL[l.status] || l.status)} · ${escapeHtml(formatShortThaiDate((l.createdAt || '').slice(0, 10)))} · ${escapeHtml(l.createdBy || '')}</div>
+                            <div class="meta">${escapeHtml(LINK_STATUS_LABEL[l.status] || l.status)} · ${escapeHtml(formatShortThaiDate((l.createdAt || '').slice(0, 10)))} · ${escapeHtml(l.createdBy || '')}${l.promoCode ? ` · โค้ด: ${escapeHtml(l.promoCode)}` : ''}${l.discountAmount ? ` · ลดราคา ${formatBaht(l.discountAmount)}` : ''}</div>
                         </div>
                         <div class="amount">${formatBaht(l.amount)}</div>
                         <button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(l.url)}', this)" title="คัดลอกลิงก์"><i class="fas fa-copy"></i></button>
@@ -8641,6 +8646,7 @@
             const amount = Number(document.getElementById('link-amount').value);
             const customer = document.getElementById('link-customer').value.trim();
             const description = document.getElementById('link-description').value.trim();
+            const promoCode = document.getElementById('link-promo-code').value.trim();
             if (!amount || amount <= 0) {
                 triggerFieldError('link-amount', 'กรุณากรอกยอดเงิน');
                 return;
@@ -8651,6 +8657,7 @@
             }
             const payload = { amount, description };
             if (customer) payload.customerName = customer; else payload.studentId = selectedStudentId;
+            if (promoCode) payload.promoCode = promoCode;
 
             showLoading();
             try {
@@ -8672,6 +8679,7 @@
                     document.getElementById('link-amount').value = '';
                     document.getElementById('link-customer').value = '';
                     document.getElementById('link-description').value = '';
+                    document.getElementById('link-promo-code').value = '';
                     loadPaymentLinks();
                     loadEarnings();
                 } else {
