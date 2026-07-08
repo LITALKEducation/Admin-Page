@@ -105,10 +105,23 @@ With the same Management API credentials, the admin panel can also:
 
 To let `POST /staff` also assign the right Auth0 role, set the role ids in
 `wrangler.toml` (`AUTH0_ADMIN_ROLE_ID` / `AUTH0_TEACHER_ROLE_ID` /
-`AUTH0_STAFF_ROLE_ID`, from step 4 above). If a role id isn't set, the
-account is still created — the response just says to assign the role
-manually. New teacher/staff accounts land in `AUTH0_STAFF_CONNECTION` (falls
-back to `AUTH0_DB_CONNECTION` if unset).
+`AUTH0_STAFF_ROLE_ID`, from step 4 above — copy each from **User Management
+→ Roles → [role]**, the id is in the URL, e.g. `rol_AbC123`). If a role id
+isn't set, the account is still created — the response just says to assign
+the role manually.
+
+New teacher/staff accounts land in `AUTH0_STAFF_CONNECTION`. **Set this
+explicitly** to your normal staff database connection (typically
+`Username-Password-Authentication`) — it falls back to `AUTH0_DB_CONNECTION`
+if unset, but that's the *student* connection (`LITALK-Student`), which you
+almost certainly don't want teacher/staff logins mixed into.
+
+The passkey ticket (`POST /staff/:identity/passkey-ticket`) enrolls the
+`webauthn-platform` factor specifically (Face ID / Windows Hello / a device's
+built-in authenticator — i.e. a passkey, not a roaming security key). This
+factor must be turned on first: **Auth0 Dashboard → Security → Multi-factor
+Auth → enable "WebAuthn with Device Biometrics"**. If it's off, enrollment
+tickets for it will fail.
 
 ## Stripe setup (payment links)
 
