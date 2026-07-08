@@ -131,7 +131,7 @@ tickets for it will fail.
    npx wrangler secret put STRIPE_SECRET_KEY
    ```
 2. Create a webhook endpoint (**Developers → Webhooks → Add endpoint**):
-   - URL: `https://litalk-files-api.n62c5gwghk.workers.dev/stripe/webhook`
+   - URL: `https://api.litalkeducation.com/stripe/webhook`
    - Event: `checkout.session.completed`
    Then store its signing secret:
    ```sh
@@ -203,7 +203,7 @@ once** or you'll get duplicates.
 2. Send it with a staff access token (grab one from the admin page's
    DevTools → Network → any Worker request → `Authorization` header):
    ```sh
-   curl -X POST https://litalk-files-api.n62c5gwghk.workers.dev/import \
+   curl -X POST https://api.litalkeducation.com/import \
      -H "Authorization: Bearer <ACCESS_TOKEN>" \
      -H "Content-Type: application/json" \
      --data @export.json
