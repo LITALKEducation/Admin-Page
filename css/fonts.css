@@ -1,12 +1,12 @@
 /* ============================================================
    LITALK — Self-hosted webfonts
-   Montserrat (Latin) + Mitr (Thai), served locally instead of
-   from fonts.googleapis.com. When the Google Fonts CDN is slow,
-   blocked, or fails, the browser used to fall back to whatever
-   default system font matches each script — a bold system Thai
-   face next to a thin system Latin face — which made EN/TH text
-   look mismatched wherever they appeared side by side. Hosting
-   both fonts locally removes that failure mode entirely.
+   Montserrat (Latin) + Noto Sans Thai (Thai), served locally
+   instead of from fonts.googleapis.com. When the Google Fonts CDN
+   is slow, blocked, or fails, the browser used to fall back to
+   whatever default system font matches each script — a bold
+   system Thai face next to a thin system Latin face — which made
+   EN/TH text look mismatched wherever they appeared side by side.
+   Hosting both fonts locally removes that failure mode entirely.
    ============================================================ */
 
 @font-face {
@@ -26,41 +26,9 @@
 }
 
 @font-face {
-  font-family: 'Mitr';
+  font-family: 'Noto Sans Thai';
   font-style: normal;
-  font-weight: 300;
+  font-weight: 100 900;
   font-display: swap;
-  src: url('../font/Mitr-Light.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Mitr';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('../font/Mitr-Regular.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Mitr';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('../font/Mitr-Medium.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Mitr';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('../font/Mitr-SemiBold.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Mitr';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('../font/Mitr-Bold.woff2') format('woff2');
+  src: url('../font/NotoSansThai-Variable.woff2') format('woff2');
 }
