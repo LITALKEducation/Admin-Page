@@ -154,41 +154,51 @@ resync, a "withdraw hours" amendment) deletes the Calendar event too. If
 Google Meet isn't configured, or the API call fails, the booking is still
 created — it's just missing a link.
 
-**Note:** a plain service account cannot create Meet links on its own
-calendar (no Meet license). It must impersonate a real Google Workspace user
-via domain-wide delegation, and the event is created on *that user's*
-calendar.
+**Auth approach:** this uses a plain OAuth "refresh token" — not a service
+account, since service accounts can only impersonate other users (and thus
+create Meet links) via Google Workspace domain-wide delegation, which a
+personal/plain Gmail account doesn't have. Instead, one human logs into the
+Google account that should own the class calendar (a teacher's Gmail, or a
+dedicated one you create for this, e.g. `litalk.classes@gmail.com`) **once**,
+which mints a refresh token the Worker reuses indefinitely.
 
-1. In [Google Cloud Console](https://console.cloud.google.com/), create (or
-   pick) a project, then **APIs & Services → Library** → enable the
-   **Google Calendar API**.
-2. **APIs & Services → Credentials → Create Credentials → Service account**.
-   Give it any name; no project role is needed. Open it, **Keys → Add Key →
-   Create new key → JSON**, and download it.
-3. Note the service account's **Client ID** (numeric, on the service
-   account's Details tab) and its email
-   (`...@<project>.iam.gserviceaccount.com`, from the same JSON key).
-4. In the Google Workspace Admin console (requires a Workspace *super
-   admin*, not just a Cloud project owner) → **Security → Access and data
-   control → API controls → Domain-wide delegation → Add new**:
-   - Client ID: the numeric one from step 3.
-   - Scopes: `https://www.googleapis.com/auth/calendar`
-5. Pick the Workspace user whose calendar should host these events (a
-   teacher or a shared "LITALK Classes" mailbox) and store its email as
-   `GOOGLE_CALENDAR_ORGANIZER_EMAIL` in `wrangler.toml`.
-6. Store the service account's credentials as Worker secrets — from the JSON
-   key downloaded in step 2, `client_email` and `private_key`:
+1. In [Google Cloud Console](https://console.cloud.google.com/) (any Google
+   account works — no Workspace needed), create a project, then
+   **APIs & Services → Library** → enable the **Google Calendar API**.
+2. **APIs & Services → OAuth consent screen**:
+   - User type: **External**.
+   - Fill in the required fields (app name, your email as support/developer
+     contact) — anything reasonable is fine, this app is only ever used by
+     you.
+   - Scopes: add `https://www.googleapis.com/auth/calendar.events`.
+   - Under **Audience**, click **Publish App** to move it from "Testing" to
+     "In production". **This matters**: refresh tokens minted while the
+     consent screen is still "Testing" expire after 7 days. Publishing
+     doesn't require Google's verification review for this use case — you'll
+     just see an "unverified app" warning during login in the next step
+     (click **Advanced → Go to [app name] (unsafe)** to continue), which is
+     expected and fine for a single-account internal tool.
+3. **APIs & Services → Credentials → Create Credentials → OAuth client ID**.
+   - Application type: **Desktop app**.
+   - Copy the **Client ID** and **Client secret** it generates.
+4. Run the helper script from `worker/`, which opens a login page, catches
+   the redirect locally, and prints the refresh token:
    ```sh
-   npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_EMAIL
-   npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+   npm run google-oauth-setup
    ```
-   Paste the `private_key` value exactly as it appears in the JSON
-   (including the `-----BEGIN/END PRIVATE KEY-----` lines and its `\n`
-   escapes) — the Worker parses that format directly.
+   Paste the Client ID / Client secret when prompted, then open the printed
+   URL and log into the Google account that should own the class calendar
+   (approve the "unverified app" warning as noted above). It prints three
+   values — store them as Worker secrets exactly as it shows:
+   ```sh
+   npx wrangler secret put GOOGLE_OAUTH_CLIENT_ID
+   npx wrangler secret put GOOGLE_OAUTH_CLIENT_SECRET
+   npx wrangler secret put GOOGLE_OAUTH_REFRESH_TOKEN
+   ```
 
-`GOOGLE_CALENDAR_ID` is optional and defaults to the organizer's own
+`GOOGLE_CALENDAR_ID` is optional and defaults to that account's own
 `primary` calendar; set it only if events should land on a different
-calendar the organizer has write access to.
+calendar the account has write access to.
 
 ## 2. One-time Cloudflare resource setup
 

@@ -26,13 +26,15 @@ export interface Env {
   AUTH0_MGMT_CLIENT_ID?: string;
   AUTH0_MGMT_CLIENT_SECRET?: string;
   // Google Meet auto-creation (see worker/README.md). Booking still works
-  // without these — it just skips the Meet link.
-  GOOGLE_SERVICE_ACCOUNT_EMAIL?: string;
-  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?: string; // secret; PEM (\n-escaped is fine)
-  // Workspace user the service account impersonates via domain-wide
-  // delegation — Meet links can only be created on a real user's calendar.
-  GOOGLE_CALENDAR_ORGANIZER_EMAIL?: string;
-  GOOGLE_CALENDAR_ID?: string; // defaults to the organizer's "primary" calendar
+  // without these — it just skips the Meet link. OAuth "refresh token" flow
+  // (not a service account — that needs Google Workspace domain-wide
+  // delegation): one-time login by the Google account that should own the
+  // class calendar mints GOOGLE_OAUTH_REFRESH_TOKEN via
+  // `npm run google-oauth-setup`.
+  GOOGLE_OAUTH_CLIENT_ID?: string;
+  GOOGLE_OAUTH_CLIENT_SECRET?: string; // secret
+  GOOGLE_OAUTH_REFRESH_TOKEN?: string; // secret
+  GOOGLE_CALENDAR_ID?: string; // defaults to that account's "primary" calendar
 }
 
 export interface AuthUser {

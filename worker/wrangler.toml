@@ -42,13 +42,11 @@ AUTH0_ADMIN_ROLE_ID = "rol_a4boy0hKsG2tABpo"
 AUTH0_TEACHER_ROLE_ID = "rol_su0AELJNGqQB8Yk7"
 AUTH0_STAFF_ROLE_ID = "rol_ZoCzC7ZFmbjuwemu"
 
-# Workspace user the Google service account impersonates (domain-wide
-# delegation) when creating a booking's Meet event — see README. Booking
-# still works without Google Meet configured; it just skips the link.
-# GOOGLE_CALENDAR_ORGANIZER_EMAIL = "teacher@yourdomain.com"
-# GOOGLE_CALENDAR_ID = ""   # defaults to the organizer's own "primary" calendar
+# Calendar a booking's Meet event is created on — see README. Booking still
+# works without Google Meet configured; it just skips the link.
+# GOOGLE_CALENDAR_ID = ""   # defaults to the authorized account's own "primary" calendar
 
 # Secrets, NOT vars — set them with `npx wrangler secret put <NAME>`:
 #   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET        (Stripe payment links)
 #   AUTH0_MGMT_CLIENT_ID, AUTH0_MGMT_CLIENT_SECRET  (student/teacher/staff account management — see README)
-#   GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY (Google Meet auto-creation — see README)
+#   GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REFRESH_TOKEN (Google Meet auto-creation — see README)

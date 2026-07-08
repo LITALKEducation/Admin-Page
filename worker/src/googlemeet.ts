@@ -1,47 +1,24 @@
 // Auto-creates a Google Meet link for each booked class by creating a
-// Calendar event (with conferenceData) on behalf of a Workspace user via a
-// service account + domain-wide delegation. No googleapis SDK — a minimal
-// REST client using WebCrypto to sign the auth JWT, matching the style of
-// stripe.ts.
+// Calendar event (with conferenceData) on a real Google account's calendar.
+// No googleapis SDK — a minimal REST client matching the style of stripe.ts.
 //
-// Setup (see worker/README.md for the full walkthrough):
-//   - Google Cloud service account with a JSON key, domain-wide delegation
-//     enabled, authorized for scope https://www.googleapis.com/auth/calendar
-//   - GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY (secrets)
-//   - GOOGLE_CALENDAR_ORGANIZER_EMAIL: the real Workspace user the service
-//     account impersonates — Meet links can only be minted on a real user's
-//     calendar, not the service account's own.
-//   - GOOGLE_CALENDAR_ID (optional, defaults to that user's "primary" calendar)
+// Auth: a plain OAuth "refresh token" flow (not a service account — that
+// needs Google Workspace domain-wide delegation, which a personal/plain
+// Gmail account doesn't have). One human logs into the Google account that
+// should own the class calendar, one time, via
+// `npm run google-oauth-setup` (see worker/README.md); that mints a
+// refresh token which is stored as a Worker secret and reused forever to
+// mint short-lived access tokens for the Calendar API.
 import type { Env } from './types';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 const DEFAULT_DURATION_MINUTES = 60;
 
 export class GoogleCalendarError extends Error {}
 
-function base64url(bytes: ArrayBuffer | string): string {
-  const bin = typeof bytes === 'string' ? bytes : String.fromCharCode(...new Uint8Array(bytes));
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-// Google's JSON key export escapes newlines as literal "\n"; PEM parsing
-// needs them as real line breaks.
-function importPrivateKey(pem: string): Promise<CryptoKey> {
-  const cleaned = pem
-    .replace(/\\n/g, '\n')
-    .replace(/-----BEGIN PRIVATE KEY-----/, '')
-    .replace(/-----END PRIVATE KEY-----/, '')
-    .replace(/\s/g, '');
-  const der = atob(cleaned);
-  const bytes = new Uint8Array(der.length);
-  for (let i = 0; i < der.length; i++) bytes[i] = der.charCodeAt(i);
-  return crypto.subtle.importKey('pkcs8', bytes, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
-}
-
-// One access token per isolate, reused until ~1 min before it expires — a
-// service-account token is good for an hour, and each isolate can handle
-// many bookings, so this saves a JWT-sign + token round trip per booking.
+// One access token per isolate, reused until ~1 min before it expires — an
+// access token is good for an hour, and each isolate can handle many
+// bookings, so this saves a token exchange round trip per booking.
 let cachedToken: { token: string; expiresAt: number } | null = null;
 let inFlight: Promise<string> | null = null;
 
@@ -50,33 +27,19 @@ async function getAccessToken(env: Env): Promise<string> {
   if (inFlight) return inFlight;
 
   inFlight = (async () => {
-    const now = Math.floor(Date.now() / 1000);
-    const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-    const claims = base64url(
-      JSON.stringify({
-        iss: env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        sub: env.GOOGLE_CALENDAR_ORGANIZER_EMAIL, // impersonate this Workspace user
-        scope: CALENDAR_SCOPE,
-        aud: TOKEN_URL,
-        iat: now,
-        exp: now + 3600,
-      }),
-    );
-    const key = await importPrivateKey(env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY!);
-    const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(`${header}.${claims}`));
-    const jwt = `${header}.${claims}.${base64url(signature)}`;
-
     const res = await fetch(TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-        assertion: jwt,
+        grant_type: 'refresh_token',
+        refresh_token: env.GOOGLE_OAUTH_REFRESH_TOKEN!,
+        client_id: env.GOOGLE_OAUTH_CLIENT_ID!,
+        client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET!,
       }),
     });
     const json = (await res.json()) as { access_token?: string; expires_in?: number; error_description?: string };
     if (!res.ok || !json.access_token) {
-      throw new GoogleCalendarError(json.error_description ?? `Google token request failed (HTTP ${res.status})`);
+      throw new GoogleCalendarError(json.error_description ?? `Google token refresh failed (HTTP ${res.status})`);
     }
     cachedToken = { token: json.access_token, expiresAt: Date.now() + (json.expires_in ?? 3600) * 1000 - 60_000 };
     return json.access_token;
@@ -89,11 +52,11 @@ async function getAccessToken(env: Env): Promise<string> {
   }
 }
 
-// True once the three settings needed to call the Calendar API are present;
+// True once the settings needed to call the Calendar API are present;
 // callers use this to skip silently (booking still succeeds without a link)
 // when Google Meet integration hasn't been configured.
 export function googleMeetConfigured(env: Env): boolean {
-  return Boolean(env.GOOGLE_SERVICE_ACCOUNT_EMAIL && env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY && env.GOOGLE_CALENDAR_ORGANIZER_EMAIL);
+  return Boolean(env.GOOGLE_OAUTH_CLIENT_ID && env.GOOGLE_OAUTH_CLIENT_SECRET && env.GOOGLE_OAUTH_REFRESH_TOKEN);
 }
 
 export interface MeetEvent {
