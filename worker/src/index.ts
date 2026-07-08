@@ -34,7 +34,7 @@ app.post('/stripe/webhook', async (c) => {
   const valid = await verifyStripeSignature(payload, c.req.header('Stripe-Signature'), c.env.STRIPE_WEBHOOK_SECRET);
   if (!valid) return c.json({ error: 'Invalid signature' }, 400);
 
-  const event = JSON.parse(payload) as {
+  let event: {
     type: string;
     data: {
       object: {
@@ -46,45 +46,62 @@ app.post('/stripe/webhook', async (c) => {
       };
     };
   };
+  try {
+    event = JSON.parse(payload);
+  } catch (err) {
+    console.error('stripe webhook: malformed JSON payload', err);
+    return c.json({ error: 'Malformed payload' }, 400);
+  }
 
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    if (session.payment_status === 'paid' && session.amount_total) {
-      const meta = session.metadata ?? {};
-      // UNIQUE(stripe_session_id) makes redelivered webhooks a no-op.
-      await c.env.DB.prepare(
-        `INSERT OR IGNORE INTO payments
-           (student_id, amount, method, paid_date, source, stripe_payment_link_id, stripe_session_id, recorded_by)
-         VALUES (?, ?, 'Stripe', ?, 'stripe', ?, ?, ?)`,
-      )
-        .bind(
-          meta.student_id || null,
-          session.amount_total / 100,
-          bangkokToday(),
-          session.payment_link ?? null,
-          session.id,
-          meta.created_by || null,
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      if (session.payment_status === 'paid' && session.amount_total) {
+        const meta = session.metadata ?? {};
+        // UNIQUE(stripe_session_id) makes redelivered webhooks a no-op.
+        await c.env.DB.prepare(
+          `INSERT OR IGNORE INTO payments
+             (student_id, amount, method, paid_date, source, stripe_payment_link_id, stripe_session_id, recorded_by)
+           VALUES (?, ?, 'Stripe', ?, 'stripe', ?, ?, ?)`,
         )
-        .run();
-      if (session.payment_link) {
-        await c.env.DB.prepare(`UPDATE payment_links SET status = 'paid' WHERE stripe_payment_link_id = ?`)
-          .bind(session.payment_link)
+          .bind(
+            meta.student_id || null,
+            session.amount_total / 100,
+            bangkokToday(),
+            session.payment_link ?? null,
+            session.id,
+            meta.created_by || null,
+          )
           .run();
+        if (session.payment_link) {
+          await c.env.DB.prepare(`UPDATE payment_links SET status = 'paid' WHERE stripe_payment_link_id = ?`)
+            .bind(session.payment_link)
+            .run();
+        }
+        // A successful payment starts the approved schedule (or amendment)
+        // right away.
+        const scheduleId = Number(meta.schedule_id);
+        const amendmentId = Number(meta.amendment_id);
+        if (Number.isFinite(amendmentId) && amendmentId > 0) {
+          await activateAmendment(c.env.DB, amendmentId);
+        } else if (Number.isFinite(scheduleId) && scheduleId > 0) {
+          await activateSchedule(c.env.DB, scheduleId);
+        } else if (meta.student_id) {
+          await activateApprovedSchedulesForStudent(c.env.DB, meta.student_id);
+          await activateAwaitingAmendmentsForStudent(c.env.DB, meta.student_id);
+        }
+        await logAudit(c.env.DB, null, 'STRIPE_PAYMENT', meta.student_id || null, session.id, true);
       }
-      // A successful payment starts the approved schedule (or amendment)
-      // right away.
-      const scheduleId = Number(meta.schedule_id);
-      const amendmentId = Number(meta.amendment_id);
-      if (Number.isFinite(amendmentId) && amendmentId > 0) {
-        await activateAmendment(c.env.DB, amendmentId);
-      } else if (Number.isFinite(scheduleId) && scheduleId > 0) {
-        await activateSchedule(c.env.DB, scheduleId);
-      } else if (meta.student_id) {
-        await activateApprovedSchedulesForStudent(c.env.DB, meta.student_id);
-        await activateAwaitingAmendmentsForStudent(c.env.DB, meta.student_id);
-      }
-      await logAudit(c.env.DB, null, 'STRIPE_PAYMENT', meta.student_id || null, session.id, true);
     }
+  } catch (err) {
+    // Surface a 500 so Stripe retries the delivery instead of silently
+    // losing a payment record — but log first so the failure is visible
+    // in `wrangler tail` / the Cloudflare dashboard instead of vanishing
+    // as an opaque "other error" on Stripe's side.
+    console.error(`stripe webhook: failed to process event ${event.type} (${event.data?.object?.id})`, err);
+    const session = event.data?.object;
+    await logAudit(c.env.DB, null, 'STRIPE_PAYMENT', session?.metadata?.student_id || null, session?.id || null, false).catch(() => {});
+    return c.json({ error: 'Internal error' }, 500);
   }
 
   return c.json({ received: true });
