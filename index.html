@@ -8299,6 +8299,8 @@
             if (!wrap) return;
             wrap.innerHTML = '<div class="form-hint">กำลังโหลดข้อมูล...</div>';
             try {
+                // Needed to decide which rows the current user may manage.
+                await loadFilesPermissions();
                 const response = await apiFetch('/bookings');
                 const rows = await response.json();
                 if (!response.ok) throw new Error(rows.error || 'load failed');
@@ -8306,25 +8308,84 @@
                     wrap.innerHTML = '<div class="form-hint">ยังไม่มีการจองเวลาเรียนที่กำลังจะถึง</div>';
                     return;
                 }
+                const admin = isAdminUser();
+                const myEmail = (filesApiMe && filesApiMe.email ? filesApiMe.email : '').toLowerCase();
                 wrap.innerHTML = `
                     <table class="data-table">
-                        <thead><tr><th>วันที่</th><th>เวลา</th><th>นักเรียน</th><th>คอร์ส</th><th>Google Meet</th></tr></thead>
+                        <thead><tr><th>วันที่</th><th>เวลา</th><th>นักเรียน</th><th>คอร์ส</th><th>ลิงก์เรียน</th><th>จัดการ</th></tr></thead>
                         <tbody>
-                            ${rows.map(b => `
+                            ${rows.map(b => {
+                                // Only the creator (or an admin) may edit/cancel a row.
+                                const canManage = admin || (!!b.createdBy && b.createdBy.toLowerCase() === myEmail);
+                                const linkCell = b.meetLink
+                                    ? `<a href="${escapeHtml(b.meetLink)}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;"><i class="fas fa-video"></i> เข้าร่วม</a>`
+                                    : '<span class="form-hint" style="margin: 0;">-</span>';
+                                const manageCell = canManage
+                                    ? `<button class="icon-btn" title="${b.meetLink ? 'แก้ลิงก์เรียน' : 'เพิ่มลิงก์ Google Meet / Zoom'}" onclick="editBookingLink(${b.id}, '${escapeJs(b.meetLink || '')}')"><i class="fas fa-link"></i></button>
+                                       <button class="icon-btn icon-btn-danger" title="ยกเลิกคลาส" onclick="cancelBooking(${b.id}, '${escapeJs(b.studentName)}')"><i class="fas fa-trash"></i></button>`
+                                    : '<span class="form-hint" title="แก้ไขได้เฉพาะผู้ที่สร้างรายการ หรือแอดมิน" style="margin: 0;"><i class="fas fa-lock"></i></span>';
+                                return `
                                 <tr>
                                     <td>${escapeHtml(new Date(b.date + 'T00:00:00').toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' }))}</td>
                                     <td>${escapeHtml(b.time)}</td>
                                     <td>${escapeHtml(b.studentName)}</td>
                                     <td>${escapeHtml(b.course || '-')}</td>
-                                    <td>${b.meetLink
-                    ? `<a href="${escapeHtml(b.meetLink)}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;"><i class="fas fa-video"></i> เข้าร่วม</a>`
-                    : '<span class="form-hint" style="margin: 0;">-</span>'}</td>
-                                </tr>`).join('')}
+                                    <td>${linkCell}</td>
+                                    <td><span class="row-actions">${manageCell}</span></td>
+                                </tr>`;
+                            }).join('')}
                         </tbody>
                     </table>`;
             } catch (error) {
                 console.error('loadBookingTable:', error);
                 wrap.innerHTML = '<div class="form-hint">โหลดตารางการจองไม่สำเร็จ</div>';
+            }
+        }
+
+        // Add or replace a booking's meeting link by hand (Google Meet, Zoom, …).
+        async function editBookingLink(id, currentLink) {
+            const url = await promptDialog('วางลิงก์ห้องเรียนออนไลน์ (Google Meet, Zoom, Teams ฯลฯ) — เว้นว่างเพื่อลบลิงก์', {
+                title: 'ลิงก์ห้องเรียน',
+                defaultValue: currentLink || '',
+                placeholder: 'https://meet.google.com/... หรือ https://zoom.us/...',
+                okLabel: 'บันทึก',
+            });
+            if (url === null) return; // cancelled
+            const trimmed = url.trim();
+            if (trimmed && !/^https?:\/\/\S+$/i.test(trimmed)) {
+                showModal('ลิงก์ไม่ถูกต้อง', 'ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https://', 'error');
+                return;
+            }
+            showLoading();
+            try {
+                const response = await apiFetch(`/bookings/${id}`, { method: 'PATCH', body: JSON.stringify({ meetLink: trimmed }) });
+                const result = await response.json();
+                hideLoading();
+                if (!response.ok) throw new Error(result.error || 'save failed');
+                showToast('บันทึกแล้ว', result.message || 'บันทึกลิงก์เรียนแล้ว', 'success');
+                loadBookingTable();
+            } catch (error) {
+                hideLoading();
+                console.error('editBookingLink:', error);
+                showModal('บันทึกล้มเหลว', error.message || 'ไม่สามารถบันทึกลิงก์ได้', 'error');
+            }
+        }
+
+        // Cancel a class the current user owns (or any, if admin).
+        async function cancelBooking(id, studentName) {
+            if (!(await confirmDialog(`ยกเลิกคลาสของ ${studentName || 'นักเรียน'} ใช่หรือไม่? คลาสจะถูกนำออกจากตารางของนักเรียนและปฏิทิน`, { danger: true, okLabel: 'ยกเลิกคลาส' }))) return;
+            showLoading();
+            try {
+                const response = await apiFetch(`/bookings/${id}`, { method: 'DELETE' });
+                const result = await response.json();
+                hideLoading();
+                if (!response.ok) throw new Error(result.error || 'cancel failed');
+                showToast('ยกเลิกแล้ว', result.message || 'ยกเลิกคลาสเรียบร้อยแล้ว', 'success');
+                loadBookingTable();
+            } catch (error) {
+                hideLoading();
+                console.error('cancelBooking:', error);
+                showModal('ยกเลิกล้มเหลว', error.message || 'ไม่สามารถยกเลิกคลาสได้', 'error');
             }
         }
 
