@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { AppBindings } from './types';
 import { requirePermission, requireAdmin, isAdmin } from './auth';
 import { logAudit } from './db';
-import { createStripePaymentLink, deactivateStripePaymentLink, StripeError, withPolicyNote, withPrefilledPromoCode } from './stripe';
+import { createStripePaymentLink, deactivateStripePaymentLink, listActivePromotionCodes, StripeError, withPolicyNote, withPrefilledPromoCode } from './stripe';
 import { createStudentAuth0User } from './auth0mgmt';
 import { bangkokToday, bangkokMonth, daysAgo, isYmd } from './dates';
 import { visibleStudentIds, canSeeStudent, activateApprovedSchedulesForStudent, activateAwaitingAmendmentsForStudent } from './manage';
@@ -447,6 +447,17 @@ core.get('/earnings', requirePermission('data:read'), async (c) => {
 });
 
 // ===== Stripe payment links =====
+
+// Lists active Promotion Codes for the "create payment link" form's dropdown.
+core.get('/payment-links/promotion-codes', requireAdmin, async (c) => {
+  if (!c.env.STRIPE_SECRET_KEY) return c.json({ error: 'Stripe is not configured (missing STRIPE_SECRET_KEY secret)' }, 503);
+  try {
+    return c.json(await listActivePromotionCodes(c.env.STRIPE_SECRET_KEY));
+  } catch (err) {
+    if (err instanceof StripeError) return c.json({ error: `Stripe: ${err.message}` }, 502);
+    throw err;
+  }
+});
 
 // Admin-only: teachers cannot bill through Stripe.
 core.post('/payment-links', requireAdmin, async (c) => {
