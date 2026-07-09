@@ -1244,7 +1244,7 @@ manage.get('/bookings', requirePermission('data:read'), async (c) => {
 manage.get('/finance', requireAdmin, async (c) => {
   const month = isYm(c.req.query('month')) ? c.req.query('month')! : bangkokMonth();
 
-  const [totals, bySource, byRecorder, transactions, links] = await c.env.DB.batch([
+  const [totals, bySource, byRecorder, transactions, links, discounts] = await c.env.DB.batch([
     c.env.DB.prepare(`SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM payments WHERE paid_date LIKE ? || '%'`).bind(month),
     c.env.DB.prepare(`SELECT source, COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM payments WHERE paid_date LIKE ? || '%' GROUP BY source`).bind(month),
     c.env.DB.prepare(
@@ -1257,7 +1257,7 @@ manage.get('/finance', requireAdmin, async (c) => {
       `SELECT p.id, p.paid_date AS date, p.amount, p.method, p.source,
               p.proof_url AS proof, p.stripe_session_id AS stripeSessionId,
               COALESCE(s.name, pl.customer_name, p.student_id, 'ลูกค้า') AS studentName, p.student_id AS studentId,
-              COALESCE(st.name, p.recorded_by, '-') AS recordedBy
+              COALESCE(st.name, p.recorded_by, '-') AS recordedBy, pl.discount_amount AS discountAmount
        FROM payments p
        LEFT JOIN students s ON s.id = p.student_id
        LEFT JOIN payment_links pl ON pl.stripe_payment_link_id = p.stripe_payment_link_id
@@ -1265,6 +1265,11 @@ manage.get('/finance', requireAdmin, async (c) => {
        WHERE p.paid_date LIKE ? || '%' ORDER BY p.paid_date DESC, p.id DESC LIMIT 200`,
     ).bind(month),
     c.env.DB.prepare(`SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM payment_links WHERE status = 'active'`),
+    c.env.DB.prepare(
+      `SELECT COALESCE(SUM(pl.discount_amount), 0) AS total, COUNT(*) AS count
+       FROM payments p JOIN payment_links pl ON pl.stripe_payment_link_id = p.stripe_payment_link_id
+       WHERE p.paid_date LIKE ? || '%' AND pl.discount_amount > 0`,
+    ).bind(month),
   ]);
 
   // Per-teacher income = this month's payments from each teacher's
@@ -1289,6 +1294,7 @@ manage.get('/finance', requireAdmin, async (c) => {
     manualTotal: sourceRows.find((r) => r.source === 'manual')?.total ?? 0,
     stripeTotal: sourceRows.find((r) => r.source === 'stripe')?.total ?? 0,
     pendingLinks: links.results?.[0] ?? { total: 0, count: 0 },
+    discounts: discounts.results?.[0] ?? { total: 0, count: 0 },
     byRecorder: byRecorder.results ?? [],
     byTeacher: assignRows ?? [],
     transactions: transactions.results ?? [],

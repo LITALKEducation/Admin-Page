@@ -4393,8 +4393,10 @@
                             </div>
                             <div class="form-group">
                                 <label><i class="fas fa-tag"></i> รหัสโปรโมชั่น (ถ้ามี)</label>
-                                <input type="text" id="link-promo-code" placeholder="เว้นว่างได้ — ลูกค้าใส่โค้ดเองที่หน้าชำระเงินได้เสมอ">
-                                <div class="form-hint">ต้องสร้างโค้ดนี้ใน Stripe Dashboard ก่อน (Product catalog → Coupons) ระบบจะกรอกโค้ดให้ล่วงหน้า ลูกค้ายังแก้ไขได้</div>
+                                <select id="link-promo-code">
+                                    <option value="">ไม่ใช้ — ลูกค้าใส่โค้ดเองที่หน้าชำระเงินได้เสมอ</option>
+                                </select>
+                                <div class="form-hint">รายการนี้ดึงจาก Promotion Code ที่ active ใน Stripe Dashboard (Product catalog → Coupons) ระบบจะกรอกโค้ดที่เลือกให้ล่วงหน้า ลูกค้ายังแก้ไขได้</div>
                             </div>
                             <div style="display: flex; justify-content: flex-end;">
                                 <button class="btn btn-primary" onclick="createPaymentLink()" id="create-link-btn">
@@ -6065,6 +6067,7 @@
             if (screen === 'payments') {
                 loadEarnings();
                 loadPaymentLinks();
+                if (isAdminUser()) loadPromotionCodes();
             }
             if (screen === 'files') {
                 syncPickerText('files');
@@ -8349,7 +8352,8 @@
                     { label: 'รายรับรวม', icon: 'fas fa-coins', value: formatBaht(f.total), sub: `${f.count} รายการ` },
                     { label: 'บันทึกเอง', icon: 'fas fa-money-bill', value: formatBaht(f.manualTotal), sub: 'เงินสด/โอน' },
                     { label: 'ผ่าน Stripe', icon: 'fab fa-stripe-s', value: formatBaht(f.stripeTotal), sub: 'ออนไลน์' },
-                    { label: 'ลิงก์รอชำระ', icon: 'fas fa-hourglass-half', value: formatBaht(f.pendingLinks.total), sub: `${f.pendingLinks.count} ลิงก์` }
+                    { label: 'ลิงก์รอชำระ', icon: 'fas fa-hourglass-half', value: formatBaht(f.pendingLinks.total), sub: `${f.pendingLinks.count} ลิงก์` },
+                    { label: 'ส่วนลดที่ให้ไป', icon: 'fas fa-tag', value: formatBaht(f.discounts.total), sub: `${f.discounts.count} รายการ` }
                 ].map(c => `
                     <div class="stat-card">
                         <div class="stat-card-top"><span class="stat-card-label">${c.label}</span><i class="${c.icon}"></i></div>
@@ -8385,7 +8389,7 @@
                                     <td>${escapeHtml(t.method || FINANCE_SOURCE_LABEL[t.source] || t.source)}</td>
                                     <td>${escapeHtml(t.recordedBy || '-')}</td>
                                     <td>${ref}</td>
-                                    <td style="text-align:right;">${formatBaht(t.amount)}</td>
+                                    <td style="text-align:right;">${formatBaht(t.amount)}${t.discountAmount ? `<div class="form-hint" style="margin:0;">ลด ${formatBaht(t.discountAmount)}</div>` : ''}</td>
                                 </tr>`;
                             }).join('')}
                         </tbody>
@@ -8619,6 +8623,27 @@
         }
 
         const LINK_STATUS_LABEL = { active: 'รอชำระ', paid: 'ชำระแล้ว', deactivated: 'ยกเลิกแล้ว' };
+
+        async function loadPromotionCodes() {
+            const select = document.getElementById('link-promo-code');
+            if (!select) return;
+            try {
+                const response = await apiFetch('/payment-links/promotion-codes');
+                const codes = await response.json();
+                if (!response.ok) throw new Error(codes.error || 'load failed');
+                const placeholder = select.options[0];
+                select.innerHTML = '';
+                select.appendChild(placeholder);
+                codes.forEach(pc => {
+                    const opt = document.createElement('option');
+                    opt.value = pc.code;
+                    opt.textContent = pc.description ? `${pc.code} (${pc.description})` : pc.code;
+                    select.appendChild(opt);
+                });
+            } catch (err) {
+                console.error('loadPromotionCodes:', err);
+            }
+        }
 
         async function loadPaymentLinks() {
             const list = document.getElementById('payment-links-list');

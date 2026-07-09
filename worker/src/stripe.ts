@@ -17,8 +17,10 @@ async function stripeRequest<T>(
   path: string,
   params?: Record<string, string>,
 ): Promise<T> {
-  const body = params ? new URLSearchParams(params).toString() : undefined;
-  const res = await fetch(`${STRIPE_API}${path}`, {
+  // GET requests can't carry a body — params go on the query string instead.
+  const query = params && method === 'GET' ? `?${new URLSearchParams(params).toString()}` : '';
+  const body = params && method === 'POST' ? new URLSearchParams(params).toString() : undefined;
+  const res = await fetch(`${STRIPE_API}${path}${query}`, {
     method,
     headers: {
       Authorization: `Bearer ${secretKey}`,
@@ -92,6 +94,33 @@ export async function createStripePaymentLink(
 
 export async function deactivateStripePaymentLink(secretKey: string, paymentLinkId: string): Promise<void> {
   await stripeRequest(secretKey, 'POST', `/v1/payment_links/${paymentLinkId}`, { active: 'false' });
+}
+
+export interface PromotionCodeSummary {
+  id: string;
+  code: string;
+  description: string; // e.g. "10% off" or "50 THB off", for the admin dropdown
+}
+
+// Lists currently-redeemable promotion codes so the admin can pick one
+// instead of typing it (and risking a typo/inactive code).
+export async function listActivePromotionCodes(secretKey: string): Promise<PromotionCodeSummary[]> {
+  const res = await stripeRequest<{
+    data: Array<{
+      code: string;
+      id: string;
+      coupon: { percent_off?: number | null; amount_off?: number | null; currency?: string | null; name?: string | null };
+    }>;
+  }>(secretKey, 'GET', '/v1/promotion_codes', { active: 'true', limit: '100' });
+  return res.data.map((pc) => ({
+    id: pc.id,
+    code: pc.code,
+    description: pc.coupon.percent_off
+      ? `${pc.coupon.percent_off}%`
+      : pc.coupon.amount_off
+        ? `${(pc.coupon.amount_off / 100).toFixed(0)} ${(pc.coupon.currency ?? '').toUpperCase()}`
+        : pc.coupon.name ?? '',
+  }));
 }
 
 // Payment Links have no create-time "apply this coupon" parameter (that's
