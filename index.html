@@ -7343,7 +7343,8 @@
                 buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="cancelSchedule(${r.id})"><i class="fas fa-ban"></i> ยกเลิก</button>`;
             }
             if (r.paymentUrl && r.status === 'approved') {
-                buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(r.paymentUrl)}', this)" title="คัดลอกลิงก์ชำระเงินสำหรับผู้ปกครอง"><i class="fas fa-copy"></i> ลิงก์ชำระเงิน</button>`;
+                buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(r.paymentUrl)}', this)" title="คัดลอกลิงก์ชำระเงินสำหรับผู้ปกครอง"><i class="fas fa-copy"></i> ลิงก์ชำระเงิน</button>
+                            <button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyScheduleSummary(${r.id}, this)" title="คัดลอกข้อความสรุปการสอนและค่าใช้จ่ายพร้อมลิงก์ชำระเงิน"><i class="fas fa-file-lines"></i> ข้อความแจ้งผู้ปกครอง</button>`;
             }
             const creditNote = r.creditsApplied > 0 ? ` <span style="color: var(--accent-success);">(ใช้เครดิต ${r.creditsApplied} ชม.)</span>` : '';
             return `
@@ -7362,6 +7363,107 @@
                         ${buttons ? `<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">${buttons}</div>` : ''}
                     </div>
                 </div>`;
+        }
+
+        // ===== Parent-facing payment summary message =====
+        // Builds the LINE-ready message an admin forwards to a parent once a
+        // payment link exists: subject, session dates/times, hours, the amount
+        // charged, and the link itself.
+
+        function formatThaiMonthYearShort(ym) {
+            const d = new Date(ym + '-01T00:00:00');
+            if (isNaN(d.getTime())) return ym || '';
+            return `${d.toLocaleDateString('th-TH', { month: 'long' })} ${String(d.getFullYear() + 543).slice(-2)}`;
+        }
+
+        // Sessions are one hour each (BOOKING_SLOTS are hourly), so the end
+        // time is always start + 1 hour.
+        function addOneHour(hm) {
+            const [h, m] = String(hm || '0:0').split(':').map(Number);
+            return `${String((h + 1) % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        }
+
+        function buildParentSummaryMessage({ studentName, month, course, note, sessions, amount, creditsApplied, paymentUrl, isExtra }) {
+            const monthLabel = formatThaiMonthYearShort(month);
+            const lines = [];
+            lines.push(`สวัสดีครับคุณแม่ ขออนุญาตแจ้งรายละเอียด${isExtra ? 'การเรียนเพิ่มเติม' : 'การเรียนการสอน'}ของน้อง${studentName}ครับ เดือน ${monthLabel}`);
+            lines.push('');
+            if (course) lines.push(`📚เรียนวิชา${course}`);
+            if (note) lines.push(`เนื้อหาการสอน: ${note}`);
+            if (course || note) lines.push('');
+
+            // Group sessions that share a start time so the common case (same
+            // slot every week) reads as one "วันที่ 11, 17, 18" line.
+            const sorted = [...(sessions || [])].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+            const byTime = new Map();
+            sorted.forEach(s => {
+                if (!byTime.has(s.time)) byTime.set(s.time, []);
+                byTime.get(s.time).push(Number(s.date.slice(8, 10)));
+            });
+            const hourNote = `(1 ชั่วโมง/ครั้ง รวม ${sorted.length} ชั่วโมง)`;
+            if (byTime.size === 1) {
+                const [time, days] = [...byTime.entries()][0];
+                lines.push(`📍เวลาเรียน: วันที่ ${days.join(', ')}`);
+                lines.push(`เวลา ${time} น. - ${addOneHour(time)} น. ${hourNote}`);
+            } else if (byTime.size > 1) {
+                lines.push('📍เวลาเรียน:');
+                byTime.forEach((days, time) => lines.push(`วันที่ ${days.join(', ')} เวลา ${time} น. - ${addOneHour(time)} น.`));
+                lines.push(hourNote);
+            }
+            lines.push('ช่องทางการเรียน: เรียนผ่าน Google Meet');
+            lines.push('');
+            lines.push(`🧾ค่าใช้จ่ายในการเรียน${isExtra ? 'เพิ่มเติม' : ''}ครั้งนี้ ${Number(amount || 0).toLocaleString('en-US')} บาทครับ`);
+            if (creditsApplied > 0) lines.push(`(หักเครดิตคงเหลือ ${creditsApplied} ชั่วโมงให้แล้ว)`);
+            if (paymentUrl) {
+                lines.push('');
+                lines.push('ร้าน ลิททอล์ก เอดดูเคชัน');
+                lines.push('ขอแจ้งยอดที่คุณต้องชำระ');
+                lines.push(`จำนวนเงิน ${Number(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`);
+                lines.push('');
+                lines.push('กรุณาชำระเงินผ่านลิงก์นี้');
+                lines.push(paymentUrl);
+                lines.push('');
+                lines.push('คุณแม่สามารถชำระเงินได้ไม่เกิน 24 ชั่วโมง หลังจากได้รับลิงก์ครับ');
+            }
+            lines.push('ขอบคุณครับคุณแม่🙏🏻💖');
+            return lines.join('\n');
+        }
+
+        // Copies the summary; silent when there is no button so callers can
+        // show their own toast. Falls back to a modal showing the full text
+        // for manual copying (clipboard access can be denied outside a user
+        // gesture).
+        async function copySummaryText(text, btn) {
+            try {
+                await navigator.clipboard.writeText(text);
+                if (btn) {
+                    const orig = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-check"></i> คัดลอกแล้ว';
+                    setTimeout(() => { btn.innerHTML = orig; }, 1200);
+                }
+            } catch {
+                showModal('คัดลอกอัตโนมัติไม่สำเร็จ — คัดลอกข้อความด้านล่างแทนได้เลย', text, 'error');
+            }
+        }
+
+        function copyScheduleSummary(id, btn) {
+            const r = schedulesData.find(s => s.id === id);
+            if (!r) return;
+            copySummaryText(buildParentSummaryMessage({
+                studentName: r.studentName, month: r.month, course: r.course, note: r.note,
+                sessions: r.sessions, amount: r.total, creditsApplied: r.creditsApplied,
+                paymentUrl: r.paymentUrl, isExtra: false
+            }), btn);
+        }
+
+        function copyAmendmentSummary(id, btn) {
+            const r = amendmentsData.find(a => a.id === id);
+            if (!r) return;
+            copySummaryText(buildParentSummaryMessage({
+                studentName: r.studentName, month: r.month, course: r.course, note: r.note,
+                sessions: r.sessions, amount: r.chargeAmount, creditsApplied: r.creditsUsed,
+                paymentUrl: r.paymentUrl, isExtra: true
+            }), btn);
         }
 
         async function reviseSchedule(id) {
@@ -7394,8 +7496,13 @@
                 hideLoading();
                 if (response.ok && result.ok) {
                     if (result.paymentUrl) {
-                        copyPaymentLink(result.paymentUrl, null);
-                        showToast('อนุมัติแล้ว', result.message + '\n\nคัดลอกลิงก์ชำระเงินไว้ให้แล้ว: ' + result.paymentUrl, 'success');
+                        const sched = schedulesData.find(s => s.id === id);
+                        await copySummaryText(sched ? buildParentSummaryMessage({
+                            studentName: sched.studentName, month: sched.month, course: sched.course, note: sched.note,
+                            sessions: sched.sessions, amount: sched.total, creditsApplied: sched.creditsApplied,
+                            paymentUrl: result.paymentUrl, isExtra: false
+                        }) : result.paymentUrl, null);
+                        showToast('อนุมัติแล้ว', result.message + '\n\nคัดลอกข้อความสรุปการสอนพร้อมลิงก์ชำระเงินสำหรับส่งผู้ปกครองไว้ให้แล้ว', 'success');
                     } else {
                         showToast('อนุมัติแล้ว', result.message, 'success');
                     }
@@ -7453,6 +7560,7 @@
 
         let amendType = 'add';
         let amendSessions = [];
+        let amendmentsData = [];
         const AMENDMENT_STATUS_LABEL = {
             pending: 'รออนุมัติ',
             awaiting_payment: 'รอชำระเงิน',
@@ -7584,17 +7692,27 @@
                 }
             }
 
+            const note = document.getElementById('amend-note').value;
             showLoading();
             try {
                 const response = await apiFetch(`/schedules/${scheduleId}/amend`, {
                     method: 'POST',
-                    body: JSON.stringify({ type: amendType, sessions, note: document.getElementById('amend-note').value })
+                    body: JSON.stringify({ type: amendType, sessions, note })
                 });
                 const result = await response.json();
                 hideLoading();
                 if (response.ok && result.ok) {
-                    if (result.paymentUrl) copyPaymentLink(result.paymentUrl, null);
-                    showToast('ส่งคำร้องสำเร็จ', result.message, 'success');
+                    if (result.paymentUrl) {
+                        const sched = schedulesData.find(s => String(s.id) === scheduleId);
+                        await copySummaryText(sched ? buildParentSummaryMessage({
+                            studentName: sched.studentName, month: sched.month, course: sched.course, note: note.trim(),
+                            sessions, amount: result.chargeAmount, creditsApplied: result.creditsUsed,
+                            paymentUrl: result.paymentUrl, isExtra: true
+                        }) : result.paymentUrl, null);
+                        showToast('ส่งคำร้องสำเร็จ', result.message + '\n\nคัดลอกข้อความสรุปพร้อมลิงก์ชำระเงินสำหรับส่งผู้ปกครองไว้ให้แล้ว', 'success');
+                    } else {
+                        showToast('ส่งคำร้องสำเร็จ', result.message, 'success');
+                    }
                     amendSessions = [];
                     document.getElementById('amend-note').value = '';
                     document.getElementById('amend-schedule-select').value = '';
@@ -7617,9 +7735,10 @@
                 const response = await apiFetch('/schedule-amendments');
                 const rows = await response.json();
                 if (!response.ok) throw new Error(rows.error || 'load failed');
+                amendmentsData = Array.isArray(rows) ? rows : [];
                 const admin = isAdminUser();
-                list.innerHTML = Array.isArray(rows) && rows.length
-                    ? rows.map(r => renderAmendmentRow(r, admin)).join('')
+                list.innerHTML = amendmentsData.length
+                    ? amendmentsData.map(r => renderAmendmentRow(r, admin)).join('')
                     : '<div class="form-hint">ยังไม่มีคำร้อง</div>';
             } catch (error) {
                 console.error('loadAmendments:', error);
@@ -7640,7 +7759,8 @@
                 buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="cancelAmendment(${r.id})"><i class="fas fa-ban"></i> ยกเลิก</button>`;
             }
             if (r.paymentUrl && r.status === 'awaiting_payment') {
-                buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(r.paymentUrl)}', this)" title="คัดลอกลิงก์ชำระเงิน"><i class="fas fa-copy"></i> ลิงก์ชำระเงิน</button>`;
+                buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(r.paymentUrl)}', this)" title="คัดลอกลิงก์ชำระเงิน"><i class="fas fa-copy"></i> ลิงก์ชำระเงิน</button>
+                            <button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyAmendmentSummary(${r.id}, this)" title="คัดลอกข้อความสรุปชั่วโมงที่เพิ่มและค่าใช้จ่ายพร้อมลิงก์ชำระเงิน"><i class="fas fa-file-lines"></i> ข้อความแจ้งผู้ปกครอง</button>`;
             }
             const typeLabel = r.type === 'add' ? 'ขอเพิ่ม' : 'ขอถอน';
             const amountNote = r.type === 'add'
@@ -7671,8 +7791,17 @@
                 const result = await response.json();
                 hideLoading();
                 if (response.ok && result.ok) {
-                    if (result.paymentUrl) copyPaymentLink(result.paymentUrl, null);
-                    showToast('อนุมัติแล้ว', result.message, 'success');
+                    if (result.paymentUrl) {
+                        const a = amendmentsData.find(x => x.id === id);
+                        await copySummaryText(a ? buildParentSummaryMessage({
+                            studentName: a.studentName, month: a.month, course: a.course, note: a.note,
+                            sessions: a.sessions, amount: result.chargeAmount, creditsApplied: result.creditsUsed,
+                            paymentUrl: result.paymentUrl, isExtra: true
+                        }) : result.paymentUrl, null);
+                        showToast('อนุมัติแล้ว', result.message + '\n\nคัดลอกข้อความสรุปพร้อมลิงก์ชำระเงินสำหรับส่งผู้ปกครองไว้ให้แล้ว', 'success');
+                    } else {
+                        showToast('อนุมัติแล้ว', result.message, 'success');
+                    }
                     loadSchedules();
                 } else {
                     showModal('อนุมัติไม่สำเร็จ', result.error || 'เกิดข้อผิดพลาด', 'error');
