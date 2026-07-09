@@ -547,7 +547,7 @@ manage.get('/schedules', requirePermission('data:read'), async (c) => {
   const admin = isAdmin(user);
   const status = c.req.query('status');
 
-  let sql = `SELECT ms.id, ms.student_id AS studentId, COALESCE(s.name, ms.student_id) AS studentName, ms.month,
+  let sql = `SELECT ms.id, ms.student_id AS studentId, COALESCE(s.name, ms.student_id) AS studentName, s.course AS course, ms.month,
                     ms.rate_per_session AS rate, ms.total_amount AS total, ms.credits_applied AS creditsApplied,
                     ms.note, ms.status, ms.reject_reason AS rejectReason, ms.revise_note AS reviseNote,
                     ms.created_by AS createdBy, COALESCE(st.name, ms.created_by) AS createdByName,
@@ -844,7 +844,7 @@ async function decideAmendment(
     rate: number;
   },
   schedule: ScheduleRow,
-): Promise<{ message: string; paymentUrl: string | null }> {
+): Promise<{ message: string; paymentUrl: string | null; chargeAmount?: number; creditsUsed?: number }> {
   const db = c.env.DB;
   const user = c.get('user');
 
@@ -882,6 +882,8 @@ async function decideAmendment(
     return {
       message: `เพิ่มชั่วโมงเรียน ${sessionCount} คาบแล้ว — ใช้เครดิตเต็มจำนวน ไม่ต้องชำระเงิน`,
       paymentUrl: null,
+      chargeAmount: 0,
+      creditsUsed,
     };
   }
 
@@ -935,7 +937,7 @@ async function decideAmendment(
       ? ` — ${warning} จะเพิ่มคาบเรียนเมื่อบันทึกการชำระเงินในระบบ`
       : ' — จะเพิ่มคาบเรียนเมื่อบันทึกการชำระเงินในระบบ';
 
-  return { message, paymentUrl };
+  return { message, paymentUrl, chargeAmount, creditsUsed };
 }
 
 // Activates a paid 'awaiting_payment' add-amendment: inserts its sessions
@@ -1073,7 +1075,7 @@ manage.get('/schedule-amendments', requirePermission('data:read'), async (c) => 
   const status = c.req.query('status');
 
   let sql = `SELECT sa.id, sa.schedule_id AS scheduleId, ms.student_id AS studentId,
-                    COALESCE(s.name, ms.student_id) AS studentName, ms.month, sa.type, sa.sessions,
+                    COALESCE(s.name, ms.student_id) AS studentName, s.course AS course, ms.month, sa.type, sa.sessions,
                     sa.rate_per_session AS rate, sa.credits_used AS creditsUsed, sa.charge_amount AS chargeAmount,
                     sa.status, sa.note, sa.reject_reason AS rejectReason,
                     sa.created_by AS createdBy, COALESCE(st.name, sa.created_by) AS createdByName,
