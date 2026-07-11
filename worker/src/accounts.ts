@@ -5,7 +5,7 @@
 import { Hono } from 'hono';
 import type { AppBindings } from './types';
 import { requireAdmin } from './auth';
-import { logAudit } from './db';
+import { logAudit, resolveStudentAuth0Id } from './db';
 import { visibleStudentIds, canSeeStudent } from './manage';
 import {
   findAuth0UserByEmail,
@@ -26,18 +26,6 @@ function extOf(filename: string): string {
 }
 
 // ===== Students: profile, avatar, credentials =====
-
-// Resolves (and caches) a student's Auth0 user id from the login email
-// convention (`<id>@STUDENT_EMAIL_DOMAIN`) used at creation time.
-async function resolveStudentAuth0Id(c: import('hono').Context<AppBindings>, studentId: string, cached: string | null): Promise<string | null> {
-  if (cached) return cached;
-  if (!c.env.AUTH0_MGMT_CLIENT_ID || !c.env.AUTH0_MGMT_CLIENT_SECRET) return null;
-  const email = `${studentId.toLowerCase()}@${c.env.STUDENT_EMAIL_DOMAIN}`;
-  const user = await findAuth0UserByEmail(c.env, email).catch(() => null);
-  if (!user) return null;
-  await c.env.DB.prepare(`UPDATE students SET auth0_user_id = ? WHERE id = ?`).bind(user.userId, studentId).run();
-  return user.userId;
-}
 
 accounts.patch('/students/:id', requireAdmin, async (c) => {
   const studentId = c.req.param('id');

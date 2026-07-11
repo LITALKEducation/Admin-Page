@@ -1,4 +1,6 @@
-import type { AuthUser } from './types';
+import type { Context } from 'hono';
+import type { AppBindings, AuthUser } from './types';
+import { findAuth0UserByEmail } from './auth0mgmt';
 
 export const DOCUMENT_TYPES = [
   'Homework',
@@ -82,6 +84,25 @@ export async function recordStaff(db: D1Database, user: AuthUser): Promise<void>
     )
     .bind(user.email, user.name, isAdmin)
     .run();
+}
+
+// Resolves (and lazily caches) a student's Auth0 user id from the login
+// email convention (`<id>@STUDENT_EMAIL_DOMAIN`) used at account creation.
+// Shared by the admin account routes and the public student-portal auth
+// check (portalTokenMatchesStudent), so both can translate a student id to
+// the Auth0 sub without a Management API call once auth0_user_id is cached.
+export async function resolveStudentAuth0Id(
+  c: Context<AppBindings>,
+  studentId: string,
+  cached: string | null,
+): Promise<string | null> {
+  if (cached) return cached;
+  if (!c.env.AUTH0_MGMT_CLIENT_ID || !c.env.AUTH0_MGMT_CLIENT_SECRET) return null;
+  const email = `${studentId.toLowerCase()}@${c.env.STUDENT_EMAIL_DOMAIN}`;
+  const user = await findAuth0UserByEmail(c.env, email).catch(() => null);
+  if (!user) return null;
+  await c.env.DB.prepare(`UPDATE students SET auth0_user_id = ? WHERE id = ?`).bind(user.userId, studentId).run();
+  return user.userId;
 }
 
 export async function logAudit(

@@ -1,7 +1,7 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { Context, Next } from 'hono';
 import type { AppBindings, AuthUser } from './types';
-import { logAudit, recordStaff } from './db';
+import { logAudit, recordStaff, resolveStudentAuth0Id } from './db';
 
 let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 let jwksDomain: string | null = null;
@@ -79,7 +79,17 @@ export async function portalTokenMatchesStudent(c: Context<AppBindings>, student
       (payload.email as string | undefined) ??
       '';
     const localPart = email.split('@')[0];
-    return !!localPart && localPart.toLowerCase() === studentId.toLowerCase();
+    if (localPart) return localPart.toLowerCase() === studentId.toLowerCase();
+
+    // No email claim on the token — the Auth0 Action from README step 5
+    // isn't deployed for this login. Fall back to matching the raw Auth0
+    // sub against the student's cached login user id instead of failing
+    // closed for every student (see resolveStudentAuth0Id in db.ts).
+    const row = await c.env.DB.prepare(`SELECT auth0_user_id AS auth0UserId FROM students WHERE id = ?`)
+      .bind(studentId)
+      .first<{ auth0UserId: string | null }>();
+    const auth0UserId = await resolveStudentAuth0Id(c, studentId, row?.auth0UserId ?? null);
+    return !!auth0UserId && auth0UserId === (payload.sub as string);
   } catch {
     return false;
   }
