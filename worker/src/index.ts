@@ -14,6 +14,8 @@ import manage, {
   creditBalance,
 } from './manage';
 import accounts from './accounts';
+import chat, { MAX_MESSAGE_LENGTH, PORTAL_DAILY_LIMIT, loadChatHistory, portalMessageCountToday, saveChatTurn, studentChatContext } from './chat';
+import { chatReply, ChatNotConfiguredError } from './anthropic';
 import { verifyStripeSignature } from './stripe';
 
 const app = new Hono<AppBindings>();
@@ -242,6 +244,52 @@ app.get('/portal/:studentId/files/:fileId', async (c) => {
   });
 });
 
+// AI chat for the student portal. Shared by students and parents alike (the
+// portal has no separate parent identity — see worker/README.md) since both
+// reach this the same way everyone else reaches the portal: by knowing the
+// student id. Grounded only in this student's own account data; never
+// exposes other students, matching the rest of the /portal/* routes.
+app.post('/portal/:studentId/chat', async (c) => {
+  const studentId = c.req.param('studentId');
+  const body = await c.req.json<{ conversationId?: string; message?: string }>().catch(() => ({}) as never);
+  const message = (body.message ?? '').trim();
+  if (!message) return c.json({ status: 'error', message: 'กรุณาพิมพ์คำถาม' }, 400);
+  if (message.length > MAX_MESSAGE_LENGTH) {
+    return c.json({ status: 'error', message: `ข้อความยาวเกินไป (จำกัด ${MAX_MESSAGE_LENGTH} ตัวอักษร)` }, 400);
+  }
+
+  const context = await studentChatContext(c.env.DB, studentId);
+  if (!context) return c.json({ status: 'error', message: 'ไม่พบข้อมูลนักเรียนรหัสนี้ในระบบ' }, 404);
+
+  const usedToday = await portalMessageCountToday(c.env.DB, studentId);
+  if (usedToday >= PORTAL_DAILY_LIMIT) {
+    return c.json({ status: 'error', message: 'วันนี้ถามคำถามครบโควตาแล้ว กรุณาลองใหม่พรุ่งนี้ หรือติดต่อเจ้าหน้าที่ผ่าน LINE OA' }, 429);
+  }
+
+  const conversationId = body.conversationId || crypto.randomUUID();
+  const history = await loadChatHistory(c.env.DB, conversationId);
+
+  const systemPrompt = [
+    'You are the AI assistant for LITALK Education, answering questions from a student or their parent about this one student\'s own account only.',
+    `Account data (real data from the system — reference only, never invent or guess beyond it):\n${JSON.stringify(context)}`,
+    'Only answer about this student\'s own account. Never discuss or reveal any other student\'s data. You cannot edit anything, book or cancel classes, or take any action — you can only answer questions; if the user wants a change made, tell them to contact staff via LITALK\'s LINE OA. Do not give medical, legal, or financial advice beyond what is in the account data.',
+    'Reply in whichever language the user just wrote in (Thai or English). Keep answers concise, friendly, and direct — no preamble, and do not show your reasoning process, just the final answer.',
+  ].join('\n\n');
+
+  let reply: string;
+  try {
+    reply = await chatReply(c.env, systemPrompt, history, message);
+  } catch (err) {
+    if (err instanceof ChatNotConfiguredError) return c.json({ status: 'error', message: 'ผู้ช่วย AI ยังไม่ได้ตั้งค่าในระบบ' }, 503);
+    console.error('portal chat: Claude call failed', err);
+    return c.json({ status: 'error', message: 'ระบบ AI ไม่พร้อมใช้งานในขณะนี้ กรุณาลองใหม่อีกครั้ง' }, 503);
+  }
+
+  await saveChatTurn(c.env.DB, conversationId, 'portal', studentId, null, message, reply);
+
+  return c.json({ status: 'success', conversationId, reply });
+});
+
 // Public file download by opaque token (shareable link). No auth: the token
 // is the capability. Only files with a token set are reachable this way.
 app.get('/public/files/:token', async (c) => {
@@ -273,6 +321,7 @@ app.use('*', verifyAuth);
 app.route('/', core);
 app.route('/', manage);
 app.route('/', accounts);
+app.route('/', chat);
 
 app.get('/me', (c) => c.json(c.get('user')));
 

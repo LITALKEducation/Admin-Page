@@ -50,3 +50,4 @@ AUTH0_STAFF_ROLE_ID = "rol_ZoCzC7ZFmbjuwemu"
 #   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET        (Stripe payment links)
 #   AUTH0_MGMT_CLIENT_ID, AUTH0_MGMT_CLIENT_SECRET  (student/teacher/staff account management — see README)
 #   GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REFRESH_TOKEN (Google Meet auto-creation — see README)
+#   ANTHROPIC_API_KEY (AI chat assistant — worker/src/anthropic.ts. Chat endpoints return 503 until this is set.)
