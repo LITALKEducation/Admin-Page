@@ -2,7 +2,7 @@
 // Simple API-key auth — no service account / OAuth token exchange needed.
 import type { Env } from './types';
 
-const MODEL = 'gemini-2.5-flash';
+const MODEL = 'gemini-3.5-flash';
 const MAX_OUTPUT_TOKENS = 1024;
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
