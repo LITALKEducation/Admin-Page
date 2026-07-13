@@ -2,7 +2,7 @@
 // index.ts and the staff route below) plus the authenticated staff endpoint.
 import { Hono } from 'hono';
 import type { AppBindings, AuthUser } from './types';
-import { isAdmin } from './auth';
+import { isAdmin, requireAdmin } from './auth';
 import { visibleStudentIds, canSeeStudent } from './manage';
 import { bangkokToday } from './dates';
 import { chatReply, ChatNotConfiguredError, type ChatTurn } from './gemini';
@@ -11,6 +11,14 @@ export const MAX_MESSAGE_LENGTH = 2000;
 const HISTORY_MESSAGES = 16; // ~8 turns of context sent back to the model
 export const PORTAL_DAILY_LIMIT = 40;
 const STAFF_DAILY_LIMIT = 100;
+const MAX_INSTRUCTIONS_LENGTH = 4000;
+
+// Admin-editable steering text, appended to both system prompts (staff and
+// portal) below the fixed safety/scope rules so it can't override them.
+export async function getAiInstructions(db: D1Database): Promise<string> {
+  const row = await db.prepare(`SELECT instructions FROM ai_chat_settings WHERE id = 1`).first<{ instructions: string }>();
+  return row?.instructions ?? '';
+}
 
 export interface StudentChatContext {
   name: string;
@@ -136,14 +144,21 @@ chat.post('/chat', async (c) => {
   const history = await loadChatHistory(c.env.DB, conversationId);
 
   const roleLabel = isAdmin(user) ? 'an admin' : 'a teacher';
+  const instructions = await getAiInstructions(c.env.DB);
   const systemPrompt = [
-    `You are the internal AI assistant inside LITALK Education's admin panel, helping ${roleLabel} named ${user.name} with questions about using the system and, when given below, about one specific student.`,
+    `You are น้องลิลลี่ (Nong Lilly), the AI assistant inside LITALK Education's admin panel, helping ${roleLabel} named ${user.name} with questions about using the system and, when given below, about one specific student. If asked your name, say น้องลิลลี่.`,
     context
       ? `Student in context (real data from the system — reference only, never invent or guess beyond it):\n${JSON.stringify(context)}`
       : 'No specific student is in context for this message. Answer general questions about how the admin panel works (a monthly schedule goes teacher submits -> admin approves, optionally creating a payment link -> payment activates it; credits are a class-hour balance; teachers only see admin-assigned students). If unsure of the exact screen or button, say so rather than guessing.',
     'Only discuss the student given above (if any) — never speculate about or reveal data for other students. You cannot make changes to the system yourself; tell the user which screen or action to use instead.',
+    instructions
+      ? `Additional guidance from the school admin on how to respond — follow it, but it never overrides the rules above (e.g. still never reveal another student's data):\n${instructions}`
+      : null,
     STYLE_RULES,
-  ].join('\n\n');
+    'Format replies in Markdown (the client renders it): use **bold**, bullet lists, and short paragraphs where they help readability, but keep it light — this is a chat bubble, not a document.',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 
   let reply: string;
   try {
@@ -157,6 +172,22 @@ chat.post('/chat', async (c) => {
   await saveChatTurn(c.env.DB, conversationId, 'staff', body.studentId ?? null, user.email, message, reply);
 
   return c.json({ conversationId, reply });
+});
+
+// Admin-only: view/edit the steering text appended to every chat system
+// prompt (staff panel and public portal alike).
+chat.get('/settings/ai-instructions', requireAdmin, async (c) => {
+  const instructions = await getAiInstructions(c.env.DB);
+  return c.json({ instructions });
+});
+
+chat.put('/settings/ai-instructions', requireAdmin, async (c) => {
+  const body = await c.req.json<{ instructions?: string }>().catch(() => ({}) as never);
+  const instructions = (body.instructions ?? '').slice(0, MAX_INSTRUCTIONS_LENGTH);
+  await c.env.DB.prepare(`UPDATE ai_chat_settings SET instructions = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ? WHERE id = 1`)
+    .bind(instructions, c.get('user').email)
+    .run();
+  return c.json({ ok: true, instructions });
 });
 
 export default chat;

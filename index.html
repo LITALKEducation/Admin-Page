@@ -3834,22 +3834,46 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 12px 14px;
+            padding: 10px 14px;
             border-bottom: 1px solid var(--border-color);
-            font-weight: 600;
             color: var(--text-primary);
         }
-        .ai-chat-panel__close { background: none; border: none; cursor: pointer; font-size: 16px; color: var(--text-muted); }
-        .ai-chat-panel__messages { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+        .ai-chat-panel__title { display: flex; align-items: center; gap: 8px; }
+        .ai-chat-panel__avatar { width: 28px; height: 28px; border-radius: 50%; background-color: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+        .ai-chat-panel__name { font-weight: 600; font-size: 13.5px; line-height: 1.3; }
+        .ai-chat-panel__status { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+        .ai-chat-status-dot { width: 6px; height: 6px; border-radius: 50%; background-color: var(--accent-success, #22c55e); display: inline-block; }
+        .ai-chat-panel__actions { display: flex; align-items: center; gap: 2px; }
+        .ai-chat-panel__icon-btn { background: none; border: none; cursor: pointer; font-size: 14px; color: var(--text-muted); width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+        .ai-chat-panel__icon-btn:hover { background-color: var(--bg-tertiary); }
+        .ai-chat-panel__close { font-size: 15px; }
+        .ai-chat-panel__messages { position: relative; flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+        .ai-chat-msg-row { display: flex; align-items: flex-end; gap: 6px; max-width: 88%; align-self: flex-start; }
+        .ai-chat-msg-avatar { flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; background-color: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; font-size: 11px; }
+        .ai-chat-scroll-btn { position: absolute; bottom: 10px; right: 14px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border-color); background-color: var(--bg-primary); color: var(--text-primary); cursor: pointer; display: none; align-items: center; justify-content: center; box-shadow: var(--shadow-pop); font-size: 12px; }
+        .ai-chat-scroll-btn.show { display: flex; }
         .ai-chat-msg { max-width: 88%; padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
         .ai-chat-msg--user { align-self: flex-end; background-color: var(--brand-primary); color: var(--brand-btn-text); }
-        .ai-chat-msg--assistant { align-self: flex-start; background-color: var(--bg-tertiary); color: var(--text-primary); }
+        .ai-chat-msg-row .ai-chat-msg--assistant { max-width: none; align-self: auto; }
+        .ai-chat-msg--assistant { align-self: flex-start; background-color: var(--bg-tertiary); color: var(--text-primary); white-space: normal; }
+        .ai-chat-msg--assistant p { margin: 0 0 6px; }
+        .ai-chat-msg--assistant p:last-child { margin-bottom: 0; }
+        .ai-chat-msg--assistant ul, .ai-chat-msg--assistant ol { margin: 0 0 6px; padding-left: 18px; }
+        .ai-chat-msg--assistant code { background-color: var(--bg-primary); border-radius: 4px; padding: 1px 4px; font-size: 12px; }
+        .ai-chat-msg--assistant pre { background-color: var(--bg-primary); border-radius: 6px; padding: 8px; overflow-x: auto; margin: 0 0 6px; }
+        .ai-chat-msg--assistant pre code { background: none; padding: 0; }
+        .ai-chat-msg--assistant a { color: var(--brand-primary); }
         .ai-chat-msg--error { align-self: center; color: var(--accent-danger); font-size: 12px; text-align: center; }
         .ai-chat-msg--pending { align-self: flex-start; color: var(--text-muted); font-size: 12.5px; }
         .ai-chat-panel__form { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border-color); }
         .ai-chat-panel__input { flex: 1; resize: none; border: 1px solid var(--border-color); border-radius: var(--radius-md, 8px); padding: 8px 10px; font: inherit; max-height: 80px; background-color: var(--bg-primary); color: var(--text-primary); }
         .ai-chat-panel__send { border: none; background-color: var(--brand-primary); color: var(--brand-btn-text); border-radius: var(--radius-md, 8px); padding: 0 14px; cursor: pointer; }
         .ai-chat-panel__send:disabled { opacity: .5; cursor: default; }
+        .ai-chat-settings { position: absolute; inset: 0; background-color: var(--bg-secondary); display: none; flex-direction: column; padding: 12px 14px; gap: 8px; }
+        .ai-chat-settings.open { display: flex; }
+        .ai-chat-settings__label { font-size: 12.5px; color: var(--text-muted); }
+        .ai-chat-settings__textarea { flex: 1; resize: none; border: 1px solid var(--border-color); border-radius: var(--radius-md, 8px); padding: 8px 10px; font: inherit; font-size: 13px; background-color: var(--bg-primary); color: var(--text-primary); }
+        .ai-chat-settings__actions { display: flex; justify-content: flex-end; gap: 8px; }
 
         @media (max-width: 700px) {
             .ai-chat-fab { left: 16px; bottom: 16px; }
@@ -9869,17 +9893,37 @@
     </script>
 
     <!-- AI chat assistant -->
-    <button class="ai-chat-fab" id="ai-chat-fab" onclick="toggleAIChat()" aria-label="ผู้ช่วย AI" title="ผู้ช่วย AI"><i class="fas fa-robot"></i></button>
+    <button class="ai-chat-fab" id="ai-chat-fab" onclick="toggleAIChat()" aria-label="น้องลิลลี่" title="น้องลิลลี่"><i class="fas fa-robot"></i></button>
     <div class="ai-chat-panel" id="ai-chat-panel">
         <div class="ai-chat-panel__header">
-            <span>ผู้ช่วย AI</span>
-            <button class="ai-chat-panel__close" onclick="toggleAIChat(false)" aria-label="ปิด"><i class="fas fa-times"></i></button>
+            <div class="ai-chat-panel__title">
+                <span class="ai-chat-panel__avatar">🌷</span>
+                <div>
+                    <div class="ai-chat-panel__name">น้องลิลลี่</div>
+                    <div class="ai-chat-panel__status"><span class="ai-chat-status-dot"></span>พร้อมช่วยเหลือ</div>
+                </div>
+            </div>
+            <div class="ai-chat-panel__actions">
+                <button class="ai-chat-panel__icon-btn" data-admin-only onclick="toggleAIChatSettings()" aria-label="ตั้งค่า AI" title="ตั้งค่าทิศทางการตอบของ AI"><i class="fas fa-gear"></i></button>
+                <button class="ai-chat-panel__icon-btn" onclick="startNewAIChat()" aria-label="เริ่มการสนทนาใหม่" title="เริ่มการสนทนาใหม่"><i class="fas fa-rotate-right"></i></button>
+                <button class="ai-chat-panel__icon-btn ai-chat-panel__close" onclick="toggleAIChat(false)" aria-label="ปิด"><i class="fas fa-times"></i></button>
+            </div>
         </div>
-        <div class="ai-chat-panel__messages" id="ai-chat-messages"></div>
+        <div class="ai-chat-panel__messages" id="ai-chat-messages">
+            <button class="ai-chat-scroll-btn" id="ai-chat-scroll-btn" onclick="scrollAIChatToBottom()" aria-label="เลื่อนไปข้อความล่าสุด" title="เลื่อนไปข้อความล่าสุด"><i class="fas fa-arrow-down"></i></button>
+        </div>
         <form class="ai-chat-panel__form" id="ai-chat-form" onsubmit="return submitAIChat(event)">
             <textarea class="ai-chat-panel__input" id="ai-chat-input" rows="1" placeholder="ถามเกี่ยวกับนักเรียนหรือวิธีใช้งานระบบ..." maxlength="2000" onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){event.preventDefault();this.form.requestSubmit();}"></textarea>
             <button type="submit" class="ai-chat-panel__send" id="ai-chat-send" aria-label="ส่ง"><i class="fas fa-paper-plane"></i></button>
         </form>
+        <div class="ai-chat-settings" id="ai-chat-settings">
+            <span class="ai-chat-settings__label">คำแนะนำเพิ่มเติมสำหรับ AI (กำหนดทิศทางการตอบ เช่น น้ำเสียง สิ่งที่ควรเน้นหรือหลีกเลี่ยง) — มีผลกับแชทของครู/แอดมินและพอร์ทัลนักเรียน/ผู้ปกครองทั้งหมด</span>
+            <textarea class="ai-chat-settings__textarea" id="ai-chat-settings-input" maxlength="4000" placeholder="เช่น ตอบให้กระชับเป็นพิเศษ, เน้นแนะนำให้ติดต่อเจ้าหน้าที่สำหรับเรื่องการเงิน, ใช้คำลงท้าย 'ค่ะ'..."></textarea>
+            <div class="ai-chat-settings__actions">
+                <button type="button" class="btn-secondary" onclick="toggleAIChatSettings(false)">ยกเลิก</button>
+                <button type="button" class="btn-primary" id="ai-chat-settings-save" onclick="saveAIChatSettings()">บันทึก</button>
+            </div>
+        </div>
     </div>
     <script>
         // ===== AI chat assistant =====
@@ -9893,20 +9937,148 @@
             if (open) {
                 document.getElementById('ai-chat-input').focus();
                 const messages = document.getElementById('ai-chat-messages');
-                if (!messages.childElementCount) {
-                    appendAIChatMessage('assistant', 'สวัสดีค่ะ ถามเกี่ยวกับตารางเรียน เครดิต การชำระเงิน หรือวิธีใช้งานระบบได้เลย' + (typeof selectedStudentId !== 'undefined' && selectedStudentId ? ` (กำลังดูข้อมูลนักเรียน ${selectedStudentId})` : ''));
+                if (!messages.querySelector('.ai-chat-msg, .ai-chat-msg-row')) {
+                    appendAIChatMessage('assistant', 'สวัสดีค่ะ หนูชื่อน้องลิลลี่ ถามเกี่ยวกับตารางเรียน เครดิต การชำระเงิน หรือวิธีใช้งานระบบได้เลย' + (typeof selectedStudentId !== 'undefined' && selectedStudentId ? ` (กำลังดูข้อมูลนักเรียน ${selectedStudentId})` : ''));
                 }
             }
+        }
+
+        function startNewAIChat() {
+            aiChatConversationId = null;
+            const messages = document.getElementById('ai-chat-messages');
+            messages.querySelectorAll('.ai-chat-msg, .ai-chat-msg-row').forEach((el) => el.remove());
+            appendAIChatMessage('assistant', 'สวัสดีค่ะ หนูชื่อน้องลิลลี่ เริ่มการสนทนาใหม่แล้วนะคะ ถามอะไรได้เลย' + (typeof selectedStudentId !== 'undefined' && selectedStudentId ? ` (กำลังดูข้อมูลนักเรียน ${selectedStudentId})` : ''));
+        }
+
+        function scrollAIChatToBottom() {
+            const messages = document.getElementById('ai-chat-messages');
+            messages.scrollTo({ top: messages.scrollHeight, behavior: 'smooth' });
+        }
+
+        // Minimal, safe Markdown-to-HTML for AI replies: escapes HTML first,
+        // then re-introduces only the small set of patterns LLMs actually use
+        // in chat answers (bold, italic, inline/fenced code, links, lists,
+        // paragraphs). Not a full CommonMark parser by design.
+        function renderChatMarkdown(text) {
+            const escapeHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            const inline = (s) => escapeHtml(s)
+                .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+                .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+                .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+
+            const codeBlocks = [];
+            const withPlaceholders = String(text).replace(/```[a-zA-Z0-9]*\n?([\s\S]*?)```/g, (_, code) => {
+                codeBlocks.push(escapeHtml(code.replace(/\n$/, '')));
+                return '\nCODEBLOCK' + (codeBlocks.length - 1) + '\n';
+            });
+
+            const out = [];
+            let para = [];
+            let list = null;
+            const flushPara = () => { if (para.length) { out.push('<p>' + para.join('<br>') + '</p>'); para = []; } };
+            const flushList = () => { if (list) { out.push('<' + list.type + '>' + list.items.map((i) => '<li>' + i + '</li>').join('') + '</' + list.type + '>'); list = null; } };
+            for (const rawLine of withPlaceholders.split('\n')) {
+                const line = rawLine.trim();
+                const codeMatch = line.match(/^CODEBLOCK(\d+)$/);
+                const ul = line.match(/^[-*]\s+(.*)$/);
+                const ol = line.match(/^\d+\.\s+(.*)$/);
+                if (codeMatch) {
+                    flushPara();
+                    flushList();
+                    out.push('<pre><code>' + codeBlocks[Number(codeMatch[1])] + '</code></pre>');
+                } else if (ul) {
+                    flushPara();
+                    if (!list || list.type !== 'ul') { flushList(); list = { type: 'ul', items: [] }; }
+                    list.items.push(inline(ul[1]));
+                } else if (ol) {
+                    flushPara();
+                    if (!list || list.type !== 'ol') { flushList(); list = { type: 'ol', items: [] }; }
+                    list.items.push(inline(ol[1]));
+                } else if (line === '') {
+                    flushPara();
+                    flushList();
+                } else {
+                    flushList();
+                    para.push(inline(line));
+                }
+            }
+            flushPara();
+            flushList();
+            return out.join('');
         }
 
         function appendAIChatMessage(role, text) {
             const messages = document.getElementById('ai-chat-messages');
             const el = document.createElement('div');
             el.className = 'ai-chat-msg ai-chat-msg--' + role;
-            el.textContent = text;
-            messages.appendChild(el);
+            if (role === 'assistant') {
+                el.innerHTML = renderChatMarkdown(text);
+                const row = document.createElement('div');
+                row.className = 'ai-chat-msg-row';
+                const avatar = document.createElement('span');
+                avatar.className = 'ai-chat-msg-avatar';
+                avatar.textContent = '🌷';
+                row.appendChild(avatar);
+                row.appendChild(el);
+                messages.appendChild(row);
+            } else {
+                el.textContent = text;
+                messages.appendChild(el);
+            }
             messages.scrollTop = messages.scrollHeight;
             return el;
+        }
+
+        (function initAIChatScrollButton() {
+            const messages = document.getElementById('ai-chat-messages');
+            const scrollBtn = document.getElementById('ai-chat-scroll-btn');
+            if (!messages || !scrollBtn) return;
+            messages.addEventListener('scroll', () => {
+                const nearBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 60;
+                scrollBtn.classList.toggle('show', !nearBottom);
+            });
+        })();
+
+        async function toggleAIChatSettings(force) {
+            const panel = document.getElementById('ai-chat-settings');
+            const open = typeof force === 'boolean' ? force : !panel.classList.contains('open');
+            panel.classList.toggle('open', open);
+            if (open) {
+                const textarea = document.getElementById('ai-chat-settings-input');
+                textarea.value = 'กำลังโหลด...';
+                textarea.disabled = true;
+                try {
+                    const res = await apiFetch('/settings/ai-instructions');
+                    const data = await res.json().catch(() => ({}));
+                    textarea.value = res.ok ? (data.instructions || '') : '';
+                } catch (err) {
+                    textarea.value = '';
+                } finally {
+                    textarea.disabled = false;
+                }
+            }
+        }
+
+        async function saveAIChatSettings() {
+            const textarea = document.getElementById('ai-chat-settings-input');
+            const saveBtn = document.getElementById('ai-chat-settings-save');
+            saveBtn.disabled = true;
+            try {
+                const res = await apiFetch('/settings/ai-instructions', {
+                    method: 'PUT',
+                    body: JSON.stringify({ instructions: textarea.value }),
+                });
+                if (!res.ok) {
+                    if (typeof showModal === 'function') showModal('ผิดพลาด', 'บันทึกไม่สำเร็จ กรุณาลองใหม่', 'error');
+                    return;
+                }
+                toggleAIChatSettings(false);
+            } catch (err) {
+                if (typeof showModal === 'function') showModal('ผิดพลาด', 'เชื่อมต่อระบบไม่สำเร็จ กรุณาลองใหม่', 'error');
+            } finally {
+                saveBtn.disabled = false;
+            }
         }
 
         async function submitAIChat(event) {
