@@ -5,10 +5,10 @@ import type { AppBindings, AuthUser } from './types';
 import { isAdmin } from './auth';
 import { visibleStudentIds, canSeeStudent } from './manage';
 import { bangkokToday } from './dates';
-import { chatReply, ChatNotConfiguredError, type ChatTurn } from './anthropic';
+import { chatReply, ChatNotConfiguredError, type ChatTurn } from './gemini';
 
 export const MAX_MESSAGE_LENGTH = 2000;
-const HISTORY_MESSAGES = 16; // ~8 turns of context sent back to Claude
+const HISTORY_MESSAGES = 16; // ~8 turns of context sent back to the model
 export const PORTAL_DAILY_LIMIT = 40;
 const STAFF_DAILY_LIMIT = 100;
 
@@ -150,7 +150,7 @@ chat.post('/chat', async (c) => {
     reply = await chatReply(c.env, systemPrompt, history, message);
   } catch (err) {
     if (err instanceof ChatNotConfiguredError) return c.json({ error: 'ผู้ช่วย AI ยังไม่ได้ตั้งค่าในระบบ' }, 503);
-    console.error('staff chat: Claude call failed', err);
+    console.error('staff chat: Gemini call failed', err);
     return c.json({ error: 'ระบบ AI ไม่พร้อมใช้งานในขณะนี้ กรุณาลองใหม่อีกครั้ง' }, 503);
   }
 

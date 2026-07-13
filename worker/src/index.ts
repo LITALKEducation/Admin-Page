@@ -15,7 +15,7 @@ import manage, {
 } from './manage';
 import accounts from './accounts';
 import chat, { MAX_MESSAGE_LENGTH, PORTAL_DAILY_LIMIT, loadChatHistory, portalMessageCountToday, saveChatTurn, studentChatContext } from './chat';
-import { chatReply, ChatNotConfiguredError } from './anthropic';
+import { chatReply, ChatNotConfiguredError } from './gemini';
 import { verifyStripeSignature } from './stripe';
 
 const app = new Hono<AppBindings>();
@@ -281,7 +281,7 @@ app.post('/portal/:studentId/chat', async (c) => {
     reply = await chatReply(c.env, systemPrompt, history, message);
   } catch (err) {
     if (err instanceof ChatNotConfiguredError) return c.json({ status: 'error', message: 'ผู้ช่วย AI ยังไม่ได้ตั้งค่าในระบบ' }, 503);
-    console.error('portal chat: Claude call failed', err);
+    console.error('portal chat: Gemini call failed', err);
     return c.json({ status: 'error', message: 'ระบบ AI ไม่พร้อมใช้งานในขณะนี้ กรุณาลองใหม่อีกครั้ง' }, 503);
   }
 

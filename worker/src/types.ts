@@ -25,9 +25,13 @@ export interface Env {
   STRIPE_WEBHOOK_SECRET?: string;
   AUTH0_MGMT_CLIENT_ID?: string;
   AUTH0_MGMT_CLIENT_SECRET?: string;
-  // AI chat assistant (worker/src/anthropic.ts). Chat endpoints degrade to a
-  // 503 "not configured" response when unset instead of failing to deploy.
-  ANTHROPIC_API_KEY?: string;
+  // AI chat assistant (worker/src/gemini.ts) — Google Cloud Vertex AI.
+  // Chat endpoints degrade to a 503 "not configured" response when unset
+  // instead of failing to deploy.
+  GOOGLE_VERTEX_PROJECT_ID?: string;
+  GOOGLE_VERTEX_LOCATION?: string; // defaults to 'us-central1' if unset
+  GOOGLE_VERTEX_CLIENT_EMAIL?: string; // service account email — secret
+  GOOGLE_VERTEX_PRIVATE_KEY?: string; // service account private key (PEM) — secret
   // Google Meet auto-creation (see worker/README.md). Booking still works
   // without these — it just skips the Meet link. OAuth "refresh token" flow
   // (not a service account — that needs Google Workspace domain-wide
