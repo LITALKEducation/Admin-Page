@@ -1,4 +1,4 @@
-name = "litalk-files-api"
+name = "litalkapi"
 account_id = "aacf06eb2a3dcbf4fc501455805047d0"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"

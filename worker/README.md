@@ -1,4 +1,8 @@
-# litalk-files-api
+# litalkapi
+
+(Cloudflare Worker name — renamed from `litalk-files-api` via the dashboard;
+must match `name` in `wrangler.toml` or `wrangler deploy` silently creates/updates
+the wrong Worker instead of the one live at api.litalkeducation.com.)
 
 Cloudflare Worker backing the **entire** admin panel and the student portal:
 
