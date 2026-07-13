@@ -46,16 +46,9 @@ AUTH0_STAFF_ROLE_ID = "rol_ZoCzC7ZFmbjuwemu"
 # works without Google Meet configured; it just skips the link.
 # GOOGLE_CALENDAR_ID = ""   # defaults to the authorized account's own "primary" calendar
 
-# AI chat assistant (worker/src/gemini.ts) — Google Cloud Vertex AI (Gemini).
-# Chat endpoints return 503 until this AND the two Vertex secrets below are
-# set. GOOGLE_VERTEX_PROJECT_ID is the GCP project the Vertex AI API is
-# enabled on; GOOGLE_VERTEX_LOCATION defaults to us-central1 if unset.
-# GOOGLE_VERTEX_PROJECT_ID = ""
-# GOOGLE_VERTEX_LOCATION = "us-central1"
-
 # Secrets, NOT vars — set them with `npx wrangler secret put <NAME>`:
 #   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET        (Stripe payment links)
 #   AUTH0_MGMT_CLIENT_ID, AUTH0_MGMT_CLIENT_SECRET  (student/teacher/staff account management — see README)
 #   GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REFRESH_TOKEN (Google Meet auto-creation — see README)
-#   GOOGLE_VERTEX_CLIENT_EMAIL, GOOGLE_VERTEX_PRIVATE_KEY (AI chat assistant — service account with the "Vertex AI User" role;
-#     GOOGLE_VERTEX_PRIVATE_KEY is the service account JSON key's "private_key" field, newlines may be pasted as literal \n)
+#   GEMINI_API_KEY (AI chat assistant — worker/src/gemini.ts. Gemini Developer API key from
+#     Google AI Studio (aistudio.google.com/apikey). Chat endpoints return 503 until this is set.)
