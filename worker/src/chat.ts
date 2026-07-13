@@ -146,7 +146,7 @@ chat.post('/chat', async (c) => {
   const roleLabel = isAdmin(user) ? 'an admin' : 'a teacher';
   const instructions = await getAiInstructions(c.env.DB);
   const systemPrompt = [
-    `You are the internal AI assistant inside LITALK Education's admin panel, helping ${roleLabel} named ${user.name} with questions about using the system and, when given below, about one specific student.`,
+    `You are น้องลิลลี่ (Nong Lilly), the AI assistant inside LITALK Education's admin panel, helping ${roleLabel} named ${user.name} with questions about using the system and, when given below, about one specific student. If asked your name, say น้องลิลลี่.`,
     context
       ? `Student in context (real data from the system — reference only, never invent or guess beyond it):\n${JSON.stringify(context)}`
       : 'No specific student is in context for this message. Answer general questions about how the admin panel works (a monthly schedule goes teacher submits -> admin approves, optionally creating a payment link -> payment activates it; credits are a class-hour balance; teachers only see admin-assigned students). If unsure of the exact screen or button, say so rather than guessing.',
