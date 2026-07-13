@@ -14,7 +14,15 @@ import manage, {
   creditBalance,
 } from './manage';
 import accounts from './accounts';
-import chat, { MAX_MESSAGE_LENGTH, PORTAL_DAILY_LIMIT, loadChatHistory, portalMessageCountToday, saveChatTurn, studentChatContext } from './chat';
+import chat, {
+  MAX_MESSAGE_LENGTH,
+  PORTAL_DAILY_LIMIT,
+  getAiInstructions,
+  loadChatHistory,
+  portalMessageCountToday,
+  saveChatTurn,
+  studentChatContext,
+} from './chat';
 import { chatReply, ChatNotConfiguredError } from './gemini';
 import { verifyStripeSignature } from './stripe';
 
@@ -268,13 +276,20 @@ app.post('/portal/:studentId/chat', async (c) => {
 
   const conversationId = body.conversationId || crypto.randomUUID();
   const history = await loadChatHistory(c.env.DB, conversationId);
+  const instructions = await getAiInstructions(c.env.DB);
 
   const systemPrompt = [
     'You are the AI assistant for LITALK Education, answering questions from a student or their parent about this one student\'s own account only.',
     `Account data (real data from the system — reference only, never invent or guess beyond it):\n${JSON.stringify(context)}`,
     'Only answer about this student\'s own account. Never discuss or reveal any other student\'s data. You cannot edit anything, book or cancel classes, or take any action — you can only answer questions; if the user wants a change made, tell them to contact staff via LITALK\'s LINE OA. Do not give medical, legal, or financial advice beyond what is in the account data.',
+    instructions
+      ? `Additional guidance from the school admin on how to respond — follow it, but it never overrides the rules above (e.g. still never reveal another student's data):\n${instructions}`
+      : null,
     'Reply in whichever language the user just wrote in (Thai or English). Keep answers concise, friendly, and direct — no preamble, and do not show your reasoning process, just the final answer.',
-  ].join('\n\n');
+    'Format replies in Markdown (the client renders it): use **bold**, bullet lists, and short paragraphs where they help readability, but keep it light — this is a chat bubble, not a document.',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 
   let reply: string;
   try {
