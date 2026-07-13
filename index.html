@@ -3789,6 +3789,72 @@
             .students-table tbody tr { display: block; border-bottom: 1px solid var(--border-color); }
             .fab-wrap { right: 16px; bottom: 16px; }
         }
+
+        /* ===== AI chat assistant ===== */
+        .ai-chat-fab {
+            position: fixed;
+            left: 24px;
+            bottom: 24px;
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            border: none;
+            background-color: var(--brand-primary);
+            color: var(--brand-btn-text);
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: var(--shadow-pop);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 500;
+            transition: transform 0.2s var(--ease-btn);
+        }
+        .ai-chat-fab:hover { transform: scale(1.05); }
+
+        .ai-chat-panel {
+            position: fixed;
+            left: 24px;
+            bottom: 88px;
+            width: 360px;
+            max-width: calc(100vw - 32px);
+            height: 480px;
+            max-height: calc(100vh - 140px);
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-pop);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 501;
+        }
+        .ai-chat-panel.open { display: flex; }
+        .ai-chat-panel__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .ai-chat-panel__close { background: none; border: none; cursor: pointer; font-size: 16px; color: var(--text-muted); }
+        .ai-chat-panel__messages { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+        .ai-chat-msg { max-width: 88%; padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+        .ai-chat-msg--user { align-self: flex-end; background-color: var(--brand-primary); color: var(--brand-btn-text); }
+        .ai-chat-msg--assistant { align-self: flex-start; background-color: var(--bg-tertiary); color: var(--text-primary); }
+        .ai-chat-msg--error { align-self: center; color: var(--accent-danger); font-size: 12px; text-align: center; }
+        .ai-chat-msg--pending { align-self: flex-start; color: var(--text-muted); font-size: 12.5px; }
+        .ai-chat-panel__form { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border-color); }
+        .ai-chat-panel__input { flex: 1; resize: none; border: 1px solid var(--border-color); border-radius: var(--radius-md, 8px); padding: 8px 10px; font: inherit; max-height: 80px; background-color: var(--bg-primary); color: var(--text-primary); }
+        .ai-chat-panel__send { border: none; background-color: var(--brand-primary); color: var(--brand-btn-text); border-radius: var(--radius-md, 8px); padding: 0 14px; cursor: pointer; }
+        .ai-chat-panel__send:disabled { opacity: .5; cursor: default; }
+
+        @media (max-width: 700px) {
+            .ai-chat-fab { left: 16px; bottom: 16px; }
+            .ai-chat-panel { left: 16px; bottom: 80px; }
+        }
     </style>
 </head>
 
@@ -9787,6 +9853,7 @@
                 closeAllRowActionMenus();
                 closeQuickCreate();
                 closeNotifPanel();
+                toggleAIChat(false);
             }
         });
     </script>
@@ -9798,6 +9865,85 @@
                     .then(reg => console.log('[PWA] Service Worker registered successfully:', reg.scope))
                     .catch(err => console.error('[PWA] Service Worker registration failed:', err));
             });
+        }
+    </script>
+
+    <!-- AI chat assistant -->
+    <button class="ai-chat-fab" id="ai-chat-fab" onclick="toggleAIChat()" aria-label="ผู้ช่วย AI" title="ผู้ช่วย AI"><i class="fas fa-robot"></i></button>
+    <div class="ai-chat-panel" id="ai-chat-panel">
+        <div class="ai-chat-panel__header">
+            <span>ผู้ช่วย AI</span>
+            <button class="ai-chat-panel__close" onclick="toggleAIChat(false)" aria-label="ปิด"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="ai-chat-panel__messages" id="ai-chat-messages"></div>
+        <form class="ai-chat-panel__form" id="ai-chat-form" onsubmit="return submitAIChat(event)">
+            <textarea class="ai-chat-panel__input" id="ai-chat-input" rows="1" placeholder="ถามเกี่ยวกับนักเรียนหรือวิธีใช้งานระบบ..." maxlength="2000" onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){event.preventDefault();this.form.requestSubmit();}"></textarea>
+            <button type="submit" class="ai-chat-panel__send" id="ai-chat-send" aria-label="ส่ง"><i class="fas fa-paper-plane"></i></button>
+        </form>
+    </div>
+    <script>
+        // ===== AI chat assistant =====
+        let aiChatConversationId = null;
+        let aiChatBusy = false;
+
+        function toggleAIChat(force) {
+            const panel = document.getElementById('ai-chat-panel');
+            const open = typeof force === 'boolean' ? force : !panel.classList.contains('open');
+            panel.classList.toggle('open', open);
+            if (open) {
+                document.getElementById('ai-chat-input').focus();
+                const messages = document.getElementById('ai-chat-messages');
+                if (!messages.childElementCount) {
+                    appendAIChatMessage('assistant', 'สวัสดีค่ะ ถามเกี่ยวกับตารางเรียน เครดิต การชำระเงิน หรือวิธีใช้งานระบบได้เลย' + (typeof selectedStudentId !== 'undefined' && selectedStudentId ? ` (กำลังดูข้อมูลนักเรียน ${selectedStudentId})` : ''));
+                }
+            }
+        }
+
+        function appendAIChatMessage(role, text) {
+            const messages = document.getElementById('ai-chat-messages');
+            const el = document.createElement('div');
+            el.className = 'ai-chat-msg ai-chat-msg--' + role;
+            el.textContent = text;
+            messages.appendChild(el);
+            messages.scrollTop = messages.scrollHeight;
+            return el;
+        }
+
+        async function submitAIChat(event) {
+            event.preventDefault();
+            if (aiChatBusy) return false;
+            const input = document.getElementById('ai-chat-input');
+            const message = input.value.trim();
+            if (!message) return false;
+
+            appendAIChatMessage('user', message);
+            input.value = '';
+            aiChatBusy = true;
+            document.getElementById('ai-chat-send').disabled = true;
+            const pending = appendAIChatMessage('pending', 'กำลังตอบ...');
+
+            try {
+                const studentId = (typeof selectedStudentId !== 'undefined' && selectedStudentId) ? selectedStudentId : undefined;
+                const res = await apiFetch('/chat', {
+                    method: 'POST',
+                    body: JSON.stringify({ conversationId: aiChatConversationId, message, studentId }),
+                });
+                const data = await res.json().catch(() => ({}));
+                pending.remove();
+                if (!res.ok) {
+                    appendAIChatMessage('error', data.error || 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
+                    return false;
+                }
+                aiChatConversationId = data.conversationId;
+                appendAIChatMessage('assistant', data.reply || '');
+            } catch (err) {
+                pending.remove();
+                appendAIChatMessage('error', 'เชื่อมต่อระบบ AI ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+            } finally {
+                aiChatBusy = false;
+                document.getElementById('ai-chat-send').disabled = false;
+            }
+            return false;
         }
     </script>
 </body>
