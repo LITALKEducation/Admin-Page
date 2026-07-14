@@ -38,12 +38,10 @@ database_id = "77c10f96-55ba-4830-abcc-cd3364fb22f7"
 binding = "BUCKET"
 bucket_name = "files-litalk"
 
-# URL shortener redirect cache (worker/src/shortlinks.ts). Create with
-# `npx wrangler kv namespace create SHORTLINKS` and paste the printed id
-# below (replacing the placeholder).
+# URL shortener redirect cache (worker/src/shortlinks.ts).
 [[kv_namespaces]]
 binding = "SHORTLINKS"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "6243b958ee0e4207932489e5197a449e"
 
 [vars]
 AUTH0_DOMAIN = "litalkeducation.us.auth0.com"
