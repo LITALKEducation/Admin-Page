@@ -9,6 +9,7 @@ import { logAudit } from './db';
 import { bangkokToday, bangkokMonth, isYm, isYmd, isHm, formatSessionsThai } from './dates';
 import { createStripePaymentLink, deactivateStripePaymentLink, StripeError, withPolicyNote } from './stripe';
 import { createMeetEvent, deleteMeetEvent } from './googlemeet';
+import { mintPaymentShortLink } from './shortlinks';
 
 // Cancels every 'booked' row matching a WHERE clause (student_id, dates,
 // notes label, ...) and best-effort deletes each one's Google Calendar
@@ -272,7 +273,7 @@ manage.get('/student-check/:id', requirePermission('data:read'), async (c) => {
       `SELECT id, paid_date AS date, amount, method, source, proof_url AS proof, stripe_session_id AS stripeSessionId
        FROM payments WHERE student_id = ? ORDER BY paid_date DESC, id DESC LIMIT 1`,
     ).bind(studentId),
-    c.env.DB.prepare(`SELECT url, amount, description FROM payment_links WHERE student_id = ? AND status = 'active' ORDER BY id DESC LIMIT 5`)
+    c.env.DB.prepare(`SELECT url, short_url AS shortUrl, amount, description FROM payment_links WHERE student_id = ? AND status = 'active' ORDER BY id DESC LIMIT 5`)
       .bind(studentId),
     c.env.DB.prepare(
       `SELECT booking_date AS date, booking_time AS time, notes FROM bookings
@@ -284,7 +285,7 @@ manage.get('/student-check/:id', requirePermission('data:read'), async (c) => {
       `SELECT ms.id, ms.month, ms.status, ms.total_amount AS total, ms.rate_per_session AS rate,
               ms.credits_applied AS creditsApplied, ms.created_by AS createdBy,
               (SELECT COUNT(*) FROM schedule_sessions ss WHERE ss.schedule_id = ms.id) AS sessionCount,
-              pl.url AS paymentUrl
+              pl.url AS paymentUrl, pl.short_url AS paymentShortUrl
        FROM monthly_schedules ms LEFT JOIN payment_links pl ON pl.id = ms.payment_link_id
        WHERE ms.student_id = ? ORDER BY ms.month DESC, ms.id DESC LIMIT 6`,
     ).bind(studentId),
@@ -553,7 +554,7 @@ manage.get('/schedules', requirePermission('data:read'), async (c) => {
                     ms.created_by AS createdBy, COALESCE(st.name, ms.created_by) AS createdByName,
                     ms.approved_by AS approvedBy, ms.created_at AS createdAt,
                     (SELECT COUNT(*) FROM schedule_sessions ss WHERE ss.schedule_id = ms.id) AS sessionCount,
-                    pl.url AS paymentUrl, pl.status AS paymentLinkStatus
+                    pl.url AS paymentUrl, pl.short_url AS paymentShortUrl, pl.status AS paymentLinkStatus
              FROM monthly_schedules ms
              LEFT JOIN students s ON s.id = ms.student_id
              LEFT JOIN staff st ON st.identity = ms.created_by COLLATE NOCASE
@@ -658,16 +659,17 @@ manage.post('/schedules/:id/approve', requireAdmin, async (c) => {
           created_by: user.email,
         },
       });
+      const shortUrl = await mintPaymentShortLink(c.env.DB, c.env, { target: link.url, studentId: sched.studentId, createdBy: user.email });
       const linkRow = await c.env.DB.prepare(
-        `INSERT INTO payment_links (stripe_payment_link_id, url, student_id, customer_name, description, amount, currency, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, 'thb', ?)`,
+        `INSERT INTO payment_links (stripe_payment_link_id, url, short_url, student_id, customer_name, description, amount, currency, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'thb', ?)`,
       )
-        .bind(link.id, link.url, sched.studentId, sched.studentName, productName, sched.total, user.email)
+        .bind(link.id, link.url, shortUrl, sched.studentId, sched.studentName, productName, sched.total, user.email)
         .run();
       await c.env.DB.prepare(`UPDATE monthly_schedules SET payment_link_id = ? WHERE id = ?`)
         .bind(Number(linkRow.meta.last_row_id), id)
         .run();
-      paymentUrl = link.url;
+      paymentUrl = shortUrl ?? link.url;
     } catch (err) {
       // Approve anyway — a manual payment record still activates the
       // schedule; the admin just has to collect the money another way.
@@ -905,15 +907,16 @@ async function decideAmendment(
         currency: 'thb',
         metadata: { student_id: amendment.studentId, amendment_id: String(amendment.id), created_by: user.email },
       });
+      const shortUrl = await mintPaymentShortLink(db, c.env, { target: link.url, studentId: amendment.studentId, createdBy: user.email });
       const linkRow = await db
         .prepare(
-          `INSERT INTO payment_links (stripe_payment_link_id, url, student_id, customer_name, description, amount, currency, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, 'thb', ?)`,
+          `INSERT INTO payment_links (stripe_payment_link_id, url, short_url, student_id, customer_name, description, amount, currency, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'thb', ?)`,
         )
-        .bind(link.id, link.url, amendment.studentId, studentName, productName, chargeAmount, user.email)
+        .bind(link.id, link.url, shortUrl, amendment.studentId, studentName, productName, chargeAmount, user.email)
         .run();
       paymentLinkId = Number(linkRow.meta.last_row_id);
-      paymentUrl = link.url;
+      paymentUrl = shortUrl ?? link.url;
     } catch (err) {
       warning = err instanceof StripeError ? `สร้างลิงก์ชำระเงินไม่สำเร็จ (Stripe: ${err.message})` : 'สร้างลิงก์ชำระเงินไม่สำเร็จ';
     }
@@ -1056,7 +1059,7 @@ manage.get('/schedules/:id/amendments', requirePermission('data:read'), async (c
     `SELECT sa.id, sa.schedule_id AS scheduleId, sa.type, sa.sessions, sa.rate_per_session AS rate,
             sa.credits_used AS creditsUsed, sa.charge_amount AS chargeAmount, sa.status, sa.note,
             sa.reject_reason AS rejectReason, sa.created_by AS createdBy, COALESCE(st.name, sa.created_by) AS createdByName,
-            sa.approved_by AS approvedBy, sa.created_at AS createdAt, pl.url AS paymentUrl
+            sa.approved_by AS approvedBy, sa.created_at AS createdAt, pl.url AS paymentUrl, pl.short_url AS paymentShortUrl
      FROM schedule_amendments sa
      LEFT JOIN staff st ON st.identity = sa.created_by COLLATE NOCASE
      LEFT JOIN payment_links pl ON pl.id = sa.payment_link_id
@@ -1079,7 +1082,7 @@ manage.get('/schedule-amendments', requirePermission('data:read'), async (c) => 
                     sa.rate_per_session AS rate, sa.credits_used AS creditsUsed, sa.charge_amount AS chargeAmount,
                     sa.status, sa.note, sa.reject_reason AS rejectReason,
                     sa.created_by AS createdBy, COALESCE(st.name, sa.created_by) AS createdByName,
-                    sa.approved_by AS approvedBy, sa.created_at AS createdAt, pl.url AS paymentUrl
+                    sa.approved_by AS approvedBy, sa.created_at AS createdAt, pl.url AS paymentUrl, pl.short_url AS paymentShortUrl
              FROM schedule_amendments sa
              JOIN monthly_schedules ms ON ms.id = sa.schedule_id
              LEFT JOIN students s ON s.id = ms.student_id
