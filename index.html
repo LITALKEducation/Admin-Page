@@ -4033,6 +4033,19 @@
                     </div>
                 </div>
 
+                <div class="sidebar-nav-section" data-section="website">
+                    <button class="sidebar-nav-heading" style="margin-top: 12px;" onclick="toggleNavSection('website')">
+                        <span class="sidebar-label">เว็บไซต์</span> <i class="fas fa-chevron-down section-chevron"></i>
+                    </button>
+                    <div class="sidebar-nav-section-items" id="nav-section-website">
+                        <div class="nav-items-inner">
+                            <button class="sidebar-nav-item" data-screen="blog" onclick="goScreen('blog')" title="บทความเว็บไซต์">
+                                <i class="fas fa-newspaper"></i> <span class="sidebar-label">บทความเว็บไซต์</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="sidebar-nav-section" data-section="admin" data-admin-only style="display: none;">
                     <button class="sidebar-nav-heading" style="margin-top: 12px;" onclick="toggleNavSection('admin')">
                         <span class="sidebar-label">ผู้ดูแลระบบ</span> <i class="fas fa-chevron-down section-chevron"></i>
@@ -5422,6 +5435,88 @@
                     </div>
                 </div>
 
+                <!-- ============ BLOG (website articles) ============ -->
+                <div id="screen-blog" class="tab-content" data-screen-panel="blog">
+                    <div class="screen-header">
+                        <h1>บทความเว็บไซต์</h1>
+                        <p>เขียนและจัดการบทความที่แสดงบนหน้า Blog ของเว็บไซต์ litalkeducation.com — บทความของครูจะแสดงบนเว็บไซต์หลังจากแอดมินหรือเจ้าหน้าที่อนุมัติแล้ว</p>
+                    </div>
+
+                    <div class="admin-card" style="margin-bottom: 20px;">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-pen-nib"></i></span>
+                            <div>
+                                <h3 id="blog-editor-title">เขียนบทความใหม่</h3>
+                                <p>รองรับ 2 ภาษา (อังกฤษ/ไทย) และเขียนเนื้อหาด้วย Markdown — ใส่เฉพาะภาษาเดียวก็ได้</p>
+                            </div>
+                        </div>
+                        <div class="form-body" id="blog-editor" style="display: none;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div class="form-group">
+                                    <label><i class="fas fa-heading"></i> หัวข้อ (English)</label>
+                                    <input type="text" id="blog-title-en" placeholder="e.g. 10 Vocabulary Strategies That Actually Work" maxlength="300">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-heading"></i> หัวข้อ (ไทย)</label>
+                                    <input type="text" id="blog-title-th" placeholder="เช่น 10 กลยุทธ์คำศัพท์ที่ได้ผลจริง" maxlength="300">
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div class="form-group">
+                                    <label><i class="fas fa-tag"></i> หมวดหมู่</label>
+                                    <input type="text" id="blog-category" placeholder="เช่น Vocabulary / Grammar / Speaking" maxlength="60">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-image"></i> รูปหน้าปก (ไม่บังคับ · สูงสุด 4 MB)</label>
+                                    <input type="file" id="blog-cover-file" accept="image/*">
+                                    <div class="form-hint" id="blog-cover-hint" style="display: none;"></div>
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div class="form-group">
+                                    <label><i class="fas fa-align-left"></i> คำโปรย (English)</label>
+                                    <input type="text" id="blog-excerpt-en" placeholder="Short summary shown on the blog card" maxlength="600">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-align-left"></i> คำโปรย (ไทย)</label>
+                                    <input type="text" id="blog-excerpt-th" placeholder="สรุปสั้น ๆ ที่แสดงบนการ์ดบทความ" maxlength="600">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fab fa-markdown"></i> เนื้อหา (English · Markdown)</label>
+                                <textarea id="blog-content-en" rows="10" placeholder="# Heading&#10;&#10;Write your article in Markdown..." style="font-family: ui-monospace, monospace; font-size: 13px;"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fab fa-markdown"></i> เนื้อหา (ไทย · Markdown · ไม่บังคับ)</label>
+                                <textarea id="blog-content-th" rows="10" placeholder="# หัวข้อ&#10;&#10;เขียนบทความด้วย Markdown..." style="font-family: ui-monospace, monospace; font-size: 13px;"></textarea>
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end; flex-wrap: wrap;">
+                                <label data-admin-only style="display: none; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+                                    <input type="checkbox" id="blog-publish-now"> เผยแพร่ทันที
+                                </label>
+                                <button class="btn btn-secondary" onclick="closeBlogEditor()"><i class="fas fa-xmark"></i> ยกเลิก</button>
+                                <button class="btn btn-primary" id="blog-save-btn" onclick="saveBlogPost()"><i class="fas fa-save"></i> บันทึกบทความ</button>
+                            </div>
+                        </div>
+                        <div id="blog-editor-closed">
+                            <button class="btn btn-primary" onclick="openBlogEditor()"><i class="fas fa-plus"></i> เขียนบทความใหม่</button>
+                        </div>
+                    </div>
+
+                    <div class="admin-card">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-newspaper"></i></span>
+                            <div>
+                                <h3>บทความทั้งหมด</h3>
+                                <p id="blog-list-sub">บทความที่สถานะ "เผยแพร่แล้ว" จะแสดงบนเว็บไซต์</p>
+                            </div>
+                        </div>
+                        <div class="row-list" id="blog-post-list">
+                            <div class="form-hint">กำลังโหลด...</div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </main>
 
@@ -5526,6 +5621,8 @@
                 <div class="sidebar-nav-heading" style="margin-top: 10px;">การเงิน</div>
                 <a href="javascript:void(0)" data-screen="payments" onclick="goScreen('payments')"><i class="fas fa-money-bill-wave"></i> บันทึกการชำระเงิน</a>
                 <a href="javascript:void(0)" data-screen="finance" data-admin-only style="display: none;" onclick="goScreen('finance')"><i class="fas fa-chart-line"></i> สรุปการเงิน</a>
+                <div class="sidebar-nav-heading" style="margin-top: 10px;">เว็บไซต์</div>
+                <a href="javascript:void(0)" data-screen="blog" onclick="goScreen('blog')"><i class="fas fa-newspaper"></i> บทความเว็บไซต์</a>
                 <div class="sidebar-nav-heading" data-admin-only style="margin-top: 10px; display: none;">ผู้ดูแลระบบ</div>
                 <a href="javascript:void(0)" data-screen="staff" data-admin-only style="display: none;" onclick="goScreen('staff')"><i class="fas fa-users-gear"></i> ครูและพนักงาน</a>
                 <a href="javascript:void(0)" data-screen="access" data-admin-only style="display: none;" onclick="goScreen('access')"><i class="fas fa-user-shield"></i> สิทธิ์การมองเห็น</a>
@@ -5593,7 +5690,8 @@
         async function apiFetch(path, options = {}) {
             const token = await getFilesApiToken();
             const headers = Object.assign({ 'Authorization': 'Bearer ' + token }, options.headers || {});
-            if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+            // FormData bodies must keep the browser-generated multipart boundary.
+            if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
             return fetch(filesApiUrl + path, Object.assign({}, options, { headers }));
         }
 
@@ -5657,7 +5755,7 @@
 
         // Supports shareable links like ?screen=logs&student=litalk12345
         // (e.g. the "คัดลอกลิงก์ Study Log" button on the check screen).
-        const DEEP_LINK_SCREENS = ['dashboard', 'students', 'logs', 'payments', 'create', 'files', 'booking', 'check', 'schedule', 'hours', 'finance', 'access', 'credits'];
+        const DEEP_LINK_SCREENS = ['dashboard', 'students', 'logs', 'payments', 'create', 'files', 'booking', 'check', 'schedule', 'hours', 'finance', 'access', 'credits', 'blog'];
         function applyDeepLink() {
             const params = new URLSearchParams(window.location.search);
             const student = params.get('student');
@@ -6073,6 +6171,7 @@
             logs: { group: 'การเรียนการสอน', title: 'บันทึกการเรียน' },
             payments: { group: 'การเงิน', title: 'บันทึกการชำระเงิน' },
             finance: { group: 'การเงิน', title: 'สรุปการเงิน' },
+            blog: { group: 'เว็บไซต์', title: 'บทความเว็บไซต์' },
             staff: { group: 'ผู้ดูแลระบบ', title: 'ครูและพนักงาน' },
             access: { group: 'ผู้ดูแลระบบ', title: 'สิทธิ์การมองเห็น' },
             credits: { group: 'ผู้ดูแลระบบ', title: 'แก้ไขเครดิต' }
@@ -6193,6 +6292,9 @@
             if (screen === 'staff') {
                 loadStaffScreen();
             }
+            if (screen === 'blog') {
+                loadBlogPosts();
+            }
 
             closeMobileMenuIfOpen();
         }
@@ -6200,6 +6302,197 @@
         function closeMobileMenuIfOpen() {
             const menu = document.getElementById('mobile-menu-overlay');
             if (menu && menu.classList.contains('active')) closeMobileMenu();
+        }
+
+        // ===== Blog (website articles via the Worker's /blog-admin routes) =====
+        // Teachers submit posts (status 'pending'); admins approve, publish,
+        // reject and can publish their own posts immediately.
+        let blogPosts = [];
+        let editingBlogId = null;
+
+        const BLOG_STATUS_LABEL = {
+            pending: 'รออนุมัติ',
+            published: 'เผยแพร่แล้ว',
+            rejected: 'ไม่ผ่านการอนุมัติ',
+        };
+
+        async function loadBlogPosts() {
+            const list = document.getElementById('blog-post-list');
+            try {
+                const res = await apiFetch('/blog-admin/posts');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                blogPosts = data.posts || [];
+                renderBlogList();
+            } catch (error) {
+                console.error('loadBlogPosts:', error);
+                list.innerHTML = '<div class="form-hint">โหลดรายการบทความไม่สำเร็จ กรุณาลองใหม่อีกครั้ง</div>';
+            }
+        }
+
+        function renderBlogList() {
+            const list = document.getElementById('blog-post-list');
+            const admin = isAdminUser();
+            if (!blogPosts.length) {
+                list.innerHTML = '<div class="form-hint">ยังไม่มีบทความ — กดปุ่ม "เขียนบทความใหม่" เพื่อเริ่มต้น</div>';
+                return;
+            }
+            list.innerHTML = blogPosts.map(p => {
+                const statusColor = p.status === 'published' ? 'var(--accent-success)' : (p.status === 'rejected' ? 'var(--accent-danger)' : 'var(--text-muted)');
+                const mine = filesApiMe && (p.authorIdentity || '').toLowerCase() === (filesApiMe.email || '').toLowerCase();
+                let buttons = '';
+                if (admin && p.status !== 'published') {
+                    buttons += `<button class="btn btn-success" style="padding: 6px 10px;" onclick="setBlogPostStatus(${p.id}, 'published')"><i class="fas fa-check"></i> อนุมัติและเผยแพร่</button>`;
+                }
+                if (admin && p.status === 'pending') {
+                    buttons += `<button class="btn btn-danger" style="padding: 6px 10px;" onclick="setBlogPostStatus(${p.id}, 'rejected')"><i class="fas fa-xmark"></i> ไม่อนุมัติ</button>`;
+                }
+                if (admin && p.status === 'published') {
+                    buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="setBlogPostStatus(${p.id}, 'pending')"><i class="fas fa-eye-slash"></i> เลิกเผยแพร่</button>`;
+                }
+                if (admin || mine) {
+                    buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="openBlogEditor(${p.id})"><i class="fas fa-pen"></i> แก้ไข</button>
+                                <button class="btn btn-danger" style="padding: 6px 10px;" onclick="deleteBlogPost(${p.id})"><i class="fas fa-trash"></i> ลบ</button>`;
+                }
+                if (p.status === 'published') {
+                    buttons += `<a class="btn btn-secondary" style="padding: 6px 10px;" href="https://litalkeducation.com/blog-post?slug=${encodeURIComponent(p.slug)}" target="_blank" rel="noopener noreferrer"><i class="fas fa-arrow-up-right-from-square"></i> ดูบนเว็บไซต์</a>`;
+                }
+                const cover = p.coverKey ? ' · <i class="fas fa-image"></i> มีรูปหน้าปก' : '';
+                return `
+                    <div class="alert-row" style="align-items: flex-start;">
+                        <i class="fas fa-newspaper" style="color: ${statusColor}; margin-top: 3px;"></i>
+                        <div style="flex: 1; min-width: 0;">
+                            <div class="alert-text">
+                                <strong>${escapeHtml(p.title)}</strong>${p.titleTh ? ' · ' + escapeHtml(p.titleTh) : ''}
+                                <span style="color: ${statusColor};"> — ${BLOG_STATUS_LABEL[p.status] || escapeHtml(p.status)}</span>
+                            </div>
+                            <div class="alert-text" style="color: var(--text-muted); font-size: 12px;">
+                                ${p.category ? escapeHtml(p.category) + ' · ' : ''}เขียนโดย ${escapeHtml(p.authorName || p.authorIdentity || '-')}${p.reviewedBy ? ' · ตรวจโดย ' + escapeHtml(p.reviewedBy) : ''}${cover}
+                            </div>
+                            <div class="alert-text" style="color: var(--text-muted); font-size: 12px;">สร้างเมื่อ ${escapeHtml((p.createdAt || '').slice(0, 16))}${p.publishedAt ? ' · เผยแพร่ ' + escapeHtml(String(p.publishedAt).slice(0, 16)) : ''}</div>
+                            ${buttons ? `<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">${buttons}</div>` : ''}
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        function openBlogEditor(id = null) {
+            editingBlogId = id;
+            const post = id ? blogPosts.find(p => p.id === id) : null;
+            document.getElementById('blog-editor').style.display = '';
+            document.getElementById('blog-editor-closed').style.display = 'none';
+            document.getElementById('blog-editor-title').innerText = post ? 'แก้ไขบทความ' : 'เขียนบทความใหม่';
+            document.getElementById('blog-title-en').value = post?.title || '';
+            document.getElementById('blog-title-th').value = post?.titleTh || '';
+            document.getElementById('blog-category').value = post?.category || '';
+            document.getElementById('blog-excerpt-en').value = post?.excerpt || '';
+            document.getElementById('blog-excerpt-th').value = post?.excerptTh || '';
+            document.getElementById('blog-content-en').value = post?.content || '';
+            document.getElementById('blog-content-th').value = post?.contentTh || '';
+            document.getElementById('blog-cover-file').value = '';
+            const publish = document.getElementById('blog-publish-now');
+            if (publish) publish.checked = false;
+            const hint = document.getElementById('blog-cover-hint');
+            hint.style.display = post?.coverKey ? '' : 'none';
+            hint.innerText = post?.coverKey ? 'มีรูปหน้าปกอยู่แล้ว — เลือกไฟล์ใหม่เพื่อแทนที่' : '';
+            document.getElementById('screen-blog').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function closeBlogEditor() {
+            editingBlogId = null;
+            document.getElementById('blog-editor').style.display = 'none';
+            document.getElementById('blog-editor-closed').style.display = '';
+        }
+
+        async function saveBlogPost() {
+            const btn = document.getElementById('blog-save-btn');
+            const body = {
+                title: document.getElementById('blog-title-en').value.trim(),
+                titleTh: document.getElementById('blog-title-th').value.trim(),
+                excerpt: document.getElementById('blog-excerpt-en').value.trim(),
+                excerptTh: document.getElementById('blog-excerpt-th').value.trim(),
+                content: document.getElementById('blog-content-en').value,
+                contentTh: document.getElementById('blog-content-th').value,
+                category: document.getElementById('blog-category').value.trim(),
+            };
+            // EN is the primary field on the API — fill it from Thai when the
+            // writer only provided the Thai version.
+            if (!body.title && body.titleTh) { body.title = body.titleTh; }
+            if (!body.content.trim() && body.contentTh.trim()) { body.content = body.contentTh; }
+            if (!body.title) { showModal('ข้อมูลไม่ครบ', 'กรุณากรอกหัวข้อบทความอย่างน้อย 1 ภาษา', 'error'); return; }
+            if (!body.content.trim()) { showModal('ข้อมูลไม่ครบ', 'กรุณากรอกเนื้อหาบทความอย่างน้อย 1 ภาษา', 'error'); return; }
+
+            const publishNow = isAdminUser() && document.getElementById('blog-publish-now')?.checked;
+            btn.disabled = true;
+            try {
+                let postId = editingBlogId;
+                if (editingBlogId) {
+                    const res = await apiFetch(`/blog-admin/posts/${editingBlogId}`, { method: 'PATCH', body: JSON.stringify(body) });
+                    const result = await res.json();
+                    if (!res.ok) throw new Error(result.error || 'บันทึกไม่สำเร็จ');
+                } else {
+                    const res = await apiFetch('/blog-admin/posts', { method: 'POST', body: JSON.stringify({ ...body, publish: publishNow }) });
+                    const result = await res.json();
+                    if (!res.ok) throw new Error(result.error || 'บันทึกไม่สำเร็จ');
+                    postId = result.id;
+                }
+
+                // Publishing an edited post is a second call; do it before the
+                // cover upload so the list refresh shows the final state.
+                if (editingBlogId && publishNow) {
+                    await apiFetch(`/blog-admin/posts/${editingBlogId}/status`, { method: 'POST', body: JSON.stringify({ status: 'published' }) });
+                }
+
+                const coverInput = document.getElementById('blog-cover-file');
+                if (coverInput.files && coverInput.files[0]) {
+                    const form = new FormData();
+                    form.append('file', coverInput.files[0]);
+                    const res = await apiFetch(`/blog-admin/posts/${postId}/cover`, { method: 'POST', body: form });
+                    if (!res.ok) {
+                        const result = await res.json().catch(() => ({}));
+                        showToast('อัปโหลดรูปหน้าปกไม่สำเร็จ', result.error || 'บทความถูกบันทึกแล้ว แต่รูปหน้าปกอัปโหลดไม่สำเร็จ', 'error');
+                    }
+                }
+
+                closeBlogEditor();
+                await loadBlogPosts();
+                showToast('บันทึกบทความแล้ว', publishNow ? 'บทความเผยแพร่บนเว็บไซต์แล้ว' : (isAdminUser() ? 'บทความถูกบันทึกในสถานะรออนุมัติ' : 'ส่งบทความแล้ว — จะแสดงบนเว็บไซต์หลังแอดมินอนุมัติ'), 'success');
+            } catch (error) {
+                console.error('saveBlogPost:', error);
+                showModal('บันทึกบทความไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function setBlogPostStatus(id, status) {
+            const labels = { published: 'เผยแพร่บทความนี้บนเว็บไซต์?', rejected: 'ไม่อนุมัติบทความนี้?', pending: 'เลิกเผยแพร่บทความนี้ (กลับเป็นรออนุมัติ)?' };
+            if (!(await confirmDialog(labels[status] || 'ยืนยันการทำรายการ?', { danger: status === 'rejected' }))) return;
+            try {
+                const res = await apiFetch(`/blog-admin/posts/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error || 'เกิดข้อผิดพลาด');
+                await loadBlogPosts();
+                showToast('อัปเดตสถานะแล้ว', BLOG_STATUS_LABEL[status] || status, 'success');
+            } catch (error) {
+                console.error('setBlogPostStatus:', error);
+                showModal('ทำรายการไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
+            }
+        }
+
+        async function deleteBlogPost(id) {
+            if (!(await confirmDialog('ลบบทความนี้ถาวร? การลบไม่สามารถย้อนกลับได้', { danger: true, okLabel: 'ลบบทความ' }))) return;
+            try {
+                const res = await apiFetch(`/blog-admin/posts/${id}`, { method: 'DELETE' });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error || 'เกิดข้อผิดพลาด');
+                if (editingBlogId === id) closeBlogEditor();
+                await loadBlogPosts();
+                showToast('ลบบทความแล้ว', '', 'success');
+            } catch (error) {
+                console.error('deleteBlogPost:', error);
+                showModal('ลบบทความไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
+            }
         }
 
         // ===== Dashboard (real data via the Worker's

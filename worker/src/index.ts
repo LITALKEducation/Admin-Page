@@ -25,6 +25,7 @@ import chat, {
 } from './chat';
 import { chatReply, ChatNotConfiguredError } from './gemini';
 import { verifyStripeSignature } from './stripe';
+import blog, { blogPublic } from './blog';
 
 const app = new Hono<AppBindings>();
 
@@ -36,6 +37,9 @@ app.use('*', async (c, next) => cors({
 })(c, next));
 
 // ===== Public routes (registered before verifyAuth) =====
+
+// Published blog posts for the public website (litalkeducation.com/blog).
+app.route('/', blogPublic);
 
 // Stripe calls this with a signature header, not a Bearer token.
 app.post('/stripe/webhook', async (c) => {
@@ -337,6 +341,7 @@ app.route('/', core);
 app.route('/', manage);
 app.route('/', accounts);
 app.route('/', chat);
+app.route('/', blog);
 
 app.get('/me', (c) => c.json(c.get('user')));
 
