@@ -4042,6 +4042,9 @@
                             <button class="sidebar-nav-item" data-screen="blog" onclick="goScreen('blog')" title="บทความเว็บไซต์">
                                 <i class="fas fa-newspaper"></i> <span class="sidebar-label">บทความเว็บไซต์</span>
                             </button>
+                            <button class="sidebar-nav-item" data-screen="links" onclick="goScreen('links')" title="ลิงก์ย่อ">
+                                <i class="fas fa-link"></i> <span class="sidebar-label">ลิงก์ย่อ</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -5530,6 +5533,69 @@
                     </div>
                 </div>
 
+                <div id="screen-links" class="tab-content" data-screen-panel="links">
+                    <div class="screen-header">
+                        <h1>ลิงก์ย่อ</h1>
+                        <p>สร้างลิงก์ย่อสำหรับ go.litalkeducation.com (ใช้งานทั่วไป) หรือ payment.litalkeducation.com (ลิงก์ชำระเงิน) — ลิงก์ชำระเงินที่ระบบสร้างให้ตอนอนุมัติตารางเรียน/สร้างลิงก์ Stripe จะมีลิงก์ย่อให้อัตโนมัติอยู่แล้ว ไม่ต้องสร้างเอง</p>
+                    </div>
+
+                    <div class="admin-card" style="margin-bottom: 20px;">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-plus"></i></span>
+                            <div>
+                                <h3>สร้างลิงก์ย่อใหม่</h3>
+                                <p>ไม่กำหนดลิงก์ท้าย ระบบจะสุ่มให้อัตโนมัติ</p>
+                            </div>
+                        </div>
+                        <div class="form-body">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div class="form-group">
+                                    <label><i class="fas fa-globe"></i> โดเมน</label>
+                                    <select id="link-domain" onchange="syncLinkStudentField()">
+                                        <option value="go">go.litalkeducation.com (ใช้งานทั่วไป)</option>
+                                        <option value="payment">payment.litalkeducation.com (ลิงก์ชำระเงิน)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-link"></i> ลิงก์เป้าหมาย (URL)</label>
+                                    <input type="url" id="link-target" placeholder="https://...">
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div class="form-group">
+                                    <label><i class="fas fa-slash"></i> ลิงก์ท้าย (ไม่บังคับ)</label>
+                                    <input type="text" id="link-slug" placeholder="ไม่กำหนด = สุ่มอัตโนมัติ" maxlength="64">
+                                </div>
+                                <div class="form-group" id="link-studentid-group">
+                                    <label><i class="fas fa-id-card"></i> รหัสนักเรียน (ไม่บังคับ)</label>
+                                    <input type="text" id="link-studentid" placeholder="เช่น LT-000123 — ใช้ตั้งชื่อลิงก์ท้ายอัตโนมัติเป็น {รหัสนักเรียน}-{สุ่ม}">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-tag"></i> ชื่อลิงก์ (ไม่บังคับ, ไว้จำในรายการ)</label>
+                                <input type="text" id="link-title" placeholder="เช่น ลิงก์โปรโมชันหน้าเว็บ" maxlength="200">
+                            </div>
+                            <div style="display: flex; justify-content: flex-end;">
+                                <button class="btn btn-primary" id="link-create-btn" onclick="createShortLink()"><i class="fas fa-wand-magic-sparkles"></i> สร้างลิงก์ย่อ</button>
+                            </div>
+                            <div id="short-link-result" style="display: none;"></div>
+                        </div>
+                    </div>
+
+                    <div class="admin-card">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-list"></i></span>
+                            <div>
+                                <h3>ลิงก์ทั้งหมด</h3>
+                                <p id="links-list-sub">รายการลิงก์ย่อของคุณ</p>
+                            </div>
+                        </div>
+                        <div class="row-list" id="short-links-list">
+                            <div class="form-hint">กำลังโหลด...</div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </main>
 
@@ -6308,6 +6374,9 @@
             if (screen === 'blog') {
                 loadBlogPosts();
             }
+            if (screen === 'links') {
+                loadShortLinks();
+            }
 
             closeMobileMenuIfOpen();
         }
@@ -6333,10 +6402,17 @@
             return 'https://litalkeducation.com/blog-post?slug=' + encodeURIComponent(slug);
         }
 
-        // Public URL of a published post, for pasting into LINE/social chats.
-        // Same clipboard + ✓-feedback behaviour as copyPaymentLink.
+        // Short, friendly link for sharing — the Worker serves every
+        // published post at go.litalkeducation.com/<slug> automatically (see
+        // worker/src/shortlinks.ts), no separate short link needs creating.
+        function shortBlogPostUrl(slug) {
+            return 'https://go.litalkeducation.com/' + encodeURIComponent(slug);
+        }
+
+        // For pasting into LINE/social chats. Same clipboard + ✓-feedback
+        // behaviour as copyPaymentLink.
         function copyBlogPostLink(slug, btn) {
-            return copyPaymentLink(blogPostUrl(slug), btn);
+            return copyPaymentLink(shortBlogPostUrl(slug), btn);
         }
 
         async function loadBlogPosts() {
@@ -6554,6 +6630,158 @@
             } catch (error) {
                 console.error('deleteBlogPost:', error);
                 showModal('ลบบทความไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
+            }
+        }
+
+        // ===== URL shortener (go.litalkeducation.com / payment.litalkeducation.com
+        // via the Worker's /links routes) =====
+        // Any signed-in staff can create a link; admins see everyone's and can
+        // suspend/resume one (creator or admin can delete outright).
+        let shortLinksData = [];
+
+        function syncLinkStudentField() {
+            const group = document.getElementById('link-studentid-group');
+            group.style.display = document.getElementById('link-domain').value === 'payment' ? '' : 'none';
+        }
+
+        async function loadShortLinks() {
+            const list = document.getElementById('short-links-list');
+            document.getElementById('links-list-sub').textContent = isAdminUser() ? 'ลิงก์ย่อทั้งหมดในระบบ' : 'ลิงก์ย่อของคุณ';
+            try {
+                const res = await apiFetch('/links');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                shortLinksData = await res.json();
+                renderShortLinksList();
+            } catch (error) {
+                console.error('loadShortLinks:', error);
+                list.innerHTML = '<div class="form-hint">โหลดรายการลิงก์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง</div>';
+            }
+        }
+
+        function renderShortLinksList() {
+            const list = document.getElementById('short-links-list');
+            const admin = isAdminUser();
+            if (!shortLinksData.length) {
+                list.innerHTML = '<div class="form-hint">ยังไม่มีลิงก์ย่อ — กรอกฟอร์มด้านบนเพื่อสร้างลิงก์แรก</div>';
+                return;
+            }
+            list.innerHTML = shortLinksData.map(l => {
+                const mine = filesApiMe && (l.createdBy || '').toLowerCase() === (filesApiMe.email || '').toLowerCase();
+                const disabled = !!l.disabledAt;
+                let buttons = `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(l.url)}', this)" title="คัดลอกลิงก์"><i class="fas fa-copy"></i></button>`;
+                if (admin) {
+                    buttons += disabled
+                        ? `<button class="btn btn-success" style="padding: 6px 10px;" onclick="enableShortLink(${l.id})"><i class="fas fa-play"></i> เปิดใช้งาน</button>`
+                        : `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="disableShortLink(${l.id})" title="ระงับลิงก์นี้ชั่วคราว"><i class="fas fa-ban"></i> ระงับ</button>`;
+                }
+                if (admin || mine) {
+                    buttons += `<button class="btn btn-danger" style="padding: 6px 10px;" onclick="deleteShortLink(${l.id})"><i class="fas fa-trash"></i> ลบ</button>`;
+                }
+                const domainLabel = l.domain === 'payment' ? 'payment' : 'go';
+                const statusNote = disabled ? ' · <span style="color: var(--accent-danger);">ระงับอยู่</span>' : '';
+                return `
+                    <div class="alert-row" style="align-items: flex-start; ${disabled ? 'opacity: 0.6;' : ''}">
+                        <i class="fas fa-link" style="color: var(--text-muted); margin-top: 3px;"></i>
+                        <div style="flex: 1; min-width: 0;">
+                            <div class="alert-text">
+                                <strong>${escapeHtml(l.url)}</strong>
+                                <span style="color: var(--text-muted);"> (${domainLabel})</span>${statusNote}
+                            </div>
+                            <div class="alert-text" style="color: var(--text-muted); font-size: 12px; word-break: break-all;">${escapeHtml(l.title ? l.title + ' — ' : '')}${escapeHtml(l.targetUrl)}</div>
+                            <div class="alert-text" style="color: var(--text-muted); font-size: 12px;">
+                                ${l.studentId ? 'นักเรียน ' + escapeHtml(l.studentId) + ' · ' : ''}คลิก ${l.clickCount || 0} ครั้ง · โดย ${escapeHtml(l.createdBy || '-')} · ${escapeHtml((l.createdAt || '').slice(0, 16))}
+                            </div>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">${buttons}</div>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        async function createShortLink() {
+            const btn = document.getElementById('link-create-btn');
+            const domain = document.getElementById('link-domain').value;
+            const target = document.getElementById('link-target').value.trim();
+            const slug = document.getElementById('link-slug').value.trim();
+            const studentId = document.getElementById('link-studentid').value.trim();
+            const title = document.getElementById('link-title').value.trim();
+            if (!target) {
+                triggerFieldError('link-target', 'กรุณากรอกลิงก์เป้าหมาย');
+                return;
+            }
+
+            const payload = { domain, target };
+            if (slug) payload.slug = slug;
+            if (studentId) payload.studentId = studentId;
+            if (title) payload.title = title;
+
+            btn.disabled = true;
+            try {
+                const res = await apiFetch('/links', { method: 'POST', body: JSON.stringify(payload) });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error || 'สร้างลิงก์ไม่สำเร็จ');
+
+                const box = document.getElementById('short-link-result');
+                box.style.display = '';
+                box.innerHTML = `
+                    <div class="info-notice" style="margin-top: 16px;">
+                        <i class="fas fa-check-circle"></i>
+                        <div style="min-width: 0;">
+                            <strong>สร้างลิงก์สำเร็จ:</strong>
+                            <a href="${escapeHtml(result.url)}" target="_blank" style="word-break: break-all;">${escapeHtml(result.url)}</a>
+                            <button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(result.url)}', this)"><i class="fas fa-copy"></i> คัดลอก</button>
+                        </div>
+                    </div>`;
+                document.getElementById('link-target').value = '';
+                document.getElementById('link-slug').value = '';
+                document.getElementById('link-studentid').value = '';
+                document.getElementById('link-title').value = '';
+                await loadShortLinks();
+            } catch (error) {
+                console.error('createShortLink:', error);
+                showModal('สร้างลิงก์ไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function disableShortLink(id) {
+            if (!(await confirmDialog('ระงับลิงก์นี้? ลิงก์จะใช้ไม่ได้ทันทีจนกว่าจะเปิดใช้งานอีกครั้ง (ประวัติการคลิกยังอยู่)', { title: 'ระงับลิงก์', danger: true, okLabel: 'ระงับลิงก์' }))) return;
+            try {
+                const res = await apiFetch(`/links/${id}/disable`, { method: 'POST' });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error || 'เกิดข้อผิดพลาด');
+                await loadShortLinks();
+                showToast('ระงับลิงก์แล้ว', '', 'success');
+            } catch (error) {
+                console.error('disableShortLink:', error);
+                showModal('ระงับลิงก์ไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
+            }
+        }
+
+        async function enableShortLink(id) {
+            try {
+                const res = await apiFetch(`/links/${id}/enable`, { method: 'POST' });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error || 'เกิดข้อผิดพลาด');
+                await loadShortLinks();
+                showToast('เปิดใช้งานลิงก์แล้ว', '', 'success');
+            } catch (error) {
+                console.error('enableShortLink:', error);
+                showModal('เปิดใช้งานลิงก์ไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
+            }
+        }
+
+        async function deleteShortLink(id) {
+            if (!(await confirmDialog('ลบลิงก์นี้ถาวร? การลบไม่สามารถย้อนกลับได้', { danger: true, okLabel: 'ลบลิงก์' }))) return;
+            try {
+                const res = await apiFetch(`/links/${id}`, { method: 'DELETE' });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error || 'เกิดข้อผิดพลาด');
+                await loadShortLinks();
+                showToast('ลบลิงก์แล้ว', '', 'success');
+            } catch (error) {
+                console.error('deleteShortLink:', error);
+                showModal('ลบลิงก์ไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
             }
         }
 
@@ -7264,7 +7492,7 @@
                 detail += `<div class="payment-row">
                     <div class="payment-info"><div class="name"><i class="fab fa-stripe-s"></i> ลิงก์รอชำระ</div><div class="meta">${escapeHtml(l.description || '')}</div></div>
                     <div class="amount">${formatBaht(l.amount)}</div>
-                    <button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(l.url)}', this)" title="คัดลอกลิงก์"><i class="fas fa-copy"></i></button>
+                    <button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(l.shortUrl || l.url)}', this)" title="คัดลอกลิงก์"><i class="fas fa-copy"></i></button>
                 </div>`;
             });
             document.getElementById('check-payment-detail').innerHTML = detail || '<div class="form-hint">ยังไม่มีประวัติการชำระเงิน</div>';
@@ -7292,7 +7520,7 @@
                         ${sessions.length ? `<div class="table-scroll" style="margin-top: 8px; max-height: 160px; overflow-y: auto;"><table class="data-table"><thead><tr><th>วันที่</th><th>เวลา</th></tr></thead><tbody>${sessionRows}</tbody></table></div>` : ''}
                     </div>
                     <div class="amount">${formatBaht(m.total)}</div>
-                    ${m.paymentUrl && m.status === 'approved' ? `<button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(m.paymentUrl)}', this)" title="คัดลอกลิงก์ชำระเงิน"><i class="fas fa-copy"></i></button>` : ''}
+                    ${m.paymentUrl && m.status === 'approved' ? `<button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(m.paymentShortUrl || m.paymentUrl)}', this)" title="คัดลอกลิงก์ชำระเงิน"><i class="fas fa-copy"></i></button>` : ''}
                 </div>`;
             }).join('') : '';
 
@@ -7788,7 +8016,7 @@
                 buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="cancelSchedule(${r.id})"><i class="fas fa-ban"></i> ยกเลิก</button>`;
             }
             if (r.paymentUrl && r.status === 'approved') {
-                buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(r.paymentUrl)}', this)" title="คัดลอกลิงก์ชำระเงินสำหรับผู้ปกครอง"><i class="fas fa-copy"></i> ลิงก์ชำระเงิน</button>
+                buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(r.paymentShortUrl || r.paymentUrl)}', this)" title="คัดลอกลิงก์ชำระเงินสำหรับผู้ปกครอง"><i class="fas fa-copy"></i> ลิงก์ชำระเงิน</button>
                             <button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyScheduleSummary(${r.id}, this)" title="คัดลอกข้อความสรุปการสอนและค่าใช้จ่ายพร้อมลิงก์ชำระเงิน"><i class="fas fa-file-lines"></i> ข้อความแจ้งผู้ปกครอง</button>`;
             }
             const creditNote = r.creditsApplied > 0 ? ` <span style="color: var(--accent-success);">(ใช้เครดิต ${r.creditsApplied} ชม.)</span>` : '';
@@ -7897,7 +8125,7 @@
             copySummaryText(buildParentSummaryMessage({
                 studentName: r.studentName, month: r.month, course: r.course, note: r.note,
                 sessions: r.sessions, amount: r.total, creditsApplied: r.creditsApplied,
-                paymentUrl: r.paymentUrl, isExtra: false
+                paymentUrl: r.paymentShortUrl || r.paymentUrl, isExtra: false
             }), btn);
         }
 
@@ -7907,7 +8135,7 @@
             copySummaryText(buildParentSummaryMessage({
                 studentName: r.studentName, month: r.month, course: r.course, note: r.note,
                 sessions: r.sessions, amount: r.chargeAmount, creditsApplied: r.creditsUsed,
-                paymentUrl: r.paymentUrl, isExtra: true
+                paymentUrl: r.paymentShortUrl || r.paymentUrl, isExtra: true
             }), btn);
         }
 
@@ -8204,7 +8432,7 @@
                 buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="cancelAmendment(${r.id})"><i class="fas fa-ban"></i> ยกเลิก</button>`;
             }
             if (r.paymentUrl && r.status === 'awaiting_payment') {
-                buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(r.paymentUrl)}', this)" title="คัดลอกลิงก์ชำระเงิน"><i class="fas fa-copy"></i> ลิงก์ชำระเงิน</button>
+                buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(r.paymentShortUrl || r.paymentUrl)}', this)" title="คัดลอกลิงก์ชำระเงิน"><i class="fas fa-copy"></i> ลิงก์ชำระเงิน</button>
                             <button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyAmendmentSummary(${r.id}, this)" title="คัดลอกข้อความสรุปชั่วโมงที่เพิ่มและค่าใช้จ่ายพร้อมลิงก์ชำระเงิน"><i class="fas fa-file-lines"></i> ข้อความแจ้งผู้ปกครอง</button>`;
             }
             const typeLabel = r.type === 'add' ? 'ขอเพิ่ม' : 'ขอถอน';
@@ -9293,7 +9521,7 @@
                             <div class="meta">${escapeHtml(LINK_STATUS_LABEL[l.status] || l.status)} · ${escapeHtml(formatShortThaiDate((l.createdAt || '').slice(0, 10)))} · ${escapeHtml(l.createdBy || '')}${l.promoCode ? ` · โค้ด: ${escapeHtml(l.promoCode)}` : ''}${l.discountAmount ? ` · ลดราคา ${formatBaht(l.discountAmount)}` : ''}</div>
                         </div>
                         <div class="amount">${formatBaht(l.amount)}</div>
-                        <button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(l.url)}', this)" title="คัดลอกลิงก์"><i class="fas fa-copy"></i></button>
+                        <button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(l.shortUrl || l.url)}', this)" title="คัดลอกลิงก์"><i class="fas fa-copy"></i></button>
                         ${l.status === 'active' ? `<button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="deactivatePaymentLink(${l.id})" title="ยกเลิกลิงก์"><i class="fas fa-ban"></i></button>` : ''}
                     </div>`).join('') : '<div class="form-hint">ยังไม่มีลิงก์ชำระเงิน</div>';
             } catch (err) {
@@ -9325,6 +9553,7 @@
                 const result = await response.json();
                 hideLoading();
                 if (response.ok && result.ok) {
+                    const displayUrl = result.shortUrl || result.url;
                     const box = document.getElementById('payment-link-result');
                     box.style.display = '';
                     box.innerHTML = `
@@ -9332,8 +9561,8 @@
                             <i class="fas fa-check-circle"></i>
                             <div style="min-width: 0;">
                                 <strong>สร้างลิงก์สำเร็จ:</strong>
-                                <a href="${escapeHtml(result.url)}" target="_blank" style="word-break: break-all;">${escapeHtml(result.url)}</a>
-                                <button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(result.url)}', this)"><i class="fas fa-copy"></i> คัดลอก</button>
+                                <a href="${escapeHtml(displayUrl)}" target="_blank" style="word-break: break-all;">${escapeHtml(displayUrl)}</a>
+                                <button class="btn btn-secondary" style="margin-left: 8px; padding: 6px 10px;" onclick="copyPaymentLink('${escapeJs(displayUrl)}', this)"><i class="fas fa-copy"></i> คัดลอก</button>
                             </div>
                         </div>`;
                     document.getElementById('link-amount').value = '';

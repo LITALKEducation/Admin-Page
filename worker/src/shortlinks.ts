@@ -10,7 +10,7 @@
 // go.../<post-slug> link "for free" with no separate short_links row.
 import { Hono, type Context } from 'hono';
 import type { AppBindings, AuthUser, Env } from './types';
-import { isAdmin } from './auth';
+import { isAdmin, requireAdmin } from './auth';
 import { logAudit } from './db';
 
 export type ShortDomain = 'go' | 'payment';
@@ -55,10 +55,12 @@ interface ShortLinkRow {
   createdAt: string;
   clickCount: number;
   lastClickedAt: string | null;
+  disabledAt: string | null;
 }
 
 const LIST_FIELDS = `id, domain, slug, target_url AS targetUrl, student_id AS studentId, title,
-  created_by AS createdBy, created_at AS createdAt, click_count AS clickCount, last_clicked_at AS lastClickedAt`;
+  created_by AS createdBy, created_at AS createdAt, click_count AS clickCount, last_clicked_at AS lastClickedAt,
+  disabled_at AS disabledAt`;
 
 // Core creation logic shared by the authenticated POST /links endpoint and
 // the automatic payment-link wrapping (mintPaymentShortLink below). Retries
@@ -110,6 +112,7 @@ export async function createShortLink(
         createdAt: new Date().toISOString(),
         clickCount: 0,
         lastClickedAt: null,
+        disabledAt: null,
       };
       await env.SHORTLINKS.put(kvKey(opts.domain, slug), JSON.stringify({ id: row.id, target: opts.target }), {
         expirationTtl: KV_TTL_SECONDS,
@@ -181,7 +184,9 @@ export async function shortLinkRedirect(c: Context<AppBindings>, next: () => Pro
     }
   }
 
-  const row = await c.env.DB.prepare(`SELECT id, target_url AS target FROM short_links WHERE domain = ? AND slug = ?`)
+  const row = await c.env.DB.prepare(
+    `SELECT id, target_url AS target FROM short_links WHERE domain = ? AND slug = ? AND disabled_at IS NULL`,
+  )
     .bind(domain, slug)
     .first<{ id: number; target: string }>();
 
@@ -288,6 +293,35 @@ shortLinks.delete('/links/:id', async (c) => {
   await c.env.DB.prepare(`DELETE FROM short_links WHERE id = ?`).bind(id).run();
   await c.env.SHORTLINKS.delete(kvKey(row.domain, row.slug));
   await logAudit(c.env.DB, user, 'DELETE_SHORT_LINK', row.studentId, `${row.domain}/${row.slug}`, true);
+  return c.json({ ok: true });
+});
+
+// Suspend/resume a link without losing its click history — admin only
+// (unlike delete, which the creator can also do). Both purge the KV cache
+// entry so the change takes effect on the very next redirect instead of
+// waiting out the ~6h TTL: a disable falls through to D1 (which now
+// excludes it) and 404s; an enable falls through to D1 and gets re-cached.
+shortLinks.post('/links/:id/disable', requireAdmin, async (c) => {
+  const user = c.get('user');
+  const id = Number(c.req.param('id'));
+  const row = await c.env.DB.prepare(`SELECT ${LIST_FIELDS} FROM short_links WHERE id = ?`).bind(id).first<ShortLinkRow>();
+  if (!row) return c.json({ error: 'Not found' }, 404);
+
+  await c.env.DB.prepare(`UPDATE short_links SET disabled_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(id).run();
+  await c.env.SHORTLINKS.delete(kvKey(row.domain, row.slug));
+  await logAudit(c.env.DB, user, 'DISABLE_SHORT_LINK', row.studentId, `${row.domain}/${row.slug}`, true);
+  return c.json({ ok: true });
+});
+
+shortLinks.post('/links/:id/enable', requireAdmin, async (c) => {
+  const user = c.get('user');
+  const id = Number(c.req.param('id'));
+  const row = await c.env.DB.prepare(`SELECT ${LIST_FIELDS} FROM short_links WHERE id = ?`).bind(id).first<ShortLinkRow>();
+  if (!row) return c.json({ error: 'Not found' }, 404);
+
+  await c.env.DB.prepare(`UPDATE short_links SET disabled_at = NULL WHERE id = ?`).bind(id).run();
+  await c.env.SHORTLINKS.delete(kvKey(row.domain, row.slug));
+  await logAudit(c.env.DB, user, 'ENABLE_SHORT_LINK', row.studentId, `${row.domain}/${row.slug}`, true);
   return c.json({ ok: true });
 });
 

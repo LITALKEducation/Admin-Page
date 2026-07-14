@@ -378,6 +378,8 @@ permissions scoped to this account.
 | GET    | `/public/files/:token`   | (public)       | Streams a file by its public token |
 | POST   | `/links`                 | (any valid token) | Create a go./payment. short link — see "URL shortener" |
 | GET    | `/links`                 | (any valid token) | List short links (own, or all for admins) |
+| POST   | `/links/:id/disable`     | admin          | Suspend a link (redirect 404s; click history kept) |
+| POST   | `/links/:id/enable`      | admin          | Resume a suspended link |
 | DELETE | `/links/:id`             | (any valid token) | Creator or admin only |
 | POST   | `/import`                | `data:write`   | One-time Sheet migration (see above) |
 | POST   | `/stripe/webhook`        | (Stripe signature) | Records paid checkout sessions |
@@ -479,7 +481,12 @@ Endpoints (any signed-in staff — this is self-service, not admin-only):
 |--------|--------------|-------|
 | POST   | `/links`     | `{ domain: 'go'\|'payment', target, slug?, studentId?, title? }` — `slug` is user-chosen if given, else random (`<studentId>-<random>` by default for `payment`) |
 | GET    | `/links`     | `?domain=go\|payment` filter. Admins see every link; others see only their own |
-| DELETE | `/links/:id` | Creator or admin only; also purges the KV cache entry |
+| POST   | `/links/:id/disable` | **Admin only.** Suspends the link (`disabled_at`) without losing `click_count` history — the redirect 404s immediately |
+| POST   | `/links/:id/enable`  | **Admin only.** Clears `disabled_at`, resuming the redirect |
+| DELETE | `/links/:id` | Creator or admin only; permanent, also purges the KV cache entry |
+
+A disable/enable purges the KV cache entry for that slug so the change is
+live on the very next redirect — it doesn't wait out the ~6h TTL.
 
 Redirect lookups (`GET` on either hostname) hit KV first (`SHORTLINKS`
 namespace, ~6h TTL) and fall back to D1 (`short_links` table, the source of

@@ -15,6 +15,9 @@ CREATE TABLE short_links (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   click_count INTEGER NOT NULL DEFAULT 0,
   last_clicked_at DATETIME,
+  -- Set by an admin (POST /links/:id/disable) to suspend a link without
+  -- losing its click history; cleared by POST /links/:id/enable.
+  disabled_at DATETIME,
   UNIQUE(domain, slug)
 );
 
