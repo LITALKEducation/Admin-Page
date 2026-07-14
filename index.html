@@ -8348,11 +8348,11 @@
                     </div>
                     <div class="form-body">
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <input type="file" id="${key}-avatar-input" accept="image/*" style="display: none;" onchange="uploadStaffAvatar('${escapeJs(r.identity)}')">
+                            <input type="file" id="${key}-avatar-input" accept="image/*" style="display: none;" onchange="uploadStaffAvatar('${escapeHtml(escapeJs(r.identity))}')">
                             <button class="btn btn-secondary" onclick="document.getElementById('${key}-avatar-input').click()"><i class="fas fa-camera"></i> เปลี่ยนรูปโปรไฟล์</button>
-                            <button class="btn btn-secondary" onclick="toggleStaffEditRow('${escapeJs(r.identity)}')"><i class="fas fa-user-pen"></i> แก้ไขข้อมูล</button>
-                            <button class="btn btn-secondary" onclick="sendStaffPasswordTicket('${escapeJs(r.identity)}', this)"><i class="fas fa-key"></i> เปลี่ยนรหัสผ่าน</button>
-                            <button class="btn btn-secondary" onclick="sendStaffPasskeyTicket('${escapeJs(r.identity)}', this)"><i class="fas fa-fingerprint"></i> ลงทะเบียน Passkey</button>
+                            <button class="btn btn-secondary" onclick="toggleStaffEditRow('${escapeHtml(escapeJs(r.identity))}')"><i class="fas fa-user-pen"></i> แก้ไขข้อมูล</button>
+                            <button class="btn btn-secondary" onclick="sendStaffPasswordTicket('${escapeHtml(escapeJs(r.identity))}', this)"><i class="fas fa-key"></i> เปลี่ยนรหัสผ่าน</button>
+                            <button class="btn btn-secondary" onclick="sendStaffPasskeyTicket('${escapeHtml(escapeJs(r.identity))}', this)"><i class="fas fa-fingerprint"></i> ลงทะเบียน Passkey</button>
                         </div>
                         <div id="${key}-edit" style="display: none; margin-top: 8px;">
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
@@ -8370,8 +8370,8 @@
                                 </div>
                             </div>
                             <div style="display: flex; justify-content: flex-end; gap: 8px;">
-                                <button class="btn btn-secondary" onclick="toggleStaffEditRow('${escapeJs(r.identity)}', false)">ยกเลิก</button>
-                                <button class="btn btn-primary" onclick="saveStaffEdit('${escapeJs(r.identity)}')"><i class="fas fa-save"></i> บันทึก</button>
+                                <button class="btn btn-secondary" onclick="toggleStaffEditRow('${escapeHtml(escapeJs(r.identity))}', false)">ยกเลิก</button>
+                                <button class="btn btn-primary" onclick="saveStaffEdit('${escapeHtml(escapeJs(r.identity))}')"><i class="fas fa-save"></i> บันทึก</button>
                             </div>
                         </div>
                     </div>
@@ -8388,14 +8388,14 @@
 
         async function saveStaffEdit(identity) {
             const key = staffRowKey(identity);
-            const payload = {
-                name: document.getElementById(`${key}-name`).value.trim(),
-                title: document.getElementById(`${key}-title`).value.trim(),
-                phone: document.getElementById(`${key}-phone`).value.trim(),
-            };
-            if (!payload.name) { triggerFieldError(`${key}-name`, 'กรุณากรอกชื่อ'); return; }
-            showLoading();
             try {
+                const nameEl = document.getElementById(`${key}-name`);
+                const titleEl = document.getElementById(`${key}-title`);
+                const phoneEl = document.getElementById(`${key}-phone`);
+                if (!nameEl || !titleEl || !phoneEl) throw new Error('ไม่พบฟอร์มแก้ไขข้อมูล กรุณาโหลดหน้าใหม่แล้วลองอีกครั้ง');
+                const payload = { name: nameEl.value.trim(), title: titleEl.value.trim(), phone: phoneEl.value.trim() };
+                if (!payload.name) { triggerFieldError(`${key}-name`, 'กรุณากรอกชื่อ'); return; }
+                showLoading();
                 const response = await apiFetch(`/staff/${encodeURIComponent(identity)}`, { method: 'PATCH', body: JSON.stringify(payload) });
                 const result = await response.json();
                 hideLoading();
