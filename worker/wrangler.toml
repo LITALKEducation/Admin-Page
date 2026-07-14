@@ -3,15 +3,23 @@ account_id = "aacf06eb2a3dcbf4fc501455805047d0"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
 
-# Send the public blog article page through this Worker so shared links get
-# real Open Graph previews (LINE/Facebook/X crawlers don't run JavaScript —
-# the Worker rewrites the page's meta tags with the post's title/excerpt/
-# cover; see the /blog-post handler in src/blog.ts). Everything else on the
-# website stays on GitHub Pages untouched.
-routes = [
-  { pattern = "litalkeducation.com/blog-post*", zone_name = "litalkeducation.com" },
-  { pattern = "www.litalkeducation.com/blog-post*", zone_name = "litalkeducation.com" }
-]
+# ROUTES — configured in the Cloudflare dashboard, NOT here.
+#
+# The public blog article page must be routed through this Worker so shared
+# links get real Open Graph previews (the /blog-post handler in src/blog.ts
+# rewrites the page's meta tags with the post's title/excerpt/cover).
+# Add these two routes by hand once, under
+# Workers & Pages → litalkapi → Settings → Domains & Routes → Add → Route:
+#
+#   litalkeducation.com/blog-post*        (zone: litalkeducation.com)
+#   www.litalkeducation.com/blog-post*    (zone: litalkeducation.com)
+#
+# They are deliberately NOT declared as `routes = [...]` in this file: the
+# CI deploy token (CLOUDFLARE_API_TOKEN in GitHub Secrets) only has
+# account-level Workers permissions, and attaching zone routes from wrangler
+# fails the whole deploy with "Authentication error [code: 10000]". If you
+# later grant the token "Zone → Workers Routes → Edit" on the zone, the
+# routes can move back into this file.
 
 [[d1_databases]]
 binding = "DB"
