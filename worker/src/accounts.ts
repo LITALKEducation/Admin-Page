@@ -81,7 +81,14 @@ accounts.patch('/students/:id', requireAdmin, async (c) => {
         if (body.password) credentials = { password: body.password };
       } catch (err) {
         await logAudit(c.env.DB, user, 'EDIT_STUDENT_AUTH0_FAILED', studentId, null, false);
-        return c.json({ error: `แก้ไขข้อมูลนักเรียนสำเร็จ แต่แก้ไขบัญชีเข้าสู่ระบบไม่สำเร็จ: ${err instanceof Error ? err.message : 'Auth0 error'}` }, 502);
+        // Credential changes (username/password) must reach Auth0 to mean
+        // anything, so those failures still need to surface. A name-only
+        // sync failure shouldn't undo the D1 update above (already
+        // committed) — log it and let the save succeed, matching the
+        // staff route's swallow-and-log pattern below.
+        if (body.username !== undefined || body.password !== undefined) {
+          return c.json({ error: `แก้ไขข้อมูลนักเรียนสำเร็จ แต่แก้ไขบัญชีเข้าสู่ระบบไม่สำเร็จ: ${err instanceof Error ? err.message : 'Auth0 error'}` }, 502);
+        }
       }
     } else if (body.username !== undefined || body.password !== undefined) {
       return c.json({ error: 'ไม่พบบัญชีเข้าสู่ระบบของนักเรียนใน Auth0 (ตั้งค่า Auth0 Management API หรือสร้างบัญชีก่อน)' }, 409);
