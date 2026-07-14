@@ -127,6 +127,88 @@ blogPublic.get('/blog/posts/:slug', async (c) => {
   return c.json({ status: 'success', post: toPublic(row) });
 });
 
+// ----- Link previews (Open Graph) for shared article URLs -----
+// litalkeducation.com/blog-post is a static page on GitHub Pages, and the
+// crawlers behind LINE/Facebook/X link previews don't run JavaScript — so
+// they'd only ever see the page's generic meta tags. A Cloudflare route
+// (worker/wrangler.toml) sends that one path through this Worker instead:
+// it fetches the page from origin and rewrites <title> + the OG/description
+// tags with the actual post's title, excerpt and cover image. Same URL for
+// humans and crawlers; everything else about the page is untouched.
+
+const WEBSITE_ORIGIN = 'https://litalkeducation.com';
+
+// Markdown → plain text for the og:description (first ~200 chars).
+function markdownToPlainText(md: string): string {
+  return md
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/[*_`>#-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function metaContentSetter(value: string) {
+  return {
+    element(el: Element) {
+      el.setAttribute('content', value);
+    },
+  };
+}
+
+blogPublic.get('/blog-post', async (c) => {
+  const url = new URL(c.req.url);
+  // Fetch the static page explicitly from the public site — a same-zone
+  // subrequest goes to the origin (GitHub Pages), not back into this Worker.
+  const originRes = await fetch(`${WEBSITE_ORIGIN}/blog-post${url.search}`, {
+    headers: { accept: 'text/html' },
+  });
+
+  const slug = url.searchParams.get('slug');
+  if (!slug || !originRes.ok) return originRes as unknown as Response;
+
+  const post = await c.env.DB.prepare(
+    `SELECT slug, title, title_th AS titleTh, excerpt, excerpt_th AS excerptTh,
+            content, content_th AS contentTh, cover_key AS coverKey
+     FROM blog_posts WHERE slug = ? AND status = 'published'`,
+  )
+    .bind(slug)
+    .first<{
+      slug: string; title: string; titleTh: string | null;
+      excerpt: string | null; excerptTh: string | null;
+      content: string; contentTh: string | null; coverKey: string | null;
+    }>();
+  if (!post) return originRes as unknown as Response;
+
+  // Thai-first: article links are mostly shared to Thai parents/students.
+  const title = `${post.titleTh || post.title} — LITALK Education`;
+  const description = (
+    post.excerptTh || post.excerpt || markdownToPlainText(post.contentTh || post.content)
+  ).slice(0, 200);
+  const image = post.coverKey
+    ? `${c.env.PUBLIC_FILES_ORIGIN || 'https://istudent.litalkeducation.com'}/blog/posts/${encodeURIComponent(post.slug)}/cover`
+    : `${WEBSITE_ORIGIN}/img/hero-visual.png`;
+  const canonical = `${WEBSITE_ORIGIN}/blog-post?slug=${encodeURIComponent(post.slug)}`;
+
+  const rewritten = new HTMLRewriter()
+    .on('title', { element(el) { el.setInnerContent(title); } })
+    .on('meta[name="description"]', metaContentSetter(description))
+    .on('meta[property="og:title"]', metaContentSetter(title))
+    .on('meta[property="og:description"]', metaContentSetter(description))
+    .on('meta[property="og:type"]', metaContentSetter('article'))
+    .on('meta[property="og:image"]', metaContentSetter(image))
+    .on('meta[property="og:url"]', metaContentSetter(canonical))
+    .transform(originRes as unknown as Response);
+
+  // Don't let Cloudflare/browsers hold the preview for the origin's full 4h —
+  // edits to a post should show up in new shares reasonably quickly.
+  const res = new Response(rewritten.body, rewritten);
+  res.headers.set('Cache-Control', 'public, max-age=600');
+  return res;
+});
+
 blogPublic.get('/blog/posts/:slug/cover', async (c) => {
   const row = await c.env.DB.prepare(
     `SELECT cover_key AS coverKey, cover_mime AS coverMime FROM blog_posts WHERE slug = ? AND status = 'published'`,

@@ -3,6 +3,16 @@ account_id = "aacf06eb2a3dcbf4fc501455805047d0"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
 
+# Send the public blog article page through this Worker so shared links get
+# real Open Graph previews (LINE/Facebook/X crawlers don't run JavaScript —
+# the Worker rewrites the page's meta tags with the post's title/excerpt/
+# cover; see the /blog-post handler in src/blog.ts). Everything else on the
+# website stays on GitHub Pages untouched.
+routes = [
+  { pattern = "litalkeducation.com/blog-post*", zone_name = "litalkeducation.com" },
+  { pattern = "www.litalkeducation.com/blog-post*", zone_name = "litalkeducation.com" }
+]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "litalk"
