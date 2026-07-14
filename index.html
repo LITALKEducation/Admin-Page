@@ -5485,6 +5485,7 @@
                             <div class="form-group">
                                 <label><i class="fab fa-markdown"></i> เนื้อหา (English · Markdown)</label>
                                 <textarea id="blog-content-en" rows="10" placeholder="# Heading&#10;&#10;Write your article in Markdown..." style="font-family: ui-monospace, monospace; font-size: 13px;"></textarea>
+                                <div class="form-hint">แนบลิงก์ในเนื้อหาได้ด้วยรูปแบบ <code>[ข้อความ](https://example.com)</code> · ตัวหนา <code>**ข้อความ**</code> · หัวข้อ <code># หัวข้อ</code></div>
                             </div>
                             <div class="form-group">
                                 <label><i class="fab fa-markdown"></i> เนื้อหา (ไทย · Markdown · ไม่บังคับ)</label>
@@ -6316,6 +6317,16 @@
             rejected: 'ไม่ผ่านการอนุมัติ',
         };
 
+        function blogPostUrl(slug) {
+            return 'https://litalkeducation.com/blog-post?slug=' + encodeURIComponent(slug);
+        }
+
+        // Public URL of a published post, for pasting into LINE/social chats.
+        // Same clipboard + ✓-feedback behaviour as copyPaymentLink.
+        function copyBlogPostLink(slug, btn) {
+            return copyPaymentLink(blogPostUrl(slug), btn);
+        }
+
         async function loadBlogPosts() {
             const list = document.getElementById('blog-post-list');
             try {
@@ -6355,7 +6366,8 @@
                                 <button class="btn btn-danger" style="padding: 6px 10px;" onclick="deleteBlogPost(${p.id})"><i class="fas fa-trash"></i> ลบ</button>`;
                 }
                 if (p.status === 'published') {
-                    buttons += `<a class="btn btn-secondary" style="padding: 6px 10px;" href="https://litalkeducation.com/blog-post?slug=${encodeURIComponent(p.slug)}" target="_blank" rel="noopener noreferrer"><i class="fas fa-arrow-up-right-from-square"></i> ดูบนเว็บไซต์</a>`;
+                    buttons += `<button class="btn btn-secondary" style="padding: 6px 10px;" onclick="copyBlogPostLink('${escapeJs(p.slug)}', this)" title="คัดลอกลิงก์บทความสำหรับแนบในแชทหรือโซเชียล"><i class="fas fa-link"></i> คัดลอกลิงก์</button>
+                                <a class="btn btn-secondary" style="padding: 6px 10px;" href="${blogPostUrl(p.slug)}" target="_blank" rel="noopener noreferrer"><i class="fas fa-arrow-up-right-from-square"></i> ดูบนเว็บไซต์</a>`;
                 }
                 const cover = p.coverKey ? ' · <i class="fas fa-image"></i> มีรูปหน้าปก' : '';
                 return `
