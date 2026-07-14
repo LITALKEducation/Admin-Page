@@ -15,7 +15,7 @@ const MAX_TITLE = 300;
 const MAX_EXCERPT = 600;
 const MAX_CONTENT = 60_000;
 const MAX_CATEGORY = 60;
-const MAX_COVER_BYTES = 4 * 1024 * 1024; // 4 MB
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4 MB — covers and inline content images alike
 const PUBLIC_LIST_LIMIT = 100;
 
 interface BlogPostRow {
@@ -226,6 +226,27 @@ blogPublic.get('/blog/posts/:slug/cover', async (c) => {
   });
 });
 
+// Serve an image inserted inline into a post's Markdown content (see
+// blog_images and POST /blog-admin/images below). Gated through the DB
+// table rather than trusting a raw R2 key from the URL, same convention as
+// the file-serving routes in index.ts.
+blogPublic.get('/blog/images/:id', async (c) => {
+  const row = await c.env.DB.prepare(`SELECT r2_key AS r2Key, mime FROM blog_images WHERE id = ?`)
+    .bind(Number(c.req.param('id')))
+    .first<{ r2Key: string; mime: string }>();
+  if (!row) return c.json({ status: 'error', message: 'Not found' }, 404);
+  const object = await c.env.BUCKET.get(row.r2Key);
+  if (!object) return c.json({ status: 'error', message: 'Not found' }, 404);
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': row.mime || object.httpMetadata?.contentType || 'image/jpeg',
+      // Immutable: a content image is never replaced in place — editing a
+      // post that no longer references it just leaves the object orphaned.
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    },
+  });
+});
+
 /* ===== Management routes — mounted AFTER verifyAuth ===== */
 
 const blog = new Hono<AppBindings>();
@@ -383,7 +404,7 @@ blog.post('/blog-admin/posts/:id/cover', async (c) => {
   if (!file.type.startsWith('image/')) return c.json({ error: 'Cover must be an image' }, 400);
 
   const bytes = new Uint8Array(await file.arrayBuffer());
-  if (bytes.byteLength > MAX_COVER_BYTES) return c.json({ error: 'Image too large (max 4 MB)' }, 400);
+  if (bytes.byteLength > MAX_IMAGE_BYTES) return c.json({ error: 'Image too large (max 4 MB)' }, 400);
 
   const key = `blog/covers/${id}-${crypto.randomUUID().slice(0, 8)}${extname(file.name) || '.jpg'}`;
   await c.env.BUCKET.put(key, bytes, { httpMetadata: { contentType: file.type } });
@@ -394,6 +415,33 @@ blog.post('/blog-admin/posts/:id/cover', async (c) => {
 
   await logAudit(c.env.DB, user, 'BLOG_COVER', null, post.slug, true);
   return c.json({ ok: true });
+});
+
+// Upload an image to insert inline into a post's Markdown content (any
+// staff — not tied to a specific post, since a writer may want to insert
+// images while composing a post that doesn't exist yet). Returns the public
+// URL to paste into the content field as ![alt](url).
+blog.post('/blog-admin/images', async (c) => {
+  const user = c.get('user');
+  const form = await c.req.formData();
+  const file = form.get('file') as unknown as File | string | null;
+  if (typeof file === 'string' || file === null) return c.json({ error: 'Missing file' }, 400);
+  if (!file.type.startsWith('image/')) return c.json({ error: 'File must be an image' }, 400);
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.byteLength > MAX_IMAGE_BYTES) return c.json({ error: 'Image too large (max 4 MB)' }, 400);
+
+  const key = `blog/content/${crypto.randomUUID()}${extname(file.name) || '.jpg'}`;
+  await c.env.BUCKET.put(key, bytes, { httpMetadata: { contentType: file.type } });
+  const result = await c.env.DB.prepare(
+    `INSERT INTO blog_images (r2_key, mime, author_identity) VALUES (?, ?, ?)`,
+  )
+    .bind(key, file.type, user.email)
+    .run();
+
+  const origin = c.env.PUBLIC_FILES_ORIGIN || new URL(c.req.url).origin;
+  await logAudit(c.env.DB, user, 'BLOG_IMAGE_UPLOAD', null, key, true);
+  return c.json({ ok: true, id: result.meta.last_row_id, url: `${origin}/blog/images/${result.meta.last_row_id}` });
 });
 
 export default blog;

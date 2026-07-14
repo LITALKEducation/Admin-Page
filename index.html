@@ -5484,11 +5484,23 @@
                             </div>
                             <div class="form-group">
                                 <label><i class="fab fa-markdown"></i> เนื้อหา (English · Markdown)</label>
+                                <div style="display: flex; justify-content: flex-end; margin-bottom: 4px;">
+                                    <button type="button" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12.5px;" onclick="document.getElementById('blog-image-file-en').click()">
+                                        <i class="fas fa-image"></i> แทรกรูปภาพ
+                                    </button>
+                                    <input type="file" id="blog-image-file-en" accept="image/*" style="display: none;" onchange="insertBlogContentImage('blog-content-en', this)">
+                                </div>
                                 <textarea id="blog-content-en" rows="10" placeholder="# Heading&#10;&#10;Write your article in Markdown..." style="font-family: ui-monospace, monospace; font-size: 13px;"></textarea>
-                                <div class="form-hint">แนบลิงก์ในเนื้อหาได้ด้วยรูปแบบ <code>[ข้อความ](https://example.com)</code> · ตัวหนา <code>**ข้อความ**</code> · หัวข้อ <code># หัวข้อ</code></div>
+                                <div class="form-hint">แนบลิงก์ในเนื้อหาได้ด้วยรูปแบบ <code>[ข้อความ](https://example.com)</code> · ตัวหนา <code>**ข้อความ**</code> · หัวข้อ <code># หัวข้อ</code> · แทรกรูปด้วยปุ่มด้านบนหรือพิมพ์ <code>![คำอธิบาย](URL)</code></div>
                             </div>
                             <div class="form-group">
                                 <label><i class="fab fa-markdown"></i> เนื้อหา (ไทย · Markdown · ไม่บังคับ)</label>
+                                <div style="display: flex; justify-content: flex-end; margin-bottom: 4px;">
+                                    <button type="button" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12.5px;" onclick="document.getElementById('blog-image-file-th').click()">
+                                        <i class="fas fa-image"></i> แทรกรูปภาพ
+                                    </button>
+                                    <input type="file" id="blog-image-file-th" accept="image/*" style="display: none;" onchange="insertBlogContentImage('blog-content-th', this)">
+                                </div>
                                 <textarea id="blog-content-th" rows="10" placeholder="# หัวข้อ&#10;&#10;เขียนบทความด้วย Markdown..." style="font-family: ui-monospace, monospace; font-size: 13px;"></textarea>
                             </div>
                             <div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end; flex-wrap: wrap;">
@@ -6402,12 +6414,50 @@
             document.getElementById('blog-content-en').value = post?.content || '';
             document.getElementById('blog-content-th').value = post?.contentTh || '';
             document.getElementById('blog-cover-file').value = '';
+            document.getElementById('blog-image-file-en').value = '';
+            document.getElementById('blog-image-file-th').value = '';
             const publish = document.getElementById('blog-publish-now');
             if (publish) publish.checked = false;
             const hint = document.getElementById('blog-cover-hint');
             hint.style.display = post?.coverKey ? '' : 'none';
             hint.innerText = post?.coverKey ? 'มีรูปหน้าปกอยู่แล้ว — เลือกไฟล์ใหม่เพื่อแทนที่' : '';
             document.getElementById('screen-blog').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // Upload an image and insert it into the given content textarea at
+        // the cursor as Markdown — same field is used for the actual saved
+        // content, so what you see in the editor is exactly what's stored.
+        async function insertBlogContentImage(textareaId, fileInput) {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) return;
+            const textarea = document.getElementById(textareaId);
+            const placeholder = `![กำลังอัปโหลด...]()`;
+            const start = textarea.selectionStart ?? textarea.value.length;
+            const end = textarea.selectionEnd ?? textarea.value.length;
+            textarea.value = textarea.value.slice(0, start) + placeholder + textarea.value.slice(end);
+            textarea.disabled = true;
+
+            try {
+                const form = new FormData();
+                form.append('file', file);
+                const res = await apiFetch('/blog-admin/images', { method: 'POST', body: form });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error || 'อัปโหลดรูปภาพไม่สำเร็จ');
+
+                const markdown = `![${file.name.replace(/\.[^.]+$/, '')}](${result.url})`;
+                textarea.value = textarea.value.replace(placeholder, markdown);
+                const caret = start + markdown.length;
+                textarea.disabled = false;
+                textarea.focus();
+                textarea.setSelectionRange(caret, caret);
+            } catch (error) {
+                console.error('insertBlogContentImage:', error);
+                textarea.value = textarea.value.replace(placeholder, '');
+                textarea.disabled = false;
+                showModal('แทรกรูปภาพไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง', 'error');
+            } finally {
+                fileInput.value = '';
+            }
         }
 
         function closeBlogEditor() {
