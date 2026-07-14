@@ -1,6 +1,12 @@
 export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
+  // URL shortener redirect cache (worker/src/shortlinks.ts) — fast path for
+  // go.litalkeducation.com / payment.litalkeducation.com lookups; D1 is the
+  // source of truth on a miss.
+  SHORTLINKS: KVNamespace;
+  SHORT_DOMAIN_GO: string;
+  SHORT_DOMAIN_PAYMENT: string;
   AUTH0_DOMAIN: string;
   AUTH0_AUDIENCE: string;
   AUTH0_EMAIL_CLAIM: string;

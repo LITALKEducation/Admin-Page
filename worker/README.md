@@ -11,6 +11,7 @@ Cloudflare Worker backing the **entire** admin panel and the student portal:
 - Stripe payment links + webhook (auto-records paid links as payments)
 - Monthly earnings summary (`/earnings`)
 - Public student-portal read endpoint for litalkeducation.com (`/portal/:id`)
+- URL shortener for go.litalkeducation.com / payment.litalkeducation.com — KV + D1 (see "URL shortener" below)
 
 The old Google Apps Script / Google Sheets backend is fully replaced. A
 one-time import endpoint (`POST /import`) moves the existing Sheet data into
@@ -225,10 +226,13 @@ If `litalk` (D1) and `files-litalk` (R2) don't already exist:
 ```sh
 npx wrangler d1 create litalk
 npx wrangler r2 bucket create files-litalk
+npx wrangler kv namespace create SHORTLINKS
 ```
 
 `wrangler d1 create` prints a `database_id` — paste it into
 `wrangler.toml`'s `database_id` field (currently `REPLACE_WITH_D1_DATABASE_ID`).
+`wrangler kv namespace create` prints an `id` — paste it into the
+`[[kv_namespaces]]` block's `id` field the same way.
 
 Also replace `AUTH0_AUDIENCE` in `wrangler.toml` with the API Identifier from
 step 1.
@@ -238,6 +242,9 @@ to this same Worker in the Cloudflare dashboard (**Workers & Pages → this
 Worker → Settings → Domains & Routes**); it only affects how shareable file
 links are displayed, not where they're served from. If unset, links fall
 back to the request's own origin.
+
+`SHORT_DOMAIN_GO` / `SHORT_DOMAIN_PAYMENT` must also be routed to this same
+Worker as **Custom Domains** — see "URL shortener" below.
 
 ## 3. Apply the D1 schema
 
@@ -369,6 +376,9 @@ permissions scoped to this account.
 | POST   | `/payment-links/:id/deactivate` | `data:write` | Disables an active link     |
 | POST   | `/files/:fileId/public-link` | `files:write` | Mint/return a shareable public download link |
 | GET    | `/public/files/:token`   | (public)       | Streams a file by its public token |
+| POST   | `/links`                 | (any valid token) | Create a go./payment. short link — see "URL shortener" |
+| GET    | `/links`                 | (any valid token) | List short links (own, or all for admins) |
+| DELETE | `/links/:id`             | (any valid token) | Creator or admin only |
 | POST   | `/import`                | `data:write`   | One-time Sheet migration (see above) |
 | POST   | `/stripe/webhook`        | (Stripe signature) | Records paid checkout sessions |
 | GET    | `/portal/:studentId`     | (public)       | Student portal data for litalkeducation.com |
@@ -447,6 +457,36 @@ edited, rejected, or cancelled before it is paid.
 `PUBLIC_FILES_ORIGIN` (a custom domain routed to this same Worker) instead
 of the Worker's own `workers.dev` origin, so shared links look like the
 student-facing site.
+
+## URL shortener
+
+Two custom domains routed to this same Worker (`worker/src/shortlinks.ts`),
+told apart by the request's `Host` header before CORS or auth even run:
+
+- **go.litalkeducation.com** — general-purpose links any teacher/staff/admin
+  can create. Every published blog post is also reachable at
+  `go.litalkeducation.com/<post-slug>` automatically — no `short_links` row
+  needed, the post's own slug doubles as its shortlink.
+- **payment.litalkeducation.com** — wraps Stripe payment links. Every
+  payment link this system creates (`POST /payment-links`, schedule
+  approval, and the "add hours" amendment flow) automatically gets one, with
+  slug `<studentId>-<random>` (e.g. `LT-000123-4f8a2`); the admin UI can
+  offer this instead of the long `buy.stripe.com` URL.
+
+Endpoints (any signed-in staff — this is self-service, not admin-only):
+
+| Method | Path         | Notes |
+|--------|--------------|-------|
+| POST   | `/links`     | `{ domain: 'go'\|'payment', target, slug?, studentId?, title? }` — `slug` is user-chosen if given, else random (`<studentId>-<random>` by default for `payment`) |
+| GET    | `/links`     | `?domain=go\|payment` filter. Admins see every link; others see only their own |
+| DELETE | `/links/:id` | Creator or admin only; also purges the KV cache entry |
+
+Redirect lookups (`GET` on either hostname) hit KV first (`SHORTLINKS`
+namespace, ~6h TTL) and fall back to D1 (`short_links` table, the source of
+truth) on a miss, repopulating KV. Each redirect bumps `click_count` /
+`last_clicked_at` in D1 (best-effort, via `waitUntil`) as a simple built-in
+analytics trail — check `GET /links` or query D1 directly for click counts;
+no separate Analytics Engine dataset is wired up.
 
 ## Payment verification
 

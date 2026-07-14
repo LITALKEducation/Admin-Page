@@ -20,6 +20,14 @@ compatibility_date = "2024-11-01"
 # fails the whole deploy with "Authentication error [code: 10000]". If you
 # later grant the token "Zone → Workers Routes → Edit" on the zone, the
 # routes can move back into this file.
+#
+# URL shortener (worker/src/shortlinks.ts) — add both as Custom Domains
+# (not Routes) under Workers & Pages → litalkapi → Settings → Domains &
+# Routes → Add → Custom Domain, since neither hostname carries any other
+# traffic:
+#
+#   go.litalkeducation.com
+#   payment.litalkeducation.com
 
 [[d1_databases]]
 binding = "DB"
@@ -29,6 +37,13 @@ database_id = "77c10f96-55ba-4830-abcc-cd3364fb22f7"
 [[r2_buckets]]
 binding = "BUCKET"
 bucket_name = "files-litalk"
+
+# URL shortener redirect cache (worker/src/shortlinks.ts). Create with
+# `npx wrangler kv namespace create SHORTLINKS` and paste the printed id
+# below (replacing the placeholder).
+[[kv_namespaces]]
+binding = "SHORTLINKS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
 
 [vars]
 AUTH0_DOMAIN = "litalkeducation.us.auth0.com"
@@ -41,6 +56,13 @@ ALLOWED_ORIGIN = "https://admin.litalkeducation.com,https://litalkeducation.com,
 # Custom domain routed to this same Worker, used only to make shareable file
 # links look like the student-facing site instead of the workers.dev URL.
 PUBLIC_FILES_ORIGIN = "https://istudent.litalkeducation.com"
+
+# URL shortener hostnames (worker/src/shortlinks.ts) — both are Custom
+# Domains routed to this same Worker (see the comment near the top of this
+# file). shortLinkRedirect matches incoming requests against these by Host
+# header, so they must exactly match what's configured in the dashboard.
+SHORT_DOMAIN_GO = "go.litalkeducation.com"
+SHORT_DOMAIN_PAYMENT = "payment.litalkeducation.com"
 
 # Login email for an auto-created student account is <studentId>@<this domain>.
 # MUST match the convention the old GAS backend used (the student site derives

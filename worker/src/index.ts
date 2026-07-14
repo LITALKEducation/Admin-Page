@@ -26,8 +26,16 @@ import chat, {
 import { chatReply, ChatNotConfiguredError } from './gemini';
 import { verifyStripeSignature } from './stripe';
 import blog, { blogPublic } from './blog';
+import shortLinks, { shortLinkRedirect } from './shortlinks';
 
 const app = new Hono<AppBindings>();
+
+// URL shortener redirects (go.litalkeducation.com / payment.litalkeducation.com).
+// Must run before CORS/auth: these are plain browser navigations to a
+// dedicated hostname, not API calls, and short-circuit with a redirect
+// before ever reaching the rest of the app. Every other hostname falls
+// through via next() untouched.
+app.use('*', shortLinkRedirect);
 
 // ALLOWED_ORIGIN is a comma-separated list (admin panel + student site).
 app.use('*', async (c, next) => cors({
@@ -165,7 +173,7 @@ app.get('/portal/:studentId', async (c) => {
     // Payment links the system is waiting on this student to pay (schedule
     // approvals / hour top-ups that still need a Stripe checkout).
     c.env.DB.prepare(
-      `SELECT url, amount, description FROM payment_links WHERE student_id = ? AND status = 'active' ORDER BY id DESC LIMIT 5`,
+      `SELECT url, short_url AS shortUrl, amount, description FROM payment_links WHERE student_id = ? AND status = 'active' ORDER BY id DESC LIMIT 5`,
     ).bind(student.id),
   ]);
 
@@ -342,6 +350,7 @@ app.route('/', manage);
 app.route('/', accounts);
 app.route('/', chat);
 app.route('/', blog);
+app.route('/', shortLinks);
 
 app.get('/me', (c) => c.json(c.get('user')));
 
