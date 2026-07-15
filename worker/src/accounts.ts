@@ -128,7 +128,7 @@ accounts.post('/students/:id/reset-password', requireAdmin, async (c) => {
   return c.json({ ok: true, password, message: 'ตั้งรหัสผ่านใหม่สำเร็จ' });
 });
 
-async function handleAvatarUpload(
+export async function handleAvatarUpload(
   c: import('hono').Context<AppBindings>,
   keyPrefix: string,
   table: 'students' | 'staff',

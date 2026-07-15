@@ -384,6 +384,9 @@ permissions scoped to this account.
 | POST   | `/import`                | `data:write`   | One-time Sheet migration (see above) |
 | POST   | `/stripe/webhook`        | (Stripe signature) | Records paid checkout sessions |
 | GET    | `/portal/:studentId`     | (public)       | Student portal data for litalkeducation.com |
+| PATCH  | `/portal/:studentId/profile` | (student's own Auth0 token) | Self-service nickname edit |
+| POST   | `/portal/:studentId/avatar` | (student's own Auth0 token) | Self-service photo upload (multipart `file`, image, ≤5MB) |
+| DELETE | `/portal/:studentId/avatar` | (student's own Auth0 token) | Self-service photo removal |
 
 `file_type` must be one of: `Homework`, `Worksheet`, `Exam`, `Attendance`,
 `Certificate`, `Portfolio`, `Other`.
@@ -546,5 +549,13 @@ when the current token carries no email. Setting up the Action from step
   `GET /portal/:studentId/avatar` streams the profile photo (public), and
   `GET /portal/:studentId/files/:fileId` streams a document (token-gated, same
   ownership check).
+- Self-service editing (`PATCH /portal/:studentId/profile`,
+  `POST`/`DELETE /portal/:studentId/avatar`) lets the signed-in student change
+  their own nickname and photo, gated by the same `portalTokenMatchesStudent`
+  ownership check as the files/Meet-link routes above. Only nickname and photo
+  are self-editable — the legal `name` stays admin-only (`PATCH /students/:id`)
+  since it feeds invoices/certificates. These routes reuse the same R2 key
+  convention as the admin avatar upload, so whichever one was set last is what
+  both `/students/:id/avatar` and `/portal/:studentId/avatar` serve.
 - `ALLOWED_ORIGIN` (comma-separated) must include both the admin panel and
   the public site origins.
