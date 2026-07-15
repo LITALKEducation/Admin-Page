@@ -7984,7 +7984,7 @@
                 <div class="payment-row" style="align-items: flex-start;">
                     <div class="payment-info">
                         <div class="name">ตารางเรียนเดือน ${escapeHtml(m.month)} (${m.sessionCount} ครั้ง)</div>
-                        <div class="meta">${escapeHtml(SCHEDULE_STATUS_LABEL[m.status] || m.status)} · โดย ${escapeHtml(m.createdBy || '-')}</div>
+                        <div class="meta">${escapeHtml(SCHEDULE_STATUS_LABEL[m.status] || m.status)} · โดย ${escapeHtml(m.createdByName || m.createdBy || '-')}</div>
                         ${sessions.length ? `<div class="table-scroll" style="margin-top: 8px; max-height: 160px; overflow-y: auto;"><table class="data-table"><thead><tr><th>วันที่</th><th>เวลา</th></tr></thead><tbody>${sessionRows}</tbody></table></div>` : ''}
                     </div>
                     <div class="amount">${formatBaht(m.total)}</div>
@@ -9238,7 +9238,7 @@
                 <div class="payment-row">
                     <div class="payment-info">
                         <div class="name">${escapeHtml(t.teacherName || t.teacher)}</div>
-                        <div class="meta">${(t.teacherName && t.teacherName !== t.teacher) ? escapeHtml(t.teacher) + ' · ' : ''}เห็นนักเรียน ${t.studentIds.length} คน: ${escapeHtml(t.studentIds.slice(0, 6).join(', '))}${t.studentIds.length > 6 ? '…' : ''}</div>
+                        <div class="meta">เห็นนักเรียน ${t.studentIds.length} คน: ${escapeHtml(t.studentIds.slice(0, 6).join(', '))}${t.studentIds.length > 6 ? '…' : ''}</div>
                     </div>
                     <button class="btn btn-secondary" style="padding: 6px 10px;" onclick="editTeacherAccess('${escapeJs(t.teacher)}')"><i class="fas fa-pen"></i> แก้ไข</button>
                 </div>`).join('') : '<div class="form-hint">ยังไม่มีการจำกัดสิทธิ์ — ครูที่ยังไม่ถูกกำหนดนักเรียนจะไม่เห็นเมนูใด ๆ</div>';
@@ -9364,7 +9364,7 @@
                                 <strong style="color: ${positive ? 'var(--accent-success)' : 'var(--accent-danger)'};">${positive ? '+' : ''}${e.hours} ชม.</strong>
                                 — ${escapeHtml(e.reason || '-')}
                             </div>
-                            <div class="alert-text" style="color: var(--text-muted); font-size: 12px;">${escapeHtml(new Date(e.createdAt).toLocaleString('th-TH'))} · โดย ${escapeHtml(e.createdBy || '-')}</div>
+                            <div class="alert-text" style="color: var(--text-muted); font-size: 12px;">${escapeHtml(new Date(e.createdAt).toLocaleString('th-TH'))} · โดย ${escapeHtml(e.createdByName || e.createdBy || '-')}</div>
                         </div>
                     </div>`;
                 }).join('') : '<div class="form-hint">ยังไม่มีประวัติเครดิต</div>';

@@ -200,8 +200,11 @@ manage.get('/students/:id/credits', requireAdmin, async (c) => {
 
   const [entries, balance] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT id, hours, reason, schedule_id AS scheduleId, created_by AS createdBy, created_at AS createdAt
-       FROM student_credits WHERE student_id = ? ORDER BY created_at DESC, id DESC LIMIT 50`,
+      `SELECT sc.id, sc.hours, sc.reason, sc.schedule_id AS scheduleId, sc.created_by AS createdBy,
+              COALESCE(st.name, sc.created_by) AS createdByName, sc.created_at AS createdAt
+       FROM student_credits sc
+       LEFT JOIN staff st ON st.identity = sc.created_by COLLATE NOCASE
+       WHERE sc.student_id = ? ORDER BY sc.created_at DESC, sc.id DESC LIMIT 50`,
     )
       .bind(studentId)
       .all(),
@@ -284,9 +287,12 @@ manage.get('/student-check/:id', requirePermission('data:read'), async (c) => {
     c.env.DB.prepare(
       `SELECT ms.id, ms.month, ms.status, ms.total_amount AS total, ms.rate_per_session AS rate,
               ms.credits_applied AS creditsApplied, ms.created_by AS createdBy,
+              COALESCE(st.name, ms.created_by) AS createdByName,
               (SELECT COUNT(*) FROM schedule_sessions ss WHERE ss.schedule_id = ms.id) AS sessionCount,
               pl.url AS paymentUrl, pl.short_url AS paymentShortUrl
-       FROM monthly_schedules ms LEFT JOIN payment_links pl ON pl.id = ms.payment_link_id
+       FROM monthly_schedules ms
+       LEFT JOIN payment_links pl ON pl.id = ms.payment_link_id
+       LEFT JOIN staff st ON st.identity = ms.created_by COLLATE NOCASE
        WHERE ms.student_id = ? ORDER BY ms.month DESC, ms.id DESC LIMIT 6`,
     ).bind(studentId),
     c.env.DB.prepare(`SELECT COALESCE(SUM(hours), 0) AS balance FROM student_credits WHERE student_id = ?`).bind(studentId),
