@@ -13,7 +13,7 @@ import manage, {
   canSeeStudent,
   creditBalance,
 } from './manage';
-import accounts from './accounts';
+import accounts, { handleAvatarUpload } from './accounts';
 import chat, {
   MAX_MESSAGE_LENGTH,
   PORTAL_DAILY_LIMIT,
@@ -237,6 +237,61 @@ app.get('/portal/:studentId/avatar', async (c) => {
       'Cache-Control': 'private, max-age=300',
     },
   });
+});
+
+// Self-service profile edit for the signed-in student themselves — nickname
+// and photo only (the legal `name` stays admin-controlled since it feeds
+// invoices/certificates). Gated the same way as the other private /portal/*
+// routes: a valid Auth0 token whose login identity is this student.
+app.patch('/portal/:studentId/profile', async (c) => {
+  const studentId = c.req.param('studentId');
+  if (!(await portalTokenMatchesStudent(c, studentId))) return c.json({ status: 'error', message: 'Unauthorized' }, 401);
+
+  const body = await c.req.json<{ nickname?: string }>().catch(() => ({}) as never);
+  if (body.nickname === undefined) return c.json({ status: 'error', message: 'ไม่มีข้อมูลที่จะบันทึก' }, 400);
+
+  const student = await c.env.DB.prepare(`SELECT id FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`)
+    .bind(studentId)
+    .first<{ id: string }>();
+  if (!student) return c.json({ status: 'error', message: 'ไม่พบข้อมูลนักเรียนรหัสนี้ในระบบ' }, 404);
+
+  await c.env.DB.prepare(`UPDATE students SET nickname = ? WHERE id = ?`).bind(body.nickname.trim() || null, student.id).run();
+  await logAudit(c.env.DB, null, 'STUDENT_SELF_EDIT_PROFILE', student.id, null, true);
+  return c.json({ status: 'success', message: 'บันทึกข้อมูลสำเร็จ' });
+});
+
+// Self-service avatar upload/removal — same R2 key convention
+// (`avatars/students/<id>`) as the admin upload route, so both
+// `/students/:id/avatar` and `/portal/:studentId/avatar` serve whichever was
+// set last.
+app.post('/portal/:studentId/avatar', async (c) => {
+  const studentId = c.req.param('studentId');
+  if (!(await portalTokenMatchesStudent(c, studentId))) return c.json({ status: 'error', message: 'Unauthorized' }, 401);
+
+  const student = await c.env.DB.prepare(`SELECT id, avatar_key AS avatarKey FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`)
+    .bind(studentId)
+    .first<{ id: string; avatarKey: string | null }>();
+  if (!student) return c.json({ status: 'error', message: 'ไม่พบข้อมูลนักเรียนรหัสนี้ในระบบ' }, 404);
+
+  const res = await handleAvatarUpload(c, `avatars/students/${student.id}`, 'students', 'id', student.id, student.avatarKey);
+  if (res.status === 200) await logAudit(c.env.DB, null, 'STUDENT_SELF_UPDATE_AVATAR', student.id, null, true);
+  return res;
+});
+
+app.delete('/portal/:studentId/avatar', async (c) => {
+  const studentId = c.req.param('studentId');
+  if (!(await portalTokenMatchesStudent(c, studentId))) return c.json({ status: 'error', message: 'Unauthorized' }, 401);
+
+  const student = await c.env.DB.prepare(`SELECT id, avatar_key AS avatarKey FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`)
+    .bind(studentId)
+    .first<{ id: string; avatarKey: string | null }>();
+  if (!student) return c.json({ status: 'error', message: 'ไม่พบข้อมูลนักเรียนรหัสนี้ในระบบ' }, 404);
+  if (!student.avatarKey) return c.json({ status: 'success', message: 'ไม่มีรูปภาพอยู่แล้ว' });
+
+  await c.env.BUCKET.delete(student.avatarKey).catch(() => {});
+  await c.env.DB.prepare(`UPDATE students SET avatar_key = NULL WHERE id = ?`).bind(student.id).run();
+  await logAudit(c.env.DB, null, 'STUDENT_SELF_REMOVE_AVATAR', student.id, null, true);
+  return c.json({ status: 'success', message: 'ลบรูปภาพสำเร็จ' });
 });
 
 // Student-portal file download. Gated by the student's own Auth0 token (the
