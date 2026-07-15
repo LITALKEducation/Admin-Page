@@ -6723,7 +6723,7 @@
                 document.getElementById('blog-cover-card-status').textContent = 'พร้อมอัปโหลด';
                 document.getElementById('blog-cover-card-thumb').innerHTML = blogCoverObjectUrl
                     ? (isVideo
-                        ? `<video src="${blogCoverObjectUrl}" muted autoplay loop playsinline></video>`
+                        ? `<video src="${blogCoverObjectUrl}" muted autoplay loop playsinline disablepictureinpicture></video>`
                         : `<img src="${blogCoverObjectUrl}" alt="">`)
                     : `<i class="fas ${isVideo ? 'fa-video' : 'fa-image'}"></i>`;
                 document.getElementById('blog-cover-card-remove').style.display = '';
@@ -6735,7 +6735,7 @@
                 document.getElementById('blog-cover-card-size').textContent = '';
                 document.getElementById('blog-cover-card-status').textContent = 'เลือกไฟล์ใหม่เพื่อแทนที่';
                 document.getElementById('blog-cover-card-thumb').innerHTML = isVideo
-                    ? `<video src="${blogExistingCoverBlobUrl}" muted autoplay loop playsinline></video>`
+                    ? `<video src="${blogExistingCoverBlobUrl}" muted autoplay loop playsinline disablepictureinpicture></video>`
                     : `<img src="${blogExistingCoverBlobUrl}" alt="">`;
                 // Nothing to "remove" here — there's no unsaved pick to clear.
                 document.getElementById('blog-cover-card-remove').style.display = 'none';
@@ -6953,7 +6953,7 @@
                 '    var cover = document.getElementById("pv-cover");',
                 '    cover.hidden = false;',
                 '    cover.innerHTML = data.coverIsVideo',
-                '      ? \'<video src="\' + data.coverUrl + \'" controls playsinline preload="metadata"></video>\'',
+                '      ? \'<video src="\' + data.coverUrl + \'" autoplay muted loop playsinline disablepictureinpicture></video>\'',
                 '      : \'<img src="\' + data.coverUrl + \'" alt="">\';',
                 '  }',
                 '  var md = pick(data.content, data.contentTh);',
