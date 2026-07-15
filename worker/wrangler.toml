@@ -68,18 +68,21 @@ SHORT_DOMAIN_PAYMENT = "payment.litalkeducation.com"
 STUDENT_EMAIL_DOMAIN = "litalkeducation.com"
 AUTH0_DB_CONNECTION = "LITALK-Student"
 
-# Connection new teacher/staff accounts are created in (POST /staff). Falls
-# back to AUTH0_DB_CONNECTION above if unset.
-AUTH0_STAFF_CONNECTION = "Admin"
-
 # Set to "true" only if the connection above has "Requires Username" enabled
 # in the Auth0 dashboard (Authentication → Database → [connection] →
 # Settings) — otherwise account creation fails with "Missing required
 # property: username". Leave unset/"false" if it's disabled there, since
-# sending a username when it's not required fails the opposite way. The
-# "Admin" connection here has it enabled.
+# sending a username when it's not required fails the opposite way.
+# "LITALK-Student" has it enabled.
+AUTH0_STUDENT_REQUIRES_USERNAME = "true"
+
+# Connection new teacher/staff accounts are created in (POST /staff). Falls
+# back to AUTH0_DB_CONNECTION above if unset.
+AUTH0_STAFF_CONNECTION = "Admin"
+
+# Same as AUTH0_STUDENT_REQUIRES_USERNAME above, for AUTH0_STAFF_CONNECTION.
+# "Admin" also has it enabled.
 AUTH0_STAFF_REQUIRES_USERNAME = "true"
-# AUTH0_STUDENT_REQUIRES_USERNAME = "true"   # same, for AUTH0_DB_CONNECTION above
 
 # Role ids assigned to accounts created via POST /staff — copy each from
 # Auth0 Dashboard → User Management → Roles → [role] → the id in the URL.
