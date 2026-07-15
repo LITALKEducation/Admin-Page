@@ -73,14 +73,20 @@ export async function insertFileWithUniqueName(
 }
 
 // Upserts the staff directory row for a signed-in user (identity → display
-// name + admin flag), touching last_seen. Called from verifyAuth so names
-// stay current without a separate registration step.
+// name + admin flag), touching last_seen. Called from verifyAuth on every
+// request so names get populated for accounts that never went through
+// POST /staff. The name is only backfilled when blank — once an admin sets
+// one via PATCH /staff/:identity, it must stick; otherwise this would
+// immediately revert it on the caller's very next request, since the Auth0
+// token's name claim stays stale until the user logs out and back in.
 export async function recordStaff(db: D1Database, user: AuthUser): Promise<void> {
   const isAdmin = user.permissions.includes('files:delete') ? 1 : 0;
   await db
     .prepare(
       `INSERT INTO staff (identity, name, is_admin, last_seen) VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-       ON CONFLICT(identity) DO UPDATE SET name = excluded.name, is_admin = excluded.is_admin, last_seen = CURRENT_TIMESTAMP`,
+       ON CONFLICT(identity) DO UPDATE SET
+         name = CASE WHEN staff.name IS NULL OR staff.name = '' THEN excluded.name ELSE staff.name END,
+         is_admin = excluded.is_admin, last_seen = CURRENT_TIMESTAMP`,
     )
     .bind(user.email, user.name, isAdmin)
     .run();
