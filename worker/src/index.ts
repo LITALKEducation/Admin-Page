@@ -156,7 +156,7 @@ app.get('/portal/:studentId', async (c) => {
   const authed = await portalTokenMatchesStudent(c, student.id);
 
   const today = bangkokToday();
-  const [logs, pays, upcoming, pendingLinks] = await c.env.DB.batch([
+  const [logs, pays, upcoming, pendingLinks, teachers] = await c.env.DB.batch([
     c.env.DB.prepare(
       `SELECT log_date AS timestamp, feedback, video_url AS video FROM study_logs WHERE student_id = ? ORDER BY log_date DESC, id DESC LIMIT 300`,
     ).bind(student.id),
@@ -174,6 +174,14 @@ app.get('/portal/:studentId', async (c) => {
     // approvals / hour top-ups that still need a Stripe checkout).
     c.env.DB.prepare(
       `SELECT url, short_url AS shortUrl, amount, description FROM payment_links WHERE student_id = ? AND status = 'active' ORDER BY id DESC LIMIT 5`,
+    ).bind(student.id),
+    // Whoever the admin assigned this student to (teacher_students — the
+    // same "visibility" mapping the admin panel's access screen manages),
+    // so the portal can show "your teacher" with contact info.
+    c.env.DB.prepare(
+      `SELECT st.identity, st.name, st.title, st.phone, st.avatar_key AS avatarKey
+       FROM teacher_students ts JOIN staff st ON st.identity = ts.teacher_email COLLATE NOCASE
+       WHERE ts.student_id = ? COLLATE NOCASE ORDER BY st.name`,
     ).bind(student.id),
   ]);
 
@@ -198,6 +206,9 @@ app.get('/portal/:studentId', async (c) => {
   }
 
   const payments = (pays.results ?? []) as Array<{ timestamp: string }>;
+  const teacherRows = (teachers.results ?? []) as Array<{
+    identity: string; name: string; title: string | null; phone: string | null; avatarKey: string | null;
+  }>;
   return c.json({
     status: 'success',
     data: {
@@ -215,6 +226,43 @@ app.get('/portal/:studentId', async (c) => {
       schedule,
       pendingPayments: pendingLinks.results ?? [],
       files,
+      // "Your teacher" card — sourced from the same teacher_students
+      // assignment the admin's visibility screen manages. identity is
+      // included only so the frontend can request the matching avatar
+      // below; the avatar route re-checks the assignment itself, so
+      // knowing an identity alone doesn't unlock anyone's photo.
+      teachers: teacherRows.map((t) => ({
+        identity: t.identity,
+        name: t.name,
+        title: t.title,
+        phone: t.phone,
+        hasAvatar: !!t.avatarKey,
+      })),
+    },
+  });
+});
+
+// Public teacher-avatar proxy for the student portal's "your teacher" card.
+// Scoped to this student: only streams the photo of a teacher who is
+// actually assigned to this student_id via teacher_students, so this can't
+// be used to enumerate arbitrary staff photos just by knowing an identity.
+app.get('/portal/:studentId/teacher-avatar/:identity', async (c) => {
+  const studentId = c.req.param('studentId');
+  const identity = decodeURIComponent(c.req.param('identity'));
+  const row = await c.env.DB.prepare(
+    `SELECT st.avatar_key AS avatarKey
+     FROM teacher_students ts JOIN staff st ON st.identity = ts.teacher_email COLLATE NOCASE
+     WHERE ts.student_id = ? COLLATE NOCASE AND ts.teacher_email = ? COLLATE NOCASE`,
+  )
+    .bind(studentId, identity)
+    .first<{ avatarKey: string | null }>();
+  if (!row?.avatarKey) return c.json({ error: 'ยังไม่มีรูปภาพ' }, 404);
+  const object = await c.env.BUCKET.get(row.avatarKey);
+  if (!object) return c.json({ error: 'ไม่พบไฟล์รูปภาพ' }, 404);
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': object.httpMetadata?.contentType || 'image/jpeg',
+      'Cache-Control': 'private, max-age=300',
     },
   });
 });

@@ -396,6 +396,7 @@ permissions scoped to this account.
 | PATCH  | `/portal/:studentId/profile` | (student's own Auth0 token) | Self-service nickname edit |
 | POST   | `/portal/:studentId/avatar` | (student's own Auth0 token) | Self-service photo upload (multipart `file`, image, ≤5MB) |
 | DELETE | `/portal/:studentId/avatar` | (student's own Auth0 token) | Self-service photo removal |
+| GET    | `/portal/:studentId/teacher-avatar/:identity` | (public, scoped) | Streams an assigned teacher's photo — 404s unless `identity` is actually assigned to `studentId` |
 
 `file_type` must be one of: `Homework`, `Worksheet`, `Exam`, `Attendance`,
 `Certificate`, `Portfolio`, `Other`.
@@ -546,9 +547,14 @@ when the current token carries no email. Setting up the Action from step
   logs, and payment history — plus additions for the student site:
   `nickname`/`avatar`, `creditBalance` (remaining class hours),
   `schedule` (upcoming `booked` classes only; a withdrawn hour flips its
-  booking to `cancelled` and simply disappears from this list) and
+  booking to `cancelled` and simply disappears from this list),
   `pendingPayments` (active Stripe payment links awaiting checkout, so the
-  site can show a "pay now" prompt).
+  site can show a "pay now" prompt), and `teachers` (whoever the admin
+  assigned this student to via `teacher_students` — the same mapping the
+  admin panel's visibility/access screen manages — with name/title/phone
+  and a `hasAvatar` flag; the photo itself streams from
+  `GET /portal/:studentId/teacher-avatar/:identity`, which re-checks the
+  assignment so it can't be used to fetch an unrelated staff member's photo).
   Two fields are **sensitive** and are returned only when the request carries
   a valid Auth0 access token whose login identity is this same student
   (`portalTokenMatchesStudent`): each schedule row's `meet` (Google Meet join
