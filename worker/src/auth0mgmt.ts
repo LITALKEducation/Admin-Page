@@ -61,6 +61,19 @@ export interface StudentCredentials {
   password: string;
 }
 
+// Auth0 rejects user creation with "Missing required property: username" on
+// connections that have "Requires Username" enabled, and with "Cannot set
+// username for connection without requires_username" when it's disabled and
+// a username is sent anyway — so this can only be included when the admin
+// has confirmed the connection's setting via AUTH0_*_REQUIRES_USERNAME (see
+// README). Derives a username from the email's local part since Auth0
+// usernames only allow letters/digits/underscores and (by default) 1-15
+// characters.
+function deriveUsername(email: string): string {
+  const local = email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 15);
+  return local || `user${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
 // Creates the Auth0 login account for a student. The login email is
 // `<studentId>@<STUDENT_EMAIL_DOMAIN>` — the student site derives the student
 // id from the email's local part, so this convention is load-bearing.
@@ -76,6 +89,7 @@ export async function createStudentAuth0User(env: Env, studentId: string, name: 
       password,
       name,
       email_verified: true,
+      ...(env.AUTH0_STUDENT_REQUIRES_USERNAME === 'true' ? { username: deriveUsername(email) } : {}),
     }),
   });
   if (!res.ok) await mgmtError(res, 'Auth0 user creation failed');
@@ -150,6 +164,7 @@ export async function createStaffAuth0User(env: Env, email: string, name: string
       password,
       name,
       email_verified: true,
+      ...(env.AUTH0_STAFF_REQUIRES_USERNAME === 'true' ? { username: deriveUsername(email) } : {}),
     }),
   });
   if (!res.ok) await mgmtError(res, 'Auth0 user creation failed');
