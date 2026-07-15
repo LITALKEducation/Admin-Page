@@ -121,6 +121,15 @@ explicitly** to your normal staff database connection (typically
 if unset, but that's the *student* connection (`LITALK-Student`), which you
 almost certainly don't want teacher/staff logins mixed into.
 
+If account creation fails with `Missing required property: username`, that
+connection has **Requires Username** enabled (Auth0 Dashboard →
+Authentication → Database → *[connection]* → Settings) — set
+`AUTH0_STAFF_REQUIRES_USERNAME` (or `AUTH0_STUDENT_REQUIRES_USERNAME` for
+`AUTH0_DB_CONNECTION`) to `"true"` in `wrangler.toml` so the Worker derives
+and sends a username automatically. Leave it unset/`"false"` when the
+connection does *not* require a username — sending one anyway fails the
+opposite way (`Cannot set username for connection without requires_username`).
+
 The passkey ticket (`POST /staff/:identity/passkey-ticket`) enrolls the
 `webauthn-platform` factor specifically (Face ID / Windows Hello / a device's
 built-in authenticator — i.e. a passkey, not a roaming security key). This

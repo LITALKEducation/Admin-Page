@@ -20,6 +20,11 @@ export interface Env {
   // Database connection new teacher/staff accounts are created in. Falls
   // back to AUTH0_DB_CONNECTION if unset.
   AUTH0_STAFF_CONNECTION?: string;
+  // Set to the literal string "true" only if AUTH0_DB_CONNECTION /
+  // AUTH0_STAFF_CONNECTION has "Requires Username" enabled in the Auth0
+  // dashboard — otherwise user creation fails (see worker/README.md).
+  AUTH0_STUDENT_REQUIRES_USERNAME?: string;
+  AUTH0_STAFF_REQUIRES_USERNAME?: string;
   // Role ids (User Management → Roles → [role] → copy the id from the URL)
   // assigned to accounts created via POST /staff. Role assignment is
   // skipped (with a message) for any that are unset.
