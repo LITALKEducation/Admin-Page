@@ -16,6 +16,12 @@ const MAX_EXCERPT = 600;
 const MAX_CONTENT = 60_000;
 const MAX_CATEGORY = 60;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4 MB — covers and inline content images alike
+// A cover can also be a short video clip instead of a still image. Duration
+// (max 15s) can't be checked in a Worker — there's no video decoder in this
+// runtime — so that's enforced client-side before upload (admin console);
+// this cap is just a sane byte-size ceiling for a ≤15s clip.
+const MAX_COVER_VIDEO_BYTES = 20 * 1024 * 1024; // 20 MB
+const COVER_VIDEO_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg']);
 const PUBLIC_LIST_LIMIT = 100;
 
 interface BlogPostRow {
@@ -29,6 +35,7 @@ interface BlogPostRow {
   contentTh?: string | null;
   category: string | null;
   coverKey?: string | null;
+  coverMime?: string | null;
   status?: string;
   authorIdentity?: string;
   authorName: string | null;
@@ -39,14 +46,15 @@ interface BlogPostRow {
 }
 
 const PUBLIC_LIST_FIELDS = `id, slug, title, title_th AS titleTh, excerpt, excerpt_th AS excerptTh,
-  category, cover_key AS coverKey, author_name AS authorName, published_at AS publishedAt`;
+  category, cover_key AS coverKey, cover_mime AS coverMime, author_name AS authorName, published_at AS publishedAt`;
 
 const ADMIN_FIELDS = `id, slug, title, title_th AS titleTh, excerpt, excerpt_th AS excerptTh,
-  content, content_th AS contentTh, category, cover_key AS coverKey, status,
+  content, content_th AS contentTh, category, cover_key AS coverKey, cover_mime AS coverMime, status,
   author_identity AS authorIdentity, author_name AS authorName, reviewed_by AS reviewedBy,
   created_at AS createdAt, updated_at AS updatedAt, published_at AS publishedAt`;
 
-// The website never sees R2 keys — just whether a cover exists.
+// The website never sees R2 keys — just whether a cover exists and its
+// mime type (so it knows whether to render <img> or <video>).
 function toPublic(row: BlogPostRow) {
   const { coverKey, ...rest } = row;
   return { ...rest, hasCover: !!coverKey };
@@ -99,6 +107,21 @@ function validatePost(body: PostBody): string | null {
 
 function canEdit(user: AuthUser, post: { authorIdentity?: string }): boolean {
   return isAdmin(user) || (post.authorIdentity ?? '').toLowerCase() === user.email.toLowerCase();
+}
+
+// Shared by both cover upload and inline-content-image upload: a cover may
+// be an image or a short video; inline content images stay image-only.
+function validateCoverFile(file: File, { allowVideo }: { allowVideo: boolean }): string | null {
+  const isVideo = COVER_VIDEO_TYPES.has(file.type);
+  const isImage = file.type.startsWith('image/');
+  if (!isImage && !(allowVideo && isVideo)) {
+    return allowVideo ? 'Cover must be an image or a short video (mp4/webm/mov)' : 'File must be an image';
+  }
+  const limit = isVideo ? MAX_COVER_VIDEO_BYTES : MAX_IMAGE_BYTES;
+  if (file.size > limit) {
+    return isVideo ? 'Video too large (max 20 MB)' : 'Image too large (max 4 MB)';
+  }
+  return null;
 }
 
 /* ===== Public routes — mounted in index.ts BEFORE verifyAuth ===== */
@@ -171,14 +194,14 @@ blogPublic.get('/blog-post', async (c) => {
 
   const post = await c.env.DB.prepare(
     `SELECT slug, title, title_th AS titleTh, excerpt, excerpt_th AS excerptTh,
-            content, content_th AS contentTh, cover_key AS coverKey
+            content, content_th AS contentTh, cover_key AS coverKey, cover_mime AS coverMime
      FROM blog_posts WHERE slug = ? AND status = 'published'`,
   )
     .bind(slug)
     .first<{
       slug: string; title: string; titleTh: string | null;
       excerpt: string | null; excerptTh: string | null;
-      content: string; contentTh: string | null; coverKey: string | null;
+      content: string; contentTh: string | null; coverKey: string | null; coverMime: string | null;
     }>();
   if (!post) return originRes as unknown as Response;
 
@@ -187,7 +210,9 @@ blogPublic.get('/blog-post', async (c) => {
   const description = (
     post.excerptTh || post.excerpt || markdownToPlainText(post.contentTh || post.content)
   ).slice(0, 200);
-  const image = post.coverKey
+  // og:image must be a still image — link-preview crawlers don't decode
+  // video, so a video cover falls back to the brand hero image instead.
+  const image = post.coverKey && !(post.coverMime || '').startsWith('video/')
     ? `${c.env.PUBLIC_FILES_ORIGIN || 'https://istudent.litalkeducation.com'}/blog/posts/${encodeURIComponent(post.slug)}/cover`
     : `${WEBSITE_ORIGIN}/img/hero-visual.png`;
   const canonical = `${WEBSITE_ORIGIN}/blog-post?slug=${encodeURIComponent(post.slug)}`;
@@ -386,6 +411,32 @@ blog.delete('/blog-admin/posts/:id', async (c) => {
   return c.json({ ok: true });
 });
 
+// Stream a post's current cover regardless of status — used by the editor's
+// preview step so an edit-in-progress on a pending/rejected post can still
+// show its existing cover (the public /blog/posts/:slug/cover route only
+// serves published posts).
+blog.get('/blog-admin/posts/:id/cover', async (c) => {
+  const user = c.get('user');
+  const id = Number(c.req.param('id'));
+  const post = await c.env.DB.prepare(
+    `SELECT cover_key AS coverKey, cover_mime AS coverMime, author_identity AS authorIdentity FROM blog_posts WHERE id = ?`,
+  )
+    .bind(id)
+    .first<{ coverKey: string | null; coverMime: string | null; authorIdentity: string }>();
+  if (!post) return c.json({ error: 'Not found' }, 404);
+  if (!canEdit(user, post)) return c.json({ error: 'Forbidden' }, 403);
+  if (!post.coverKey) return c.json({ error: 'No cover' }, 404);
+
+  const object = await c.env.BUCKET.get(post.coverKey);
+  if (!object) return c.json({ error: 'Not found' }, 404);
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': post.coverMime || object.httpMetadata?.contentType || 'image/jpeg',
+      'Cache-Control': 'private, no-store',
+    },
+  });
+});
+
 // Upload / replace the cover image (multipart form, field "file").
 blog.post('/blog-admin/posts/:id/cover', async (c) => {
   const user = c.get('user');
@@ -401,11 +452,10 @@ blog.post('/blog-admin/posts/:id/cover', async (c) => {
   const form = await c.req.formData();
   const file = form.get('file') as unknown as File | string | null;
   if (typeof file === 'string' || file === null) return c.json({ error: 'Missing file' }, 400);
-  if (!file.type.startsWith('image/')) return c.json({ error: 'Cover must be an image' }, 400);
+  const invalidFile = validateCoverFile(file, { allowVideo: true });
+  if (invalidFile) return c.json({ error: invalidFile }, 400);
 
   const bytes = new Uint8Array(await file.arrayBuffer());
-  if (bytes.byteLength > MAX_IMAGE_BYTES) return c.json({ error: 'Image too large (max 4 MB)' }, 400);
-
   const key = `blog/covers/${id}-${crypto.randomUUID().slice(0, 8)}${extname(file.name) || '.jpg'}`;
   await c.env.BUCKET.put(key, bytes, { httpMetadata: { contentType: file.type } });
   await c.env.DB.prepare(`UPDATE blog_posts SET cover_key = ?, cover_mime = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
