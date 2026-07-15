@@ -3909,13 +3909,34 @@
         .blog-wizard-nav__right { display: flex; gap: 10px; margin-left: auto; }
 
         .blog-cover-drop {
-            display: flex; align-items: center; gap: 12px; border: 1.5px dashed var(--border-color);
-            border-radius: var(--radius-md, 8px); padding: 14px; cursor: pointer; transition: border-color .15s ease;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+            text-align: center; border: 1.5px dashed var(--border-color); border-radius: var(--radius-md, 8px);
+            padding: 28px 16px; cursor: pointer; transition: border-color .15s ease, background-color .15s ease;
         }
-        .blog-cover-drop:hover { border-color: var(--brand-primary); }
-        .blog-cover-drop i { font-size: 18px; color: var(--text-muted); }
-        .blog-cover-preview { margin-top: 10px; max-width: 260px; border-radius: var(--radius-md, 8px); overflow: hidden; border: 1px solid var(--border-color); display: none; }
-        .blog-cover-preview img, .blog-cover-preview video { display: block; width: 100%; max-height: 160px; object-fit: cover; }
+        .blog-cover-drop:hover, .blog-cover-drop.dragover { border-color: var(--brand-primary); background-color: var(--bg-tertiary); }
+        .blog-cover-drop .fa-cloud-arrow-up { font-size: 22px; color: var(--text-muted); }
+        .blog-cover-drop__text { font-size: 13.5px; color: var(--text-secondary); }
+        .blog-cover-drop__choose { color: var(--brand-primary); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+
+        /* Selected-cover card: thumbnail + name/size/status + remove button */
+        .blog-cover-card { position: relative; display: none; margin-top: 12px; border-radius: var(--radius-md, 8px); background-color: var(--bg-tertiary); padding: 12px; }
+        .blog-cover-card__remove {
+            position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border: none; background: none;
+            border-radius: var(--radius-sm, 6px); color: var(--text-muted); cursor: pointer;
+            display: flex; align-items: center; justify-content: center; transition: background-color .15s ease, color .15s ease;
+        }
+        .blog-cover-card__remove:hover { background-color: var(--bg-secondary); color: var(--text-primary); }
+        .blog-cover-card__row { display: flex; align-items: center; gap: 10px; }
+        .blog-cover-card__thumb {
+            width: 44px; height: 44px; flex-shrink: 0; border-radius: var(--radius-sm, 6px); overflow: hidden;
+            background-color: var(--bg-secondary); border: 1px solid var(--border-color);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .blog-cover-card__thumb img, .blog-cover-card__thumb video { display: block; width: 100%; height: 100%; object-fit: cover; }
+        .blog-cover-card__thumb i { font-size: 16px; color: var(--text-muted); }
+        .blog-cover-card__info { flex: 1; min-width: 0; }
+        .blog-cover-card__name { font-size: 12.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .blog-cover-card__meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 2px; font-size: 11.5px; color: var(--text-muted); }
 
         /* Preview step: the iframe renders the real litalkeducation.com
            article template (its own CSS/fonts), so it's a true "what the
@@ -5584,14 +5605,37 @@
                                     <input type="text" id="blog-category" placeholder="เช่น Vocabulary / Grammar / Speaking" maxlength="60">
                                 </div>
                                 <div class="form-group">
-                                    <label><i class="fas fa-photo-film"></i> ปกบทความ (ไม่บังคับ) — รูปภาพ (สูงสุด 4 MB) หรือวิดีโอสั้น (ไม่เกิน 15 วินาที · สูงสุด 20 MB)</label>
-                                    <div class="blog-cover-drop" onclick="document.getElementById('blog-cover-file').click()">
-                                        <i class="fas fa-cloud-arrow-up"></i>
-                                        <span id="blog-cover-drop-label">คลิกเพื่อเลือกรูปภาพหรือวิดีโอปก</span>
+                                    <label><i class="fas fa-photo-film"></i> ปกบทความ (ไม่บังคับ)</label>
+                                    <div class="blog-cover-drop" id="blog-cover-drop"
+                                         onclick="document.getElementById('blog-cover-file').click()"
+                                         ondragover="blogCoverDragOver(event)"
+                                         ondragleave="blogCoverDragLeave(event)"
+                                         ondrop="blogCoverDrop(event)">
+                                        <i class="fas fa-cloud-arrow-up" aria-hidden="true"></i>
+                                        <div class="blog-cover-drop__text">
+                                            ลากไฟล์มาวาง หรือ
+                                            <span class="blog-cover-drop__choose">เลือกไฟล์</span>
+                                            เพื่ออัปโหลด
+                                        </div>
                                     </div>
                                     <input type="file" id="blog-cover-file" accept="image/*,video/mp4,video/webm,video/quicktime,video/ogg" style="display: none;" onchange="handleBlogCoverSelected(this)">
-                                    <div class="blog-cover-preview" id="blog-cover-preview"></div>
-                                    <div class="form-hint" id="blog-cover-hint" style="display: none;"></div>
+                                    <div class="form-hint">รูปภาพสูงสุด 4 MB หรือวิดีโอสั้นไม่เกิน 15 วินาที (สูงสุด 20 MB) · JPG, PNG, WEBP, MP4, WEBM, MOV</div>
+
+                                    <div class="blog-cover-card" id="blog-cover-card">
+                                        <button type="button" class="blog-cover-card__remove" id="blog-cover-card-remove" onclick="clearBlogCoverSelection()" aria-label="นำออก">
+                                            <i class="fas fa-xmark"></i>
+                                        </button>
+                                        <div class="blog-cover-card__row">
+                                            <div class="blog-cover-card__thumb" id="blog-cover-card-thumb"></div>
+                                            <div class="blog-cover-card__info">
+                                                <p class="blog-cover-card__name" id="blog-cover-card-name"></p>
+                                                <p class="blog-cover-card__meta">
+                                                    <span id="blog-cover-card-size"></span>
+                                                    <span id="blog-cover-card-status"></span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                                 <label data-admin-only style="display: none; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; margin-top: 4px;">
                                     <input type="checkbox" id="blog-publish-now"> เผยแพร่ทันทีเมื่อบันทึก
@@ -6620,19 +6664,8 @@
 
             revokeBlogCoverObjectUrl();
             revokeBlogExistingCoverBlobUrl();
-            document.getElementById('blog-cover-drop-label').textContent = 'คลิกเพื่อเลือกรูปภาพหรือวิดีโอปก';
-            const preview = document.getElementById('blog-cover-preview');
-            preview.style.display = 'none';
-            preview.innerHTML = '';
-            const hint = document.getElementById('blog-cover-hint');
-            if (post?.coverKey) {
-                hint.style.display = '';
-                hint.innerText = 'มีปกอยู่แล้ว — เลือกไฟล์ใหม่เพื่อแทนที่';
-                loadExistingBlogCoverPreview(id);
-            } else {
-                hint.style.display = 'none';
-                hint.innerText = '';
-            }
+            renderBlogCoverCard();
+            if (post?.coverKey) loadExistingBlogCoverPreview(id);
 
             blogWizardMaxReached = 1;
             updateBlogWizardUI(1);
@@ -6650,11 +6683,7 @@
                 // request was in flight — don't clobber their choice.
                 if (document.getElementById('blog-cover-file').files.length) return;
                 blogExistingCoverBlobUrl = URL.createObjectURL(blob);
-                const preview = document.getElementById('blog-cover-preview');
-                preview.style.display = 'block';
-                preview.innerHTML = blob.type.startsWith('video/')
-                    ? `<video src="${blogExistingCoverBlobUrl}" muted autoplay loop playsinline></video>`
-                    : `<img src="${blogExistingCoverBlobUrl}" alt="">`;
+                renderBlogCoverCard();
             } catch (error) {
                 console.warn('loadExistingBlogCoverPreview:', error);
             }
@@ -6673,46 +6702,112 @@
             });
         }
 
-        // Cover file picked (step 3) — validates a video's length client-side
-        // (Workers can't decode video to check duration server-side) and
-        // shows an immediate thumbnail either way.
+        function formatBlogFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        // Single source of truth for the step-3 cover card: shows a newly
+        // picked (not yet uploaded) file if there is one, else the post's
+        // already-saved cover if editing one, else stays hidden.
+        function renderBlogCoverCard() {
+            const card = document.getElementById('blog-cover-card');
+            const input = document.getElementById('blog-cover-file');
+            const newFile = input.files && input.files[0];
+
+            if (newFile) {
+                const isVideo = newFile.type.startsWith('video/');
+                document.getElementById('blog-cover-card-name').textContent = newFile.name;
+                document.getElementById('blog-cover-card-size').textContent = formatBlogFileSize(newFile.size);
+                document.getElementById('blog-cover-card-status').textContent = 'พร้อมอัปโหลด';
+                document.getElementById('blog-cover-card-thumb').innerHTML = blogCoverObjectUrl
+                    ? (isVideo
+                        ? `<video src="${blogCoverObjectUrl}" muted autoplay loop playsinline></video>`
+                        : `<img src="${blogCoverObjectUrl}" alt="">`)
+                    : `<i class="fas ${isVideo ? 'fa-video' : 'fa-image'}"></i>`;
+                document.getElementById('blog-cover-card-remove').style.display = '';
+                card.style.display = 'block';
+            } else if (blogExistingCoverBlobUrl) {
+                const existing = editingBlogId ? blogPosts.find((p) => p.id === editingBlogId) : null;
+                const isVideo = !!(existing?.coverMime || '').startsWith('video/');
+                document.getElementById('blog-cover-card-name').textContent = 'ปกที่บันทึกไว้แล้ว';
+                document.getElementById('blog-cover-card-size').textContent = '';
+                document.getElementById('blog-cover-card-status').textContent = 'เลือกไฟล์ใหม่เพื่อแทนที่';
+                document.getElementById('blog-cover-card-thumb').innerHTML = isVideo
+                    ? `<video src="${blogExistingCoverBlobUrl}" muted autoplay loop playsinline></video>`
+                    : `<img src="${blogExistingCoverBlobUrl}" alt="">`;
+                // Nothing to "remove" here — there's no unsaved pick to clear.
+                document.getElementById('blog-cover-card-remove').style.display = 'none';
+                card.style.display = 'block';
+            } else {
+                card.style.display = 'none';
+            }
+        }
+
+        // Cover file picked (step 3, via click or drag-drop) — validates a
+        // video's length client-side (Workers can't decode video to check
+        // duration server-side) and updates the card either way.
         async function handleBlogCoverSelected(input) {
             const file = input.files && input.files[0];
-            const label = document.getElementById('blog-cover-drop-label');
-            const preview = document.getElementById('blog-cover-preview');
             revokeBlogCoverObjectUrl();
 
-            if (!file) {
-                label.textContent = 'คลิกเพื่อเลือกรูปภาพหรือวิดีโอปก';
-                preview.style.display = 'none';
-                preview.innerHTML = '';
-                return;
-            }
+            if (!file) { renderBlogCoverCard(); return; }
 
             const isVideo = file.type.startsWith('video/');
             if (isVideo) {
-                label.textContent = 'กำลังตรวจสอบวิดีโอ...';
+                // Show the card immediately with a "checking" status while
+                // duration is being read, so drag-drop feels responsive.
+                document.getElementById('blog-cover-card-name').textContent = file.name;
+                document.getElementById('blog-cover-card-size').textContent = formatBlogFileSize(file.size);
+                document.getElementById('blog-cover-card-status').textContent = 'กำลังตรวจสอบวิดีโอ...';
+                document.getElementById('blog-cover-card-thumb').innerHTML = '<i class="fas fa-video"></i>';
+                document.getElementById('blog-cover-card-remove').style.display = '';
+                document.getElementById('blog-cover-card').style.display = 'block';
+
                 const duration = await readVideoDuration(file);
                 if (duration === null) {
                     input.value = '';
-                    label.textContent = 'คลิกเพื่อเลือกรูปภาพหรือวิดีโอปก';
+                    renderBlogCoverCard();
                     showModal('ไฟล์วิดีโอไม่ถูกต้อง', 'ไม่สามารถอ่านไฟล์วิดีโอนี้ได้ กรุณาลองไฟล์อื่น', 'error');
                     return;
                 }
                 if (duration > MAX_COVER_VIDEO_SECONDS + 0.5) {
                     input.value = '';
-                    label.textContent = 'คลิกเพื่อเลือกรูปภาพหรือวิดีโอปก';
+                    renderBlogCoverCard();
                     showModal('วิดีโอยาวเกินไป', `วิดีโอปกต้องไม่เกิน ${MAX_COVER_VIDEO_SECONDS} วินาที (ไฟล์นี้ยาว ${duration.toFixed(1)} วินาที)`, 'error');
                     return;
                 }
             }
 
             blogCoverObjectUrl = URL.createObjectURL(file);
-            label.textContent = file.name;
-            preview.style.display = 'block';
-            preview.innerHTML = isVideo
-                ? `<video src="${blogCoverObjectUrl}" muted autoplay loop playsinline></video>`
-                : `<img src="${blogCoverObjectUrl}" alt="">`;
+            renderBlogCoverCard();
+            if (isVideo) document.getElementById('blog-cover-card-status').textContent = 'พร้อมอัปโหลด';
+        }
+
+        function clearBlogCoverSelection() {
+            document.getElementById('blog-cover-file').value = '';
+            revokeBlogCoverObjectUrl();
+            renderBlogCoverCard();
+        }
+
+        function blogCoverDragOver(e) {
+            e.preventDefault();
+            document.getElementById('blog-cover-drop').classList.add('dragover');
+        }
+        function blogCoverDragLeave() {
+            document.getElementById('blog-cover-drop').classList.remove('dragover');
+        }
+        function blogCoverDrop(e) {
+            e.preventDefault();
+            document.getElementById('blog-cover-drop').classList.remove('dragover');
+            const file = e.dataTransfer.files && e.dataTransfer.files[0];
+            if (!file) return;
+            const input = document.getElementById('blog-cover-file');
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+            handleBlogCoverSelected(input);
         }
 
         // ----- Step navigation -----
