@@ -45,13 +45,27 @@ interface BlogPostRow {
   publishedAt: string | null;
 }
 
-const PUBLIC_LIST_FIELDS = `id, slug, title, title_th AS titleTh, excerpt, excerpt_th AS excerptTh,
-  category, cover_key AS coverKey, cover_mime AS coverMime, author_name AS authorName, published_at AS publishedAt`;
+// author_name is a snapshot of the display name at post-creation time
+// (falls back to the login email if the author's Auth0 token carried no
+// friendly name claim — see blog.post('/blog-admin/posts') below). Prefer
+// the live staff directory name when one exists, same as every other
+// "who did this" field in the app (schedules, credits, finance).
+const AUTHOR_JOIN = `LEFT JOIN staff st ON st.identity = bp.author_identity COLLATE NOCASE`;
+const AUTHOR_NAME_FIELD = `COALESCE(st.name, bp.author_name) AS authorName`;
 
-const ADMIN_FIELDS = `id, slug, title, title_th AS titleTh, excerpt, excerpt_th AS excerptTh,
-  content, content_th AS contentTh, category, cover_key AS coverKey, cover_mime AS coverMime, status,
-  author_identity AS authorIdentity, author_name AS authorName, reviewed_by AS reviewedBy,
-  created_at AS createdAt, updated_at AS updatedAt, published_at AS publishedAt`;
+// Admin-only list also shows who approved/published a post — same
+// stale-raw-email problem, same fix, joined against a second staff alias
+// since the reviewer is a different identity than the author.
+const REVIEWER_JOIN = `LEFT JOIN staff rst ON rst.identity = bp.reviewed_by COLLATE NOCASE`;
+const REVIEWED_BY_FIELD = `COALESCE(rst.name, bp.reviewed_by) AS reviewedBy`;
+
+const PUBLIC_LIST_FIELDS = `bp.id, bp.slug, bp.title, bp.title_th AS titleTh, bp.excerpt, bp.excerpt_th AS excerptTh,
+  bp.category, bp.cover_key AS coverKey, bp.cover_mime AS coverMime, ${AUTHOR_NAME_FIELD}, bp.published_at AS publishedAt`;
+
+const ADMIN_FIELDS = `bp.id, bp.slug, bp.title, bp.title_th AS titleTh, bp.excerpt, bp.excerpt_th AS excerptTh,
+  bp.content, bp.content_th AS contentTh, bp.category, bp.cover_key AS coverKey, bp.cover_mime AS coverMime, bp.status,
+  bp.author_identity AS authorIdentity, ${AUTHOR_NAME_FIELD}, ${REVIEWED_BY_FIELD},
+  bp.created_at AS createdAt, bp.updated_at AS updatedAt, bp.published_at AS publishedAt`;
 
 // The website never sees R2 keys — just whether a cover exists and its
 // mime type (so it knows whether to render <img> or <video>).
@@ -130,9 +144,9 @@ export const blogPublic = new Hono<AppBindings>();
 
 blogPublic.get('/blog/posts', async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT ${PUBLIC_LIST_FIELDS} FROM blog_posts
-     WHERE status = 'published'
-     ORDER BY published_at DESC, id DESC LIMIT ?`,
+    `SELECT ${PUBLIC_LIST_FIELDS} FROM blog_posts bp ${AUTHOR_JOIN}
+     WHERE bp.status = 'published'
+     ORDER BY bp.published_at DESC, bp.id DESC LIMIT ?`,
   )
     .bind(PUBLIC_LIST_LIMIT)
     .all<BlogPostRow>();
@@ -141,8 +155,8 @@ blogPublic.get('/blog/posts', async (c) => {
 
 blogPublic.get('/blog/posts/:slug', async (c) => {
   const row = await c.env.DB.prepare(
-    `SELECT ${PUBLIC_LIST_FIELDS}, content, content_th AS contentTh FROM blog_posts
-     WHERE slug = ? AND status = 'published'`,
+    `SELECT ${PUBLIC_LIST_FIELDS}, bp.content, bp.content_th AS contentTh FROM blog_posts bp ${AUTHOR_JOIN}
+     WHERE bp.slug = ? AND bp.status = 'published'`,
   )
     .bind(c.req.param('slug'))
     .first<BlogPostRow>();
@@ -280,8 +294,8 @@ const blog = new Hono<AppBindings>();
 blog.get('/blog-admin/posts', async (c) => {
   const user = c.get('user');
   const stmt = isAdmin(user)
-    ? c.env.DB.prepare(`SELECT ${ADMIN_FIELDS} FROM blog_posts ORDER BY id DESC`)
-    : c.env.DB.prepare(`SELECT ${ADMIN_FIELDS} FROM blog_posts WHERE author_identity = ? COLLATE NOCASE ORDER BY id DESC`).bind(user.email);
+    ? c.env.DB.prepare(`SELECT ${ADMIN_FIELDS} FROM blog_posts bp ${AUTHOR_JOIN} ${REVIEWER_JOIN} ORDER BY bp.id DESC`)
+    : c.env.DB.prepare(`SELECT ${ADMIN_FIELDS} FROM blog_posts bp ${AUTHOR_JOIN} ${REVIEWER_JOIN} WHERE bp.author_identity = ? COLLATE NOCASE ORDER BY bp.id DESC`).bind(user.email);
   const { results } = await stmt.all<BlogPostRow>();
   return c.json({ status: 'success', isAdmin: isAdmin(user), posts: results ?? [] });
 });
