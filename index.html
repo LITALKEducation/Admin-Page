@@ -140,6 +140,55 @@
             position: relative;
         }
 
+        /* ===== Accessibility baseline (docs/UX-REDESIGN.md §7, phase 1) ===== */
+        /* Keyboard focus ring — :focus-visible only, so mouse/touch users never
+           see it but keyboard users always do (WCAG 2.4.7). Ink outline stays
+           visible on any surface in both themes since the token flips too. */
+        :focus-visible {
+            outline: 2px solid var(--text-primary);
+            outline-offset: 2px;
+        }
+
+        :focus:not(:focus-visible) {
+            outline: none;
+        }
+
+        /* Skip link for keyboard/screen-reader users (WCAG 2.4.1): visually
+           hidden until focused, then drops in above the sidebar. */
+        .skip-link {
+            position: fixed;
+            top: -100px;
+            left: 16px;
+            z-index: 2000;
+            background: var(--text-primary);
+            color: var(--bg-primary);
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 14px;
+            text-decoration: none;
+            transition: top 0.15s ease;
+        }
+
+        .skip-link:focus-visible {
+            top: 16px;
+        }
+
+        /* Fitts's Law: icon-only controls get a >=44px hit area on touch
+           devices without changing desktop density (pointer: coarse only). */
+        @media (pointer: coarse) {
+            .icon-btn {
+                min-width: 44px;
+                min-height: 44px;
+                justify-content: center;
+            }
+
+            .ai-chat-panel__icon-btn {
+                width: 44px;
+                height: 44px;
+            }
+        }
+
         /* Visibility of sections */
         #admin-panel,
         #login-section,
@@ -3954,7 +4003,7 @@
 
 <body>
 
-
+    <a href="#main-content" class="skip-link">ข้ามไปยังเนื้อหาหลัก</a>
 
     <!-- ADMIN LOGIN -->
     <div id="login-section" class="login-page">
@@ -4149,7 +4198,7 @@
             </div>
         </aside>
 
-        <main class="app-main" data-main="true">
+        <main class="app-main" id="main-content" data-main="true">
             <!-- Mobile top bar (sidebar hidden below 900px) -->
             <div class="mobile-topbar">
                 <div class="sidebar-header">
