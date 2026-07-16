@@ -43,6 +43,8 @@
             --focus-ring: rgba(17, 19, 24, 0.1);
             --accent-success: #16794c;
             --accent-danger: #d4380d;
+            --accent-warning: #b45309;
+            --accent-info: #0b6bcb;
             --badge-bg: rgba(17, 19, 24, 0.05);
             --badge-text: #111318;
         }
@@ -74,6 +76,8 @@
                 --focus-ring: rgba(255, 255, 255, 0.15);
                 --accent-success: #3ecf8e;
                 --accent-danger: #f0644a;
+                --accent-warning: #f5a524;
+                --accent-info: #4c9ffe;
                 --badge-bg: rgba(255, 255, 255, 0.08);
                 --badge-text: #ffffff;
             }
@@ -96,6 +100,8 @@
             --focus-ring: rgba(255, 255, 255, 0.15);
             --accent-success: #3ecf8e;
             --accent-danger: #f0644a;
+            --accent-warning: #f5a524;
+            --accent-info: #4c9ffe;
             --badge-bg: rgba(255, 255, 255, 0.08);
             --badge-text: #ffffff;
         }
@@ -2567,7 +2573,63 @@
             border-bottom: none;
         }
 
+        /* ===== Mobile bottom navigation (docs/UX-REDESIGN.md phase 2) =====
+           The sidebar disappears at <=900px, leaving 14 screens behind the
+           hamburger drawer alone. Surface the 4 highest-frequency screens +
+           "more" (opens the existing drawer) at the thumb's resting zone —
+           Miller's Law at the surface, full depth one tap away. Hidden on
+           desktop where the sidebar already serves this job. */
+        .admin-bottom-nav {
+            display: none;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 500;
+            background-color: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        .admin-bottom-nav button {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            min-height: 56px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 10.5px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .admin-bottom-nav button i {
+            font-size: 17px;
+        }
+
+        .admin-bottom-nav button.active {
+            color: var(--text-primary);
+        }
+
         @media (max-width: 900px) {
+            .admin-bottom-nav {
+                display: flex;
+            }
+
+            /* Keep scrolled content and the quick-create FAB clear of the bar. */
+            #admin-panel .app-main {
+                padding-bottom: calc(64px + env(safe-area-inset-bottom));
+            }
+
+            .fab-wrap {
+                bottom: calc(80px + env(safe-area-inset-bottom));
+            }
+
             .login-wrapper {
                 grid-template-columns: 1fr;
             }
@@ -5807,6 +5869,15 @@
             </button>
         </div>
 
+        <!-- Mobile bottom navigation (<=900px, where the sidebar is hidden) -->
+        <nav class="admin-bottom-nav" aria-label="เมนูหลัก">
+            <button data-screen="dashboard" class="active" onclick="goScreen('dashboard')"><i class="fas fa-gauge-high"></i><span>ภาพรวม</span></button>
+            <button data-screen="students" onclick="goScreen('students')"><i class="fas fa-users"></i><span>นักเรียน</span></button>
+            <button data-screen="logs" onclick="goScreen('logs')"><i class="fas fa-book-open"></i><span>บันทึกผล</span></button>
+            <button data-screen="payments" onclick="goScreen('payments')"><i class="fas fa-money-bill-wave"></i><span>ชำระเงิน</span></button>
+            <button onclick="openMobileMenu()"><i class="fas fa-ellipsis"></i><span>เพิ่มเติม</span></button>
+        </nav>
+
         <!-- Command Palette (Ctrl/Cmd + K) -->
         <div class="cmdk-overlay" id="cmdk-overlay" onclick="closeCommandPalette(event)">
             <div class="cmdk-box" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="ค้นหา">
@@ -6511,6 +6582,9 @@
             });
             document.querySelectorAll('.mobile-menu-nav a').forEach(a => {
                 a.classList.toggle('active', a.getAttribute('data-screen') === screen);
+            });
+            document.querySelectorAll('.admin-bottom-nav button[data-screen]').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-screen') === screen);
             });
 
             const main = document.querySelector('[data-main]');
@@ -10784,12 +10858,21 @@
         let notifAlerts = [];
         let notifLoaded = false;
 
+        // Icon + color per notification type (see the Worker's /notifications).
+        const NOTIF_STYLE = {
+            schedule_pending: { icon: 'fa-calendar-check', color: 'var(--accent-info)' },
+            amendment_pending: { icon: 'fa-arrows-up-down', color: 'var(--accent-info)' },
+            schedule_revise: { icon: 'fa-rotate-left', color: 'var(--accent-warning)' },
+            schedule_rejected: { icon: 'fa-xmark', color: 'var(--accent-danger)' },
+            unpaid: { icon: 'fa-triangle-exclamation', color: 'var(--accent-danger)' },
+        };
+
         async function loadNotifications() {
             try {
-                const response = await apiFetch('/dashboard?range=today');
+                const response = await apiFetch('/notifications');
                 const result = await response.json();
                 if (response.ok) {
-                    notifAlerts = result.alerts || [];
+                    notifAlerts = result.items || [];
                     notifLoaded = true;
                     renderNotifBadge();
                 }
@@ -10817,14 +10900,18 @@
                 list.innerHTML = '<div class="empty-state" style="padding: 24px 16px;"><i class="fas fa-check-circle"></i><div class="empty-title">ไม่มีการแจ้งเตือน</div><div class="empty-sub">คุณติดตามทุกอย่างเรียบร้อยแล้ว</div></div>';
                 return;
             }
-            list.innerHTML = notifAlerts.map(a => `
-                <button class="notif-item" onclick="handleNotifClick('${escapeJs(a.studentId)}', '${a.screen}')">
-                    <i class="fas fa-triangle-exclamation" style="color: var(--accent-danger);"></i>
+            list.innerHTML = notifAlerts.map(a => {
+                const style = NOTIF_STYLE[a.type] || { icon: 'fa-bell', color: 'var(--text-muted)' };
+                const screenTitle = (SCREEN_META[a.screen] && SCREEN_META[a.screen].title) || a.screen;
+                return `
+                <button class="notif-item" onclick="handleNotifClick('${escapeJs(a.studentId || '')}', '${a.screen}')">
+                    <i class="fas ${style.icon}" style="color: ${style.color};"></i>
                     <div class="notif-item-body">
                         <div class="notif-item-text">${escapeHtml(a.text)}</div>
-                        <div class="notif-item-action">${escapeHtml(a.actionLabel)} <i class="fas fa-arrow-right" style="font-size: 9px;"></i></div>
+                        <div class="notif-item-action">${escapeHtml(screenTitle)} <i class="fas fa-arrow-right" style="font-size: 9px;"></i></div>
                     </div>
-                </button>`).join('');
+                </button>`;
+            }).join('');
         }
 
         function toggleNotifPanel(e) {
@@ -10857,7 +10944,11 @@
 
         function handleNotifClick(studentId, screen) {
             closeNotifPanel();
-            goToStudentAndScreen(studentId, screen);
+            if (studentId) {
+                goToStudentAndScreen(studentId, screen);
+            } else {
+                goScreen(screen);
+            }
         }
 
         // ===== Command palette (Ctrl/Cmd + K) =====
