@@ -428,19 +428,43 @@ app.post('/portal/:studentId/chat', async (c) => {
 // only answer general questions about LITALK Education itself. visitorId
 // is a random id the site generates and persists client-side purely to
 // rate-limit this endpoint; it carries no identity.
+// This endpoint's own error strings are shown verbatim in the widget on
+// bilingual marketing pages, so — unlike every other Thai-only error message
+// in this file — they follow the site's language toggle (`lang`, sent by
+// the frontend from window.litalkGetLang()) rather than being Thai-only.
+// This is independent of the AI's own reply, which separately and
+// correctly auto-detects whatever language the user types in.
+const GENERAL_CHAT_ERRORS = {
+  en: {
+    emptyMessage: 'Please type a question',
+    tooLong: (max: number) => `Message is too long (max ${max} characters)`,
+    quota: "You've reached today's question limit. Please try again tomorrow, or contact us via LINE OA.",
+    notConfigured: 'The AI assistant is not set up yet',
+    callFailed: 'The AI assistant is unavailable right now. Please try again.',
+  },
+  th: {
+    emptyMessage: 'กรุณาพิมพ์คำถาม',
+    tooLong: (max: number) => `ข้อความยาวเกินไป (จำกัด ${max} ตัวอักษร)`,
+    quota: 'วันนี้ถามคำถามครบโควตาแล้ว กรุณาลองใหม่พรุ่งนี้ หรือติดต่อเจ้าหน้าที่ผ่าน LINE OA',
+    notConfigured: 'ผู้ช่วย AI ยังไม่ได้ตั้งค่าในระบบ',
+    callFailed: 'ระบบ AI ไม่พร้อมใช้งานในขณะนี้ กรุณาลองใหม่อีกครั้ง',
+  },
+};
+
 app.post('/chat/general', async (c) => {
-  const body = await c.req.json<{ conversationId?: string; message?: string; visitorId?: string }>().catch(() => ({}) as never);
+  const body = await c.req.json<{ conversationId?: string; message?: string; visitorId?: string; lang?: string }>().catch(() => ({}) as never);
   const message = (body.message ?? '').trim();
   const visitorId = (body.visitorId ?? '').trim();
-  if (!message) return c.json({ status: 'error', message: 'กรุณาพิมพ์คำถาม' }, 400);
+  const errors = GENERAL_CHAT_ERRORS[body.lang === 'th' ? 'th' : 'en'];
+  if (!message) return c.json({ status: 'error', message: errors.emptyMessage }, 400);
   if (message.length > MAX_MESSAGE_LENGTH) {
-    return c.json({ status: 'error', message: `ข้อความยาวเกินไป (จำกัด ${MAX_MESSAGE_LENGTH} ตัวอักษร)` }, 400);
+    return c.json({ status: 'error', message: errors.tooLong(MAX_MESSAGE_LENGTH) }, 400);
   }
   if (!visitorId) return c.json({ status: 'error', message: 'Missing visitorId' }, 400);
 
   const usedToday = await generalMessageCountToday(c.env.DB, visitorId);
   if (usedToday >= GENERAL_DAILY_LIMIT) {
-    return c.json({ status: 'error', message: 'วันนี้ถามคำถามครบโควตาแล้ว กรุณาลองใหม่พรุ่งนี้ หรือติดต่อเจ้าหน้าที่ผ่าน LINE OA' }, 429);
+    return c.json({ status: 'error', message: errors.quota }, 429);
   }
 
   const conversationId = body.conversationId || crypto.randomUUID();
@@ -463,9 +487,9 @@ app.post('/chat/general', async (c) => {
   try {
     reply = await chatReply(c.env, systemPrompt, history, message);
   } catch (err) {
-    if (err instanceof ChatNotConfiguredError) return c.json({ status: 'error', message: 'ผู้ช่วย AI ยังไม่ได้ตั้งค่าในระบบ' }, 503);
+    if (err instanceof ChatNotConfiguredError) return c.json({ status: 'error', message: errors.notConfigured }, 503);
     console.error('general chat: Gemini call failed', err);
-    return c.json({ status: 'error', message: 'ระบบ AI ไม่พร้อมใช้งานในขณะนี้ กรุณาลองใหม่อีกครั้ง' }, 503);
+    return c.json({ status: 'error', message: errors.callFailed }, 503);
   }
 
   await saveChatTurn(c.env.DB, conversationId, 'general', null, visitorId, message, reply);
