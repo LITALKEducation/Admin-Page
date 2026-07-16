@@ -238,8 +238,11 @@ done ÷ (done + upcoming + credit)), weekly learning streak (Mon-based; the curr
 week not yet studied doesn't break it), and six milestone achievements with
 earned/locked states — all computed client-side from the payload the page already
 fetches. Also on mobile the AI assistant moved **into** the bottom nav (both apps)
-instead of a floating button overlapping the bar. Still open: certificates,
-calendar sync (ICS), push notifications, QR attendance.
+instead of a floating button overlapping the bar. **Calendar sync done**:
+`GET /portal/:id/calendar.ics` (Bangkok wall-clock → UTC instants; Meet links
+deliberately excluded from the public feed) + a subscribe row on the portal's
+schedule section (Google / webcal / copy-link). Still open: certificates, push
+notifications, QR attendance.
 
 **Phase 5 — scale**: parent accounts as first-class Auth0 identities (today the portal
 link is shared) · teacher self-service dashboard · virtualized tables once lists exceed
