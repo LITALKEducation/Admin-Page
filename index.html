@@ -2751,6 +2751,15 @@
                 bottom: calc(80px + env(safe-area-inset-bottom));
             }
 
+            /* On mobile the AI assistant lives in the bottom nav instead of a
+               floating button — the FAB's bottom-left spot is now the bar's
+               first item, and two floating circles over a nav bar is clutter.
+               button.* so this outranks the base .ai-chat-fab { display: flex }
+               rule that appears later in the file at equal specificity. */
+            button.ai-chat-fab {
+                display: none;
+            }
+
             .login-wrapper {
                 grid-template-columns: 1fr;
             }
@@ -4019,7 +4028,9 @@
             .students-table td:first-child { padding-top: 14px; }
             .students-table td:last-child { padding-bottom: 14px; }
             .students-table tbody tr { display: block; border-bottom: 1px solid var(--border-color); }
-            .fab-wrap { right: 16px; bottom: 16px; }
+            /* Keep clearing the bottom nav — a plain bottom: 16px here used to
+               override the 900px raise and sink the FAB behind the bar. */
+            .fab-wrap { right: 16px; bottom: calc(76px + env(safe-area-inset-bottom)); }
         }
 
         /* ===== AI chat assistant ===== */
@@ -4108,8 +4119,9 @@
         .ai-chat-settings__actions { display: flex; justify-content: flex-end; gap: 8px; }
 
         @media (max-width: 700px) {
-            .ai-chat-fab { left: 16px; bottom: 16px; }
-            .ai-chat-panel { left: 16px; bottom: 80px; }
+            /* The FAB is hidden on mobile (chat opens from the bottom nav);
+               the panel itself sits just above the nav bar. */
+            .ai-chat-panel { left: 16px; bottom: calc(76px + env(safe-area-inset-bottom)); max-height: calc(100vh - 150px); }
         }
 
         /* ===== Blog editor wizard (screen-blog) ===== */
@@ -6030,6 +6042,7 @@
             <button data-screen="students" onclick="goScreen('students')"><i class="fas fa-users"></i><span>นักเรียน</span></button>
             <button data-screen="logs" onclick="goScreen('logs')"><i class="fas fa-book-open"></i><span>บันทึกผล</span></button>
             <button data-screen="payments" onclick="goScreen('payments')"><i class="fas fa-money-bill-wave"></i><span>ชำระเงิน</span></button>
+            <button onclick="toggleAIChat()"><i class="fas fa-robot"></i><span>AI แชท</span></button>
             <button onclick="openMobileMenu()"><i class="fas fa-ellipsis"></i><span>เพิ่มเติม</span></button>
         </nav>
 
