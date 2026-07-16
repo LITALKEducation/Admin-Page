@@ -232,9 +232,14 @@ tooltips, `<details>` table view per chart), horizontal course-mix bars, and sta
 tiles incl. month-over-month retention. Still open: smart reports (monthly summary
 email).
 
-**Phase 4 — student engagement**: learning progress (% of paid hours used, streaks) ·
-achievements/certificates timeline · calendar sync (ICS feed per student) · push
-notifications via the existing PWA · QR attendance.
+**Phase 4 — student engagement (progress layer done)**: portal overview now has a
+"ความก้าวหน้าการเรียน" section — progress ring (% of the paid plan studied:
+done ÷ (done + upcoming + credit)), weekly learning streak (Mon-based; the current
+week not yet studied doesn't break it), and six milestone achievements with
+earned/locked states — all computed client-side from the payload the page already
+fetches. Also on mobile the AI assistant moved **into** the bottom nav (both apps)
+instead of a floating button overlapping the bar. Still open: certificates,
+calendar sync (ICS), push notifications, QR attendance.
 
 **Phase 5 — scale**: parent accounts as first-class Auth0 identities (today the portal
 link is shared) · teacher self-service dashboard · virtualized tables once lists exceed
