@@ -385,6 +385,91 @@ core.get('/dashboard', requirePermission('data:read'), async (c) => {
   });
 });
 
+// ===== Notifications (topbar bell) =====
+// Aggregated "needs attention" feed for the admin panel's notification
+// center. Role-aware: admins see the approval queue (pending schedules and
+// amendments) plus unpaid students; teachers see their own schedules that
+// were sent back (revise/rejected) plus unpaid among their assigned
+// students. Stateless by design — every item links to the screen where it
+// gets resolved, and resolving it removes it from the feed, so no
+// read/unread bookkeeping is needed.
+core.get('/notifications', requirePermission('data:read'), async (c) => {
+  const user = c.get('user');
+  const month = bangkokMonth();
+  const items: Array<{ type: string; text: string; screen: string; studentId: string | null }> = [];
+
+  const unpaidStmt = c.env.DB.prepare(
+    `SELECT DISTINCT l.student_id AS id, COALESCE(s.name, l.student_id) AS name
+     FROM study_logs l LEFT JOIN students s ON s.id = l.student_id
+     WHERE l.log_date LIKE ? || '%'
+       AND l.student_id NOT IN (SELECT student_id FROM payments WHERE student_id IS NOT NULL AND paid_date LIKE ? || '%')
+     LIMIT 20`,
+  ).bind(month, month);
+
+  if (isAdmin(user)) {
+    const [pendingSched, pendingAmend, unpaid] = await c.env.DB.batch([
+      c.env.DB.prepare(
+        `SELECT ms.month, ms.student_id AS studentId, COALESCE(s.name, ms.student_id) AS name,
+                (SELECT COUNT(*) FROM schedule_sessions ss WHERE ss.schedule_id = ms.id) AS sessions
+         FROM monthly_schedules ms LEFT JOIN students s ON s.id = ms.student_id
+         WHERE ms.status = 'pending' ORDER BY ms.id DESC LIMIT 10`,
+      ),
+      c.env.DB.prepare(
+        `SELECT sa.type, sa.student_id AS studentId, COALESCE(s.name, sa.student_id) AS name
+         FROM schedule_amendments sa LEFT JOIN students s ON s.id = sa.student_id
+         WHERE sa.status = 'pending' ORDER BY sa.id DESC LIMIT 10`,
+      ),
+      unpaidStmt,
+    ]);
+    for (const r of (pendingSched.results ?? []) as Array<{ month: string; studentId: string; name: string; sessions: number }>) {
+      items.push({
+        type: 'schedule_pending',
+        text: `ตารางเรียนเดือน ${r.month} ของ ${r.name} (${r.sessions} ครั้ง) รออนุมัติ`,
+        screen: 'schedule',
+        studentId: r.studentId,
+      });
+    }
+    for (const r of (pendingAmend.results ?? []) as Array<{ type: string; studentId: string; name: string }>) {
+      items.push({
+        type: 'amendment_pending',
+        text: `คำร้อง${r.type === 'add' ? 'เพิ่ม' : 'ถอน'}ชั่วโมงเรียนของ ${r.name} รออนุมัติ`,
+        screen: 'hours',
+        studentId: r.studentId,
+      });
+    }
+    for (const r of (unpaid.results ?? []) as Array<{ id: string; name: string }>) {
+      items.push({ type: 'unpaid', text: `${r.name} ยังไม่มีการบันทึกชำระเงินในเดือนนี้`, screen: 'payments', studentId: r.id });
+    }
+  } else {
+    const [needsAction, unpaid] = await c.env.DB.batch([
+      c.env.DB.prepare(
+        `SELECT ms.month, ms.status, ms.student_id AS studentId, COALESCE(s.name, ms.student_id) AS name
+         FROM monthly_schedules ms LEFT JOIN students s ON s.id = ms.student_id
+         WHERE ms.created_by = ? COLLATE NOCASE AND ms.status IN ('revise', 'rejected')
+         ORDER BY ms.id DESC LIMIT 10`,
+      ).bind(user.email),
+      unpaidStmt,
+    ]);
+    for (const r of (needsAction.results ?? []) as Array<{ month: string; status: string; studentId: string; name: string }>) {
+      items.push({
+        type: r.status === 'revise' ? 'schedule_revise' : 'schedule_rejected',
+        text:
+          r.status === 'revise'
+            ? `ตารางเรียนเดือน ${r.month} ของ ${r.name} ถูกขอให้ปรับปรุง`
+            : `ตารางเรียนเดือน ${r.month} ของ ${r.name} ถูกปฏิเสธ`,
+        screen: 'schedule',
+        studentId: r.studentId,
+      });
+    }
+    const visible = await visibleStudentIds(c.env.DB, user);
+    for (const r of ((unpaid.results ?? []) as Array<{ id: string; name: string }>).filter((u) => canSeeStudent(visible, u.id))) {
+      items.push({ type: 'unpaid', text: `${r.name} ยังไม่มีการบันทึกชำระเงินในเดือนนี้`, screen: 'payments', studentId: r.id });
+    }
+  }
+
+  return c.json({ items });
+});
+
 // ===== Monthly earnings ("what will I get this month") =====
 
 core.get('/earnings', requirePermission('data:read'), async (c) => {

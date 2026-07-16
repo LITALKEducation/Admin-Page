@@ -34,9 +34,10 @@ document · **[roadmap]** designed here, built later.
 | **No `:focus-visible` styles** in admin panel or marketing site — keyboard users get browser-default or no focus ring | WCAG 2.4.7 failure | **[phase 1]** |
 | **Touch targets below 44px**: `.icon-btn` (~30px), `.ai-chat-panel__icon-btn` (28px admin / 30px portal), modal close buttons (32px) | Fitts's Law / WCAG 2.5.8 | **[phase 1]** |
 | **No skip-to-content link** — keyboard/screen-reader users must tab through the entire nav on every page | WCAG 2.4.1 | **[phase 1]** |
-| Admin panel has **no mobile bottom nav** — 14 screens behind a hamburger drawer only | Mobile efficiency | **[roadmap]** |
-| No command palette — power users (admins doing data entry all day) have no keyboard-first navigation | Flexibility & efficiency (Nielsen #7) | **[roadmap]** |
-| No bulk actions / CSV import-export on the student list | Admin efficiency | **[roadmap]** |
+| Admin panel has **no mobile bottom nav** — 14 screens behind a hamburger drawer only | Mobile efficiency | **[phase 2 — done]** |
+| No command palette — power users (admins doing data entry all day) have no keyboard-first navigation | Flexibility & efficiency (Nielsen #7) | **[phase 2 — done]** |
+| No bulk actions / CSV import-export on the student list | Admin efficiency | **[phase 2 — done]** |
+| Admin bell only mirrored dashboard unpaid alerts — no schedule/amendment queue awareness | Visibility of status | **[phase 2 — done]** (role-aware `GET /notifications`) |
 | Analytics limited to dashboard stat cards + finance screen — no trend charts | Insight | **[roadmap]** |
 | Portal has no notifications center; pending payments are the only "alert" surface | Visibility of status | **[roadmap]** |
 | No learning-progress/streak/achievement layer in the portal | Engagement | **[roadmap]** |
@@ -217,9 +218,12 @@ everything gated by `prefers-reduced-motion` **[exists]**. Never animate layout 
 **Phase 1 — shipped with this doc**: focus-visible rings everywhere · ≥44px coarse-pointer
 touch targets · skip-to-content links · this design system doc.
 
-**Phase 2 — admin efficiency (highest ROI)**: command palette (Ctrl/⌘+K) · student-list
-search-as-filter + bulk export CSV · admin mobile bottom nav · `accent-info` token +
-notifications center (payment reminders, schedule events, announcements).
+**Phase 2 — admin efficiency (done)**: command palette (Ctrl/⌘+K) · student-list
+search-as-filter + bulk export CSV · admin mobile bottom nav (4 top screens + "more" →
+drawer, ≤900px where the sidebar hides) · `accent-info`/`accent-warning` tokens + role-aware
+notifications center (`GET /notifications`: admins see the approval queue + unpaid; teachers
+see their revise/rejected schedules + unpaid among assigned students; stateless — items
+clear when resolved).
 
 **Phase 3 — insight**: revenue/growth/attendance trend charts (SVG sparklines on stat
 cards first, full charts on finance screen) · retention + popular-course metrics ·
