@@ -470,6 +470,87 @@ core.get('/notifications', requirePermission('data:read'), async (c) => {
   return c.json({ items });
 });
 
+// ===== Analytics (finance screen trends, admin only) =====
+
+// The trailing n calendar months as YYYY-MM labels, ending at the current
+// Bangkok month, oldest first.
+function lastMonths(n: number): string[] {
+  const [y, m] = bangkokMonth().split('-').map(Number);
+  const out: string[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(y, m - 1 - i, 1));
+    out.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+  }
+  return out;
+}
+
+// Six-month trend series for the finance screen: revenue, classes taught,
+// distinct active students, and new registrations per month, plus the
+// current course mix and a month-over-month retention rate. Admin-only —
+// this is school-wide financial insight; teachers get their restricted
+// per-assignment view from /earnings instead.
+core.get('/analytics', requireAdmin, async (c) => {
+  const months = lastMonths(6);
+  const startDate = `${months[0]}-01`;
+  const thisMonth = months[months.length - 1];
+  const prevMonth = months[months.length - 2];
+
+  const [revenue, classes, active, fresh, courses, retainedRow, prevActiveRow] = await c.env.DB.batch([
+    c.env.DB.prepare(
+      `SELECT substr(paid_date, 1, 7) AS m, COALESCE(SUM(amount), 0) AS v FROM payments WHERE paid_date >= ? GROUP BY m`,
+    ).bind(startDate),
+    c.env.DB.prepare(
+      `SELECT substr(log_date, 1, 7) AS m, COUNT(*) AS v FROM study_logs WHERE log_date >= ? GROUP BY m`,
+    ).bind(startDate),
+    c.env.DB.prepare(
+      `SELECT substr(log_date, 1, 7) AS m, COUNT(DISTINCT student_id) AS v FROM study_logs WHERE log_date >= ? GROUP BY m`,
+    ).bind(startDate),
+    // New registrations by creation month. Deliberately not filtered by
+    // deleted_at — a student who joined and later left still joined that
+    // month; deleting them shouldn't rewrite the growth history.
+    c.env.DB.prepare(
+      `SELECT substr(created_at, 1, 7) AS m, COUNT(*) AS v FROM students WHERE created_at >= ? GROUP BY m`,
+    ).bind(startDate),
+    c.env.DB.prepare(
+      `SELECT COALESCE(NULLIF(TRIM(course), ''), 'ไม่ระบุ') AS course, COUNT(*) AS n
+       FROM students WHERE deleted_at IS NULL GROUP BY 1 ORDER BY n DESC LIMIT 6`,
+    ),
+    // Retention: of last month's actively-studying students, how many also
+    // studied this month.
+    c.env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM (
+         SELECT DISTINCT student_id FROM study_logs WHERE log_date LIKE ? || '%'
+           AND student_id IN (SELECT DISTINCT student_id FROM study_logs WHERE log_date LIKE ? || '%')
+       )`,
+    ).bind(prevMonth, thisMonth),
+    c.env.DB.prepare(
+      `SELECT COUNT(DISTINCT student_id) AS n FROM study_logs WHERE log_date LIKE ? || '%'`,
+    ).bind(prevMonth),
+  ]);
+
+  const series = (rows: unknown, valueKey = 'v') => {
+    const byMonth = new Map(((rows as { results?: Array<Record<string, unknown>> }).results ?? []).map((r) => [r.m as string, Number(r[valueKey]) || 0]));
+    return months.map((m) => byMonth.get(m) ?? 0);
+  };
+
+  const prevActive = Number((prevActiveRow.results?.[0] as { n: number } | undefined)?.n) || 0;
+  const retained = Number((retainedRow.results?.[0] as { n: number } | undefined)?.n) || 0;
+
+  return c.json({
+    months,
+    revenue: series(revenue),
+    classes: series(classes),
+    activeStudents: series(active),
+    newStudents: series(fresh),
+    courses: courses.results ?? [],
+    retention: {
+      rate: prevActive > 0 ? Math.round((retained / prevActive) * 100) : null,
+      retained,
+      lastMonthActive: prevActive,
+    },
+  });
+});
+
 // ===== Monthly earnings ("what will I get this month") =====
 
 core.get('/earnings', requirePermission('data:read'), async (c) => {

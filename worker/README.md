@@ -380,6 +380,7 @@ permissions scoped to this account.
 | GET    | `/bookings?from=`        | `data:read`    | Upcoming bookings (visibility-filtered), each with `meetLink` |
 | GET    | `/dashboard?range=`      | `data:read`    | `today` \| `week` \| `month` \| `year`; includes weekly classes. Class times are Bangkok (GMT+7) wall-clock strings — the admin panel converts them to the viewer's own device timezone for display (`today` in the response is the Bangkok calendar date `todayClasses` is bound to, needed to do that conversion correctly) |
 | GET    | `/notifications`         | `data:read`    | Role-aware "needs attention" feed for the topbar bell: admins get pending schedules/amendments + unpaid students; teachers get their own revise/rejected schedules + unpaid among assigned students. Stateless — items disappear when resolved |
+| GET    | `/analytics`             | admin          | Six-month trend series for the finance screen: revenue / classes taught / distinct active students / new registrations per month, current course mix, and month-over-month retention |
 | GET    | `/earnings?month=`       | `data:read`    | Admin: full totals. Teacher: assigned-students total only |
 | POST   | `/payment-links`         | admin          | Creates a Stripe payment link      |
 | GET    | `/payment-links`         | `data:read`    | Last 30 links with status          |
