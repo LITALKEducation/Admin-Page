@@ -399,6 +399,7 @@ permissions scoped to this account.
 | POST   | `/portal/:studentId/avatar` | (student's own Auth0 token) | Self-service photo upload (multipart `file`, image, ≤5MB) |
 | DELETE | `/portal/:studentId/avatar` | (student's own Auth0 token) | Self-service photo removal |
 | GET    | `/portal/:studentId/teacher-avatar/:identity` | (public, scoped) | Streams an assigned teacher's photo — 404s unless `identity` is actually assigned to `studentId` |
+| GET    | `/portal/:studentId/calendar.ics` | (public)      | Subscribe-able iCalendar feed of booked classes (last 30 days + future) for Google/Apple Calendar. Times emitted as UTC instants from the stored Bangkok wall-clock values; Meet links deliberately excluded (auth-gated capability) — events point at the portal |
 | POST   | `/chat`                  | (any valid token) | AI assistant for the admin panel (staff/teacher) — optional `studentId` grounds it in that student's data |
 | POST   | `/portal/:studentId/chat` | (public)      | AI assistant for the student portal, grounded in that student's own account data |
 | POST   | `/chat/general`          | (public)       | AI assistant for the general marketing site (home/programs/about) — not grounded in any account data; rate-limited by a client-generated `visitorId` instead of a student id |

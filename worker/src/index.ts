@@ -269,6 +269,77 @@ app.get('/portal/:studentId/teacher-avatar/:identity', async (c) => {
   });
 });
 
+// Subscribe-able iCalendar feed of the student's booked classes, for
+// Google/Apple Calendar ("เพิ่มลงปฏิทินอัตโนมัติ" on the portal). Public by
+// student id like the rest of /portal/* — calendar apps can't send an Auth0
+// token, and the feed exposes exactly what GET /portal/:studentId already
+// shows unauthenticated: dates and times. Meet links are deliberately NOT
+// included (they're the auth-gated join capability); events point at the
+// portal instead. Times are stored as Bangkok wall-clock strings and
+// emitted as UTC instants, so subscribers in any timezone see the class at
+// the correct local time.
+app.get('/portal/:studentId/calendar.ics', async (c) => {
+  const studentId = c.req.param('studentId');
+  const student = await c.env.DB.prepare(
+    `SELECT id FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+  )
+    .bind(studentId)
+    .first<{ id: string }>();
+  if (!student) return c.text('Not found', 404);
+
+  // Recent past too (30 days), so a fresh subscription doesn't look empty
+  // right after this week's class already happened.
+  const since = new Date(Date.now() + 7 * 3600_000 - 30 * 86400_000).toISOString().slice(0, 10);
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, booking_date AS date, booking_time AS time FROM bookings
+     WHERE student_id = ? AND status = 'booked' AND booking_date >= ?
+     ORDER BY booking_date, booking_time LIMIT 500`,
+  )
+    .bind(student.id, since)
+    .all<{ id: number; date: string; time: string }>();
+
+  const utc = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+  const stamp = utc(new Date());
+
+  const lines: string[] = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//LITALK Education//Student Portal//TH',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:${esc('คลาสเรียน LITALK')}`,
+    'X-WR-TIMEZONE:Asia/Bangkok',
+  ];
+  for (const b of results ?? []) {
+    const start = new Date(`${b.date}T${b.time}:00+07:00`);
+    if (isNaN(start.getTime())) continue;
+    const end = new Date(start.getTime() + 3600_000); // fixed 1-hour slots
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:booking-${b.id}@litalkeducation.com`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART:${utc(start)}`,
+      `DTEND:${utc(end)}`,
+      `SUMMARY:${esc('คลาสเรียน LITALK Education')}`,
+      `DESCRIPTION:${esc('ลิงก์เข้าเรียนและรายละเอียดอยู่ที่พอร์ทัลนักเรียน: https://litalkeducation.com/student')}`,
+      'URL:https://litalkeducation.com/student',
+      'END:VEVENT',
+    );
+  }
+  lines.push('END:VCALENDAR');
+
+  return new Response(lines.join('\r\n') + '\r\n', {
+    headers: {
+      'Content-Type': 'text/calendar; charset=utf-8',
+      // Calendar apps poll on their own schedule anyway; a short shared
+      // cache just absorbs repeat fetches.
+      'Cache-Control': 'public, max-age=900',
+      'Content-Disposition': 'inline; filename="litalk-classes.ics"',
+    },
+  });
+});
+
 // Public avatar for the student portal — the student's own photo is basic
 // profile data, so no auth (parity with the rest of the public portal).
 app.get('/portal/:studentId/avatar', async (c) => {
