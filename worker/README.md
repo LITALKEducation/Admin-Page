@@ -378,7 +378,7 @@ permissions scoped to this account.
 | PATCH  | `/payments/:id`          | admin          | Correct a payment's amount/method/date |
 | POST   | `/bookings`              | `data:write`   | 409 if the date+time slot is taken; response includes `meetLink` if Google Meet is configured |
 | GET    | `/bookings?from=`        | `data:read`    | Upcoming bookings (visibility-filtered), each with `meetLink` |
-| GET    | `/dashboard?range=`      | `data:read`    | `today` \| `week` \| `month` \| `year`; includes weekly classes |
+| GET    | `/dashboard?range=`      | `data:read`    | `today` \| `week` \| `month` \| `year`; includes weekly classes. Class times are Bangkok (GMT+7) wall-clock strings — the admin panel converts them to the viewer's own device timezone for display (`today` in the response is the Bangkok calendar date `todayClasses` is bound to, needed to do that conversion correctly) |
 | GET    | `/earnings?month=`       | `data:read`    | Admin: full totals. Teacher: assigned-students total only |
 | POST   | `/payment-links`         | admin          | Creates a Stripe payment link      |
 | GET    | `/payment-links`         | `data:read`    | Last 30 links with status          |

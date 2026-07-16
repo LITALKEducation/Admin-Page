@@ -4242,7 +4242,7 @@
                                 <span class="card-icon"><i class="fas fa-clock"></i></span>
                                 <div>
                                     <h3>คลาสวันนี้</h3>
-                                    <p>ตารางเรียนและสถานะการบันทึกผล</p>
+                                    <p>ตารางเรียนและสถานะการบันทึกผล (เวลาแสดงตามอุปกรณ์ของคุณ)</p>
                                 </div>
                             </div>
                             <div class="row-list" id="dash-today-classes"></div>
@@ -7344,7 +7344,7 @@
             const todayClasses = dashboardData.todayClasses || [];
             setHtmlWithReveal(document.getElementById('dash-today-classes'), todayClasses.length ? todayClasses.map(row => `
                 <div class="class-row">
-                    <div class="class-time">${escapeHtml(row.time || '-')}</div>
+                    <div class="class-time">${escapeHtml(formatClassTimeLocal(dashboardData.today, row.time))}</div>
                     <div class="class-info"><div class="name">${escapeHtml(row.name)}</div><div class="course">${escapeHtml(row.course || '')}</div></div>
                     <span class="class-status ${row.done ? 'done' : 'pending'}"><i class="${row.done ? 'fas fa-check-circle' : 'far fa-clock'}"></i> ${row.done ? 'บันทึกแล้ว' : 'รอบันทึกผล'}</span>
                     ${row.meetLink ? `<a href="${escapeHtml(row.meetLink)}" target="_blank" rel="noopener" class="class-log-btn"><i class="fas fa-video"></i> Meet</a>` : ''}
@@ -7381,7 +7381,7 @@
             const week = (dashboardData && dashboardData.weekClasses) || [];
             const start = dashboardData && dashboardData.weekStart;
             document.getElementById('dash-week-sub').textContent =
-                week.length ? `${week.length} คาบเรียนในสัปดาห์นี้` : 'ยังไม่มีคาบเรียนที่จองไว้ในสัปดาห์นี้';
+                (week.length ? `${week.length} คาบเรียนในสัปดาห์นี้` : 'ยังไม่มีคาบเรียนที่จองไว้ในสัปดาห์นี้') + ' (เวลาแสดงตามอุปกรณ์ของคุณ)';
 
             const days = [];
             const base = start ? new Date(start + 'T00:00:00') : new Date();
@@ -7394,7 +7394,7 @@
                     <div class="week-day">
                         <div class="week-day-head">${DOW[i]} <span>${d.getDate()}/${d.getMonth() + 1}</span></div>
                         <div class="week-day-body">
-                            ${items.length ? items.map(it => `<div class="week-slot"><b>${escapeHtml(it.time)}</b> ${escapeHtml(it.name)}</div>`).join('') : '<div class="week-empty">—</div>'}
+                            ${items.length ? items.map(it => `<div class="week-slot"><b>${escapeHtml(formatClassTimeLocal(it.date, it.time))}</b> ${escapeHtml(it.name)}</div>`).join('') : '<div class="week-empty">—</div>'}
                         </div>
                     </div>`);
             }
@@ -7403,6 +7403,36 @@
 
         function formatBaht(n) {
             return '฿' + Number(n || 0).toLocaleString('en-US');
+        }
+
+        // Class dates/times are stored and queried as Bangkok (GMT+7) wall-clock
+        // strings (see worker/src/dates.ts) — plain "YYYY-MM-DD"/"HH:MM" with no
+        // timezone info. Anchoring them explicitly to +07:00 here means the
+        // resulting Date is the correct absolute instant, so every
+        // toLocaleString/toLocaleTimeString call below renders in whatever
+        // timezone this device is actually set to (e.g. a teacher on GMT+0 sees
+        // a class booked for 08:00 Bangkok time as 01:00), instead of the raw
+        // Bangkok string being shown unconverted to every viewer everywhere.
+        function bangkokDateTime(dateYMD, timeHM) {
+            if (!dateYMD || !timeHM) return null;
+            const d = new Date(`${dateYMD}T${timeHM}:00+07:00`);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        // Formats a Bangkok-anchored class time for display in the viewer's own
+        // device timezone. Appends the date when converting shifts it onto a
+        // different calendar day than the Bangkok date it's stored under, so a
+        // teacher outside GMT+7 isn't misled about which day the class falls on
+        // for them.
+        function formatClassTimeLocal(dateYMD, timeHM) {
+            const d = bangkokDateTime(dateYMD, timeHM);
+            if (!d) return timeHM || '-';
+            const timeStr = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
+            const localYmd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            if (localYmd !== dateYMD) {
+                return `${timeStr} (${d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })})`;
+            }
+            return timeStr;
         }
 
         function formatShortThaiDate(dateYMD) {
