@@ -225,9 +225,12 @@ notifications center (`GET /notifications`: admins see the approval queue + unpa
 see their revise/rejected schedules + unpaid among assigned students; stateless — items
 clear when resolved).
 
-**Phase 3 — insight**: revenue/growth/attendance trend charts (SVG sparklines on stat
-cards first, full charts on finance screen) · retention + popular-course metrics ·
-smart reports (monthly summary email).
+**Phase 3 — insight (charts done)**: `GET /analytics` + a "สถิติย้อนหลัง 6 เดือน" block on
+the finance screen — inline-SVG monthly bar charts (revenue, classes taught, active
+students, new registrations; monochrome ink marks, selective value labels, hover
+tooltips, `<details>` table view per chart), horizontal course-mix bars, and stat
+tiles incl. month-over-month retention. Still open: smart reports (monthly summary
+email).
 
 **Phase 4 — student engagement**: learning progress (% of paid hours used, streaks) ·
 achievements/certificates timeline · calendar sync (ICS feed per student) · push

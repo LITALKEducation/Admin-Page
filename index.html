@@ -2573,6 +2573,127 @@
             border-bottom: none;
         }
 
+        /* ===== Analytics charts (finance screen, docs/UX-REDESIGN.md phase 3) ===== */
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        @media (max-width: 700px) {
+            .analytics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .analytics-block h4 {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .analytics-block svg {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        .analytics-block svg text {
+            font-family: 'Montserrat', 'Noto Sans Thai', sans-serif;
+        }
+
+        /* Shared fixed-position tooltip; one element serves every chart. */
+        .chart-tooltip {
+            position: fixed;
+            z-index: 1500;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: var(--shadow-pop);
+            padding: 6px 10px;
+            font-size: 12px;
+            color: var(--text-primary);
+            pointer-events: none;
+            display: none;
+            white-space: nowrap;
+        }
+
+        .chart-tooltip .tt-label {
+            color: var(--text-muted);
+            margin-right: 6px;
+        }
+
+        /* Accessible table view behind a disclosure, per chart. */
+        .chart-table {
+            margin-top: 6px;
+        }
+
+        .chart-table summary {
+            font-size: 11.5px;
+            color: var(--text-muted);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .chart-table table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-top: 6px;
+        }
+
+        .chart-table th,
+        .chart-table td {
+            text-align: left;
+            padding: 4px 8px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .chart-table td:last-child,
+        .chart-table th:last-child {
+            text-align: right;
+        }
+
+        /* Horizontal bars for the course mix. */
+        .hbar-row {
+            display: grid;
+            grid-template-columns: minmax(90px, 160px) 1fr 48px;
+            align-items: center;
+            gap: 10px;
+            padding: 5px 0;
+        }
+
+        .hbar-label {
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .hbar-track {
+            height: 10px;
+            border-radius: 5px;
+            background-color: var(--bg-tertiary);
+            overflow: hidden;
+        }
+
+        .hbar-fill {
+            height: 100%;
+            border-radius: 5px;
+            background-color: var(--text-primary);
+            min-width: 2px;
+        }
+
+        .hbar-value {
+            font-size: 12px;
+            color: var(--text-primary);
+            font-weight: 600;
+            text-align: right;
+        }
+
         /* ===== Mobile bottom navigation (docs/UX-REDESIGN.md phase 2) =====
            The sidebar disappears at <=900px, leaving 14 screens behind the
            hamburger drawer alone. Surface the 4 highest-frequency screens +
@@ -5405,6 +5526,40 @@
                             <div class="form-hint">กำลังโหลดข้อมูล...</div>
                         </div>
                     </div>
+
+                    <!-- Six-month trends (independent of the month picker above) -->
+                    <div class="admin-card" style="margin-top: 20px;">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-chart-column"></i></span>
+                            <div>
+                                <h3>สถิติย้อนหลัง 6 เดือน</h3>
+                                <p>แนวโน้มรายรับ คลาสที่สอน และการเติบโตของนักเรียน (ไม่ขึ้นกับเดือนที่เลือกด้านบน)</p>
+                            </div>
+                        </div>
+                        <div class="stat-grid" id="analytics-tiles" style="margin-bottom: 16px;"></div>
+                        <div class="analytics-grid">
+                            <div class="analytics-block">
+                                <h4>รายรับต่อเดือน</h4>
+                                <div id="chart-revenue"><div class="form-hint">กำลังโหลดข้อมูล...</div></div>
+                            </div>
+                            <div class="analytics-block">
+                                <h4>คลาสที่สอนต่อเดือน</h4>
+                                <div id="chart-classes"></div>
+                            </div>
+                            <div class="analytics-block">
+                                <h4>นักเรียนที่มาเรียนต่อเดือน</h4>
+                                <div id="chart-active"></div>
+                            </div>
+                            <div class="analytics-block">
+                                <h4>นักเรียนใหม่ต่อเดือน</h4>
+                                <div id="chart-new"></div>
+                            </div>
+                        </div>
+                        <div class="analytics-block" style="margin-top: 16px;">
+                            <h4>คอร์สยอดนิยม (นักเรียนปัจจุบัน)</h4>
+                            <div id="chart-courses"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ============ TEACHER / STAFF ACCOUNTS (ADMIN) ============ -->
@@ -6632,6 +6787,7 @@
             }
             if (screen === 'finance') {
                 loadFinance();
+                loadAnalytics();
             }
             if (screen === 'access') {
                 loadTeacherAssignments();
@@ -9881,6 +10037,159 @@
             } catch (error) {
                 console.error('loadFinance:', error);
                 statGrid.innerHTML = '<div class="form-hint">โหลดข้อมูลการเงินไม่สำเร็จ (เฉพาะแอดมิน)</div>';
+            }
+        }
+
+        // ===== Six-month analytics (finance screen, docs/UX-REDESIGN.md phase 3) =====
+
+        // One shared tooltip element serves every chart (created on first use).
+        function chartTooltip() {
+            let el = document.getElementById('chart-tooltip');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'chart-tooltip';
+                el.className = 'chart-tooltip';
+                document.body.appendChild(el);
+            }
+            return el;
+        }
+
+        function showChartTooltip(evt, label, value) {
+            const el = chartTooltip();
+            el.innerHTML = `<span class="tt-label">${escapeHtml(label)}</span><b>${escapeHtml(value)}</b>`;
+            el.style.display = 'block';
+            const pad = 12;
+            const w = el.offsetWidth;
+            let x = evt.clientX + pad;
+            if (x + w > window.innerWidth - 8) x = evt.clientX - w - pad;
+            el.style.left = x + 'px';
+            el.style.top = (evt.clientY - 34) + 'px';
+        }
+
+        function hideChartTooltip() {
+            const el = document.getElementById('chart-tooltip');
+            if (el) el.style.display = 'none';
+        }
+
+        function thaiMonthShort(ym) {
+            const d = new Date(ym + '-01T00:00:00');
+            return isNaN(d.getTime()) ? ym : d.toLocaleDateString('th-TH', { month: 'short' });
+        }
+
+        // Single-series monthly bar chart as inline SVG: monochrome ink bars
+        // (identity is carried by the block title, so no legend), recessive
+        // baseline + midline grid, selective value labels (max + latest only),
+        // full-height hover targets with a tooltip, and a <details> table view
+        // for screen readers / precise reading.
+        function renderBarChart(elId, months, values, format) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            const W = 520, H = 170, top = 22, bottom = 24, side = 8;
+            const plotH = H - top - bottom;
+            const max = Math.max(...values, 1);
+            const slot = (W - side * 2) / months.length;
+            const barW = Math.min(36, slot * 0.5);
+            const maxIdx = values.indexOf(Math.max(...values));
+            const lastIdx = values.length - 1;
+
+            let bars = '';
+            months.forEach((m, i) => {
+                const v = values[i];
+                const h = Math.round((v / max) * plotH);
+                const x = side + i * slot + (slot - barW) / 2;
+                const y = top + plotH - h;
+                const r = Math.min(4, h);
+                // Rounded top corners only — the data-end wears the radius, the
+                // baseline end stays square (see dataviz mark specs).
+                const barPath = h > 0
+                    ? `M ${x} ${top + plotH} L ${x} ${y + r} Q ${x} ${y} ${x + r} ${y} L ${x + barW - r} ${y} Q ${x + barW} ${y} ${x + barW} ${y + r} L ${x + barW} ${top + plotH} Z`
+                    : '';
+                if (barPath) bars += `<path d="${barPath}" style="fill: var(--text-primary);" data-bar="${i}"></path>`;
+                if ((i === maxIdx && values[maxIdx] > 0) || i === lastIdx) {
+                    bars += `<text x="${x + barW / 2}" y="${y - 6}" text-anchor="middle" font-size="11" font-weight="600" style="fill: var(--text-primary);">${escapeHtml(format(v))}</text>`;
+                }
+                bars += `<text x="${side + i * slot + slot / 2}" y="${H - 8}" text-anchor="middle" font-size="10.5" style="fill: var(--text-muted);">${escapeHtml(thaiMonthShort(m))}</text>`;
+                // Full-height invisible hit target — bigger than the mark.
+                bars += `<rect x="${side + i * slot}" y="${top}" width="${slot}" height="${plotH}" fill="transparent" data-hit="${i}"></rect>`;
+            });
+
+            const midY = top + plotH / 2;
+            el.innerHTML = `
+                <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="กราฟแท่งรายเดือน">
+                    <line x1="${side}" y1="${midY}" x2="${W - side}" y2="${midY}" style="stroke: var(--border-color);" stroke-width="1" stroke-dasharray="3 4"></line>
+                    <line x1="${side}" y1="${top + plotH}" x2="${W - side}" y2="${top + plotH}" style="stroke: var(--border-color);" stroke-width="1"></line>
+                    ${bars}
+                </svg>
+                <details class="chart-table">
+                    <summary>ดูข้อมูลเป็นตาราง</summary>
+                    <table><thead><tr><th>เดือน</th><th>ค่า</th></tr></thead><tbody>
+                        ${months.map((m, i) => `<tr><td>${escapeHtml(formatThaiMonthYearShort(m))}</td><td>${escapeHtml(format(values[i]))}</td></tr>`).join('')}
+                    </tbody></table>
+                </details>`;
+
+            el.querySelectorAll('[data-hit]').forEach(hit => {
+                const i = Number(hit.getAttribute('data-hit'));
+                const move = (evt) => showChartTooltip(evt, formatThaiMonthYearShort(months[i]), format(values[i]));
+                hit.addEventListener('mouseenter', move);
+                hit.addEventListener('mousemove', move);
+                hit.addEventListener('mouseleave', hideChartTooltip);
+            });
+        }
+
+        // Course mix as labeled horizontal bars (few categories, long Thai
+        // labels — horizontal reads better than a pie ever would).
+        function renderCourseBars(elId, courses) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            if (!courses.length) {
+                el.innerHTML = '<div class="form-hint">ยังไม่มีข้อมูลนักเรียน</div>';
+                return;
+            }
+            const max = Math.max(...courses.map(cs => cs.n), 1);
+            el.innerHTML = courses.map(cs => `
+                <div class="hbar-row">
+                    <span class="hbar-label" title="${escapeHtml(cs.course)}">${escapeHtml(cs.course)}</span>
+                    <div class="hbar-track"><div class="hbar-fill" style="width: ${Math.round((cs.n / max) * 100)}%;"></div></div>
+                    <span class="hbar-value">${cs.n} คน</span>
+                </div>`).join('');
+        }
+
+        async function loadAnalytics() {
+            const tiles = document.getElementById('analytics-tiles');
+            if (!tiles) return;
+            try {
+                const response = await apiFetch('/analytics');
+                const d = await response.json();
+                if (!response.ok) throw new Error(d.error || 'load failed');
+
+                const sum = (arr) => arr.reduce((a, b) => a + b, 0);
+                const money = (v) => formatBaht(v);
+                const count = (v) => String(v);
+
+                tiles.innerHTML = [
+                    {
+                        label: 'นักเรียนเรียนต่อเนื่อง', icon: 'fas fa-user-check',
+                        value: d.retention.rate === null ? '—' : d.retention.rate + '%',
+                        sub: d.retention.rate === null ? 'ยังไม่มีข้อมูลเดือนก่อน' : `${d.retention.retained} จาก ${d.retention.lastMonthActive} คนของเดือนก่อนยังเรียนเดือนนี้`,
+                    },
+                    { label: 'รายรับรวม 6 เดือน', icon: 'fas fa-sack-dollar', value: formatBaht(sum(d.revenue)), sub: 'รวมทุกช่องทางชำระเงิน' },
+                    { label: 'คลาสรวม 6 เดือน', icon: 'fas fa-chalkboard-teacher', value: `${sum(d.classes)} คลาส`, sub: 'จากบันทึกการเรียนทั้งหมด' },
+                    { label: 'นักเรียนใหม่ 6 เดือน', icon: 'fas fa-user-plus', value: `${sum(d.newStudents)} คน`, sub: 'บัญชีที่สร้างใหม่ในระบบ' },
+                ].map(c => `
+                    <div class="stat-card">
+                        <div class="stat-card-top"><span class="stat-card-label">${c.label}</span><i class="${c.icon}"></i></div>
+                        <div class="stat-card-value">${c.value}</div>
+                        <div class="stat-card-sub">${escapeHtml(c.sub)}</div>
+                    </div>`).join('');
+
+                renderBarChart('chart-revenue', d.months, d.revenue, money);
+                renderBarChart('chart-classes', d.months, d.classes, count);
+                renderBarChart('chart-active', d.months, d.activeStudents, count);
+                renderBarChart('chart-new', d.months, d.newStudents, count);
+                renderCourseBars('chart-courses', d.courses || []);
+            } catch (error) {
+                console.error('loadAnalytics:', error);
+                tiles.innerHTML = '<div class="form-hint">โหลดสถิติไม่สำเร็จ (เฉพาะแอดมิน)</div>';
             }
         }
 
