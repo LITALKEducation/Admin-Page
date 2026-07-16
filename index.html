@@ -4242,7 +4242,7 @@
                                 <span class="card-icon"><i class="fas fa-clock"></i></span>
                                 <div>
                                     <h3>คลาสวันนี้</h3>
-                                    <p>ตารางเรียนและสถานะการบันทึกผล</p>
+                                    <p>ตารางเรียนและสถานะการบันทึกผล (เวลาแสดงตามอุปกรณ์ของคุณ)</p>
                                 </div>
                             </div>
                             <div class="row-list" id="dash-today-classes"></div>
@@ -5018,7 +5018,7 @@
                                 <span class="card-icon"><i class="fas fa-calendar-day"></i></span>
                                 <div>
                                     <h3>วันเรียนที่กำลังจะถึง</h3>
-                                    <p>คลาสที่จองไว้ และสถานะตารางเรียนรายเดือน</p>
+                                    <p>คลาสที่จองไว้ และสถานะตารางเรียนรายเดือน (เวลาแสดงตามอุปกรณ์ของคุณ)</p>
                                 </div>
                             </div>
                             <div class="row-list" id="check-upcoming"></div>
@@ -5163,7 +5163,7 @@
                             <span class="card-icon"><i class="fas fa-list-check"></i></span>
                             <div>
                                 <h3>รายการตารางเรียน</h3>
-                                <p>สถานะ: รออนุมัติ → อนุมัติแล้ว (รอชำระเงิน) → กำลังใช้งาน</p>
+                                <p>สถานะ: รออนุมัติ → อนุมัติแล้ว (รอชำระเงิน) → กำลังใช้งาน (เวลาแสดงตามอุปกรณ์ของคุณ)</p>
                             </div>
                         </div>
                         <div class="row-list" id="schedule-list">
@@ -5237,7 +5237,7 @@
                             <span class="card-icon"><i class="fas fa-clipboard-list"></i></span>
                             <div>
                                 <h3>คำร้องเพิ่ม/ถอนชั่วโมงเรียน</h3>
-                                <p>รายการคำร้องล่าสุด</p>
+                                <p>รายการคำร้องล่าสุด (เวลาแสดงตามอุปกรณ์ของคุณ)</p>
                             </div>
                         </div>
                         <div class="row-list" id="amendment-list">
@@ -7344,7 +7344,7 @@
             const todayClasses = dashboardData.todayClasses || [];
             setHtmlWithReveal(document.getElementById('dash-today-classes'), todayClasses.length ? todayClasses.map(row => `
                 <div class="class-row">
-                    <div class="class-time">${escapeHtml(row.time || '-')}</div>
+                    <div class="class-time">${escapeHtml(formatClassTimeLocal(dashboardData.today, row.time))}</div>
                     <div class="class-info"><div class="name">${escapeHtml(row.name)}</div><div class="course">${escapeHtml(row.course || '')}</div></div>
                     <span class="class-status ${row.done ? 'done' : 'pending'}"><i class="${row.done ? 'fas fa-check-circle' : 'far fa-clock'}"></i> ${row.done ? 'บันทึกแล้ว' : 'รอบันทึกผล'}</span>
                     ${row.meetLink ? `<a href="${escapeHtml(row.meetLink)}" target="_blank" rel="noopener" class="class-log-btn"><i class="fas fa-video"></i> Meet</a>` : ''}
@@ -7381,7 +7381,7 @@
             const week = (dashboardData && dashboardData.weekClasses) || [];
             const start = dashboardData && dashboardData.weekStart;
             document.getElementById('dash-week-sub').textContent =
-                week.length ? `${week.length} คาบเรียนในสัปดาห์นี้` : 'ยังไม่มีคาบเรียนที่จองไว้ในสัปดาห์นี้';
+                (week.length ? `${week.length} คาบเรียนในสัปดาห์นี้` : 'ยังไม่มีคาบเรียนที่จองไว้ในสัปดาห์นี้') + ' (เวลาแสดงตามอุปกรณ์ของคุณ)';
 
             const days = [];
             const base = start ? new Date(start + 'T00:00:00') : new Date();
@@ -7394,7 +7394,7 @@
                     <div class="week-day">
                         <div class="week-day-head">${DOW[i]} <span>${d.getDate()}/${d.getMonth() + 1}</span></div>
                         <div class="week-day-body">
-                            ${items.length ? items.map(it => `<div class="week-slot"><b>${escapeHtml(it.time)}</b> ${escapeHtml(it.name)}</div>`).join('') : '<div class="week-empty">—</div>'}
+                            ${items.length ? items.map(it => `<div class="week-slot"><b>${escapeHtml(formatClassTimeLocal(it.date, it.time))}</b> ${escapeHtml(it.name)}</div>`).join('') : '<div class="week-empty">—</div>'}
                         </div>
                     </div>`);
             }
@@ -7403,6 +7403,36 @@
 
         function formatBaht(n) {
             return '฿' + Number(n || 0).toLocaleString('en-US');
+        }
+
+        // Class dates/times are stored and queried as Bangkok (GMT+7) wall-clock
+        // strings (see worker/src/dates.ts) — plain "YYYY-MM-DD"/"HH:MM" with no
+        // timezone info. Anchoring them explicitly to +07:00 here means the
+        // resulting Date is the correct absolute instant, so every
+        // toLocaleString/toLocaleTimeString call below renders in whatever
+        // timezone this device is actually set to (e.g. a teacher on GMT+0 sees
+        // a class booked for 08:00 Bangkok time as 01:00), instead of the raw
+        // Bangkok string being shown unconverted to every viewer everywhere.
+        function bangkokDateTime(dateYMD, timeHM) {
+            if (!dateYMD || !timeHM) return null;
+            const d = new Date(`${dateYMD}T${timeHM}:00+07:00`);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        // Formats a Bangkok-anchored class time for display in the viewer's own
+        // device timezone. Appends the date when converting shifts it onto a
+        // different calendar day than the Bangkok date it's stored under, so a
+        // teacher outside GMT+7 isn't misled about which day the class falls on
+        // for them.
+        function formatClassTimeLocal(dateYMD, timeHM) {
+            const d = bangkokDateTime(dateYMD, timeHM);
+            if (!d) return timeHM || '-';
+            const timeStr = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
+            const localYmd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            if (localYmd !== dateYMD) {
+                return `${timeStr} (${d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })})`;
+            }
+            return timeStr;
         }
 
         function formatShortThaiDate(dateYMD) {
@@ -7968,7 +7998,7 @@
             const upcoming = d.upcomingClasses || [];
             document.getElementById('check-upcoming').innerHTML = upcoming.length ? upcoming.map(b => `
                 <div class="class-row">
-                    <div class="class-time">${escapeHtml(b.time)}</div>
+                    <div class="class-time">${escapeHtml(formatClassTimeLocal(b.date, b.time))}</div>
                     <div class="class-info"><div class="name">${escapeHtml(new Date(b.date + 'T00:00:00').toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long' }))}</div><div class="course">${escapeHtml(b.notes || '')}</div></div>
                 </div>`).join('') : '<div class="form-hint">ยังไม่มีคลาสที่จองไว้ล่วงหน้า</div>';
 
@@ -7978,7 +8008,7 @@
                 const sessionRows = sessions.map(s => `
                     <tr>
                         <td>${escapeHtml(formatShortThaiDate(s.date))}</td>
-                        <td>${escapeHtml(s.time)}</td>
+                        <td>${escapeHtml(formatClassTimeLocal(s.date, s.time))}</td>
                     </tr>`).join('');
                 return `
                 <div class="payment-row" style="align-items: flex-start;">
@@ -8460,7 +8490,7 @@
         }
 
         function renderScheduleRow(r, admin) {
-            const sessions = (r.sessions || []).map(s => `${formatShortThaiDate(s.date)} ${s.time}`).join(' · ');
+            const sessions = (r.sessions || []).map(s => `${formatShortThaiDate(s.date)} ${formatClassTimeLocal(s.date, s.time)}`).join(' · ');
             const statusColor = r.status === 'active' ? 'var(--accent-success)' : (r.status === 'rejected' || r.status === 'cancelled') ? 'var(--accent-danger)' : (r.status === 'revise' ? 'var(--accent-danger)' : 'var(--text-muted)');
             const mine = filesApiMe && (r.createdBy || '').toLowerCase() === (filesApiMe.email || '').toLowerCase();
             let buttons = '';
@@ -8807,7 +8837,7 @@
             list.innerHTML = sessions.length ? sessions.map((s, i) => `
                 <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); cursor: pointer;">
                     <input type="checkbox" class="amend-remove-check" data-date="${escapeHtml(s.date)}" data-time="${escapeHtml(s.time)}">
-                    ${escapeHtml(formatShortThaiDate(s.date))} ${escapeHtml(s.time)}
+                    ${escapeHtml(formatShortThaiDate(s.date))} ${escapeHtml(formatClassTimeLocal(s.date, s.time))}
                 </label>`).join('') : '<div class="form-hint">เลือกตารางเรียนก่อน</div>';
         }
 
@@ -8888,7 +8918,7 @@
         }
 
         function renderAmendmentRow(r, admin) {
-            const sessions = (r.sessions || []).map(s => `${formatShortThaiDate(s.date)} ${s.time}`).join(' · ');
+            const sessions = (r.sessions || []).map(s => `${formatShortThaiDate(s.date)} ${formatClassTimeLocal(s.date, s.time)}`).join(' · ');
             const statusColor = r.status === 'applied' ? 'var(--accent-success)' : (r.status === 'rejected' || r.status === 'cancelled') ? 'var(--accent-danger)' : 'var(--text-muted)';
             const mine = filesApiMe && (r.createdBy || '').toLowerCase() === (filesApiMe.email || '').toLowerCase();
             let buttons = '';
@@ -9585,7 +9615,7 @@
                 const myEmail = (filesApiMe && filesApiMe.email ? filesApiMe.email : '').toLowerCase();
                 wrap.innerHTML = `
                     <table class="data-table">
-                        <thead><tr><th>วันที่</th><th>เวลา</th><th>นักเรียน</th><th>คอร์ส</th><th>ลิงก์เรียน</th><th>จัดการ</th></tr></thead>
+                        <thead><tr><th>วันที่</th><th>เวลา (ตามอุปกรณ์ของคุณ)</th><th>นักเรียน</th><th>คอร์ส</th><th>ลิงก์เรียน</th><th>จัดการ</th></tr></thead>
                         <tbody>
                             ${rows.map(b => {
                                 // Only the creator (or an admin) may edit/cancel a row.
@@ -9600,7 +9630,7 @@
                                 return `
                                 <tr>
                                     <td>${escapeHtml(new Date(b.date + 'T00:00:00').toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' }))}</td>
-                                    <td>${escapeHtml(b.time)}</td>
+                                    <td>${escapeHtml(formatClassTimeLocal(b.date, b.time))}</td>
                                     <td>${escapeHtml(b.studentName)}</td>
                                     <td>${escapeHtml(b.course || '-')}</td>
                                     <td>${linkCell}</td>
@@ -10969,8 +10999,10 @@
             <button type="submit" class="ai-chat-panel__send" id="ai-chat-send" aria-label="ส่ง"><i class="fas fa-paper-plane"></i></button>
         </form>
         <div class="ai-chat-settings" id="ai-chat-settings">
-            <span class="ai-chat-settings__label">คำแนะนำเพิ่มเติมสำหรับ AI (กำหนดทิศทางการตอบ เช่น น้ำเสียง สิ่งที่ควรเน้นหรือหลีกเลี่ยง) — มีผลกับแชทของครู/แอดมินและพอร์ทัลนักเรียน/ผู้ปกครองทั้งหมด</span>
-            <textarea class="ai-chat-settings__textarea" id="ai-chat-settings-input" maxlength="4000" placeholder="เช่น ตอบให้กระชับเป็นพิเศษ, เน้นแนะนำให้ติดต่อเจ้าหน้าที่สำหรับเรื่องการเงิน, ใช้คำลงท้าย 'ค่ะ'..."></textarea>
+            <span class="ai-chat-settings__label">คำแนะนำสำหรับแชทของครู/แอดมิน (ในระบบหลังบ้านนี้เท่านั้น)</span>
+            <textarea class="ai-chat-settings__textarea" id="ai-chat-settings-staff-input" maxlength="4000" placeholder="เช่น ตอบให้กระชับเป็นพิเศษ, เน้นแนะนำให้ติดต่อเจ้าหน้าที่สำหรับเรื่องการเงิน..."></textarea>
+            <span class="ai-chat-settings__label">คำแนะนำสำหรับแชทฝั่งผู้ปกครอง/นักเรียน (พอร์ทัลนักเรียน และแชททั่วไปบนหน้าเว็บหลัก)</span>
+            <textarea class="ai-chat-settings__textarea" id="ai-chat-settings-portal-input" maxlength="4000" placeholder="เช่น ใช้คำลงท้าย 'ค่ะ', เน้นน้ำเสียงเป็นกันเอง..."></textarea>
             <div class="ai-chat-settings__actions">
                 <button type="button" class="btn-secondary" onclick="toggleAIChatSettings(false)">ยกเลิก</button>
                 <button type="button" class="btn-primary" id="ai-chat-settings-save" onclick="saveAIChatSettings()">บันทึก</button>
@@ -11097,29 +11129,36 @@
             const open = typeof force === 'boolean' ? force : !panel.classList.contains('open');
             panel.classList.toggle('open', open);
             if (open) {
-                const textarea = document.getElementById('ai-chat-settings-input');
-                textarea.value = 'กำลังโหลด...';
-                textarea.disabled = true;
+                const staffTextarea = document.getElementById('ai-chat-settings-staff-input');
+                const portalTextarea = document.getElementById('ai-chat-settings-portal-input');
+                staffTextarea.value = 'กำลังโหลด...';
+                portalTextarea.value = 'กำลังโหลด...';
+                staffTextarea.disabled = true;
+                portalTextarea.disabled = true;
                 try {
                     const res = await apiFetch('/settings/ai-instructions');
                     const data = await res.json().catch(() => ({}));
-                    textarea.value = res.ok ? (data.instructions || '') : '';
+                    staffTextarea.value = res.ok ? (data.staffInstructions || '') : '';
+                    portalTextarea.value = res.ok ? (data.portalInstructions || '') : '';
                 } catch (err) {
-                    textarea.value = '';
+                    staffTextarea.value = '';
+                    portalTextarea.value = '';
                 } finally {
-                    textarea.disabled = false;
+                    staffTextarea.disabled = false;
+                    portalTextarea.disabled = false;
                 }
             }
         }
 
         async function saveAIChatSettings() {
-            const textarea = document.getElementById('ai-chat-settings-input');
+            const staffTextarea = document.getElementById('ai-chat-settings-staff-input');
+            const portalTextarea = document.getElementById('ai-chat-settings-portal-input');
             const saveBtn = document.getElementById('ai-chat-settings-save');
             saveBtn.disabled = true;
             try {
                 const res = await apiFetch('/settings/ai-instructions', {
                     method: 'PUT',
-                    body: JSON.stringify({ instructions: textarea.value }),
+                    body: JSON.stringify({ staffInstructions: staffTextarea.value, portalInstructions: portalTextarea.value }),
                 });
                 if (!res.ok) {
                     if (typeof showModal === 'function') showModal('ผิดพลาด', 'บันทึกไม่สำเร็จ กรุณาลองใหม่', 'error');

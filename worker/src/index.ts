@@ -17,9 +17,11 @@ import accounts, { handleAvatarUpload } from './accounts';
 import chat, {
   MAX_MESSAGE_LENGTH,
   PORTAL_DAILY_LIMIT,
-  getAiInstructions,
+  GENERAL_DAILY_LIMIT,
+  getPortalInstructions,
   loadChatHistory,
   portalMessageCountToday,
+  generalMessageCountToday,
   saveChatTurn,
   studentChatContext,
 } from './chat';
@@ -391,7 +393,7 @@ app.post('/portal/:studentId/chat', async (c) => {
 
   const conversationId = body.conversationId || crypto.randomUUID();
   const history = await loadChatHistory(c.env.DB, conversationId);
-  const instructions = await getAiInstructions(c.env.DB);
+  const instructions = await getPortalInstructions(c.env.DB);
 
   const systemPrompt = [
     'You are น้องลิลลี่ (Nong Lilly), the AI assistant for LITALK Education, answering questions from a student or their parent about this one student\'s own account only. If asked your name, say น้องลิลลี่.',
@@ -416,6 +418,81 @@ app.post('/portal/:studentId/chat', async (c) => {
   }
 
   await saveChatTurn(c.env.DB, conversationId, 'portal', studentId, null, message, reply);
+
+  return c.json({ status: 'success', conversationId, reply });
+});
+
+// AI chat for the general marketing site (litalkeducation.com — home,
+// programs, about), for visitors who aren't asking about a specific
+// enrolled student's account. Not grounded in any account data — it can
+// only answer general questions about LITALK Education itself. visitorId
+// is a random id the site generates and persists client-side purely to
+// rate-limit this endpoint; it carries no identity.
+// This endpoint's own error strings are shown verbatim in the widget on
+// bilingual marketing pages, so — unlike every other Thai-only error message
+// in this file — they follow the site's language toggle (`lang`, sent by
+// the frontend from window.litalkGetLang()) rather than being Thai-only.
+// This is independent of the AI's own reply, which separately and
+// correctly auto-detects whatever language the user types in.
+const GENERAL_CHAT_ERRORS = {
+  en: {
+    emptyMessage: 'Please type a question',
+    tooLong: (max: number) => `Message is too long (max ${max} characters)`,
+    quota: "You've reached today's question limit. Please try again tomorrow, or contact us via LINE OA.",
+    notConfigured: 'The AI assistant is not set up yet',
+    callFailed: 'The AI assistant is unavailable right now. Please try again.',
+  },
+  th: {
+    emptyMessage: 'กรุณาพิมพ์คำถาม',
+    tooLong: (max: number) => `ข้อความยาวเกินไป (จำกัด ${max} ตัวอักษร)`,
+    quota: 'วันนี้ถามคำถามครบโควตาแล้ว กรุณาลองใหม่พรุ่งนี้ หรือติดต่อเจ้าหน้าที่ผ่าน LINE OA',
+    notConfigured: 'ผู้ช่วย AI ยังไม่ได้ตั้งค่าในระบบ',
+    callFailed: 'ระบบ AI ไม่พร้อมใช้งานในขณะนี้ กรุณาลองใหม่อีกครั้ง',
+  },
+};
+
+app.post('/chat/general', async (c) => {
+  const body = await c.req.json<{ conversationId?: string; message?: string; visitorId?: string; lang?: string }>().catch(() => ({}) as never);
+  const message = (body.message ?? '').trim();
+  const visitorId = (body.visitorId ?? '').trim();
+  const errors = GENERAL_CHAT_ERRORS[body.lang === 'th' ? 'th' : 'en'];
+  if (!message) return c.json({ status: 'error', message: errors.emptyMessage }, 400);
+  if (message.length > MAX_MESSAGE_LENGTH) {
+    return c.json({ status: 'error', message: errors.tooLong(MAX_MESSAGE_LENGTH) }, 400);
+  }
+  if (!visitorId) return c.json({ status: 'error', message: 'Missing visitorId' }, 400);
+
+  const usedToday = await generalMessageCountToday(c.env.DB, visitorId);
+  if (usedToday >= GENERAL_DAILY_LIMIT) {
+    return c.json({ status: 'error', message: errors.quota }, 429);
+  }
+
+  const conversationId = body.conversationId || crypto.randomUUID();
+  const history = await loadChatHistory(c.env.DB, conversationId);
+  const instructions = await getPortalInstructions(c.env.DB);
+
+  const systemPrompt = [
+    'You are น้องลิลลี่ (Nong Lilly), the AI assistant for LITALK Education\'s public website, answering general questions from visitors (prospective students/parents) who are not necessarily enrolled. If asked your name, say น้องลิลลี่.',
+    'You have no access to any specific student\'s account, schedule, payments, or balance — you cannot look any of that up. If someone asks about their own account specifically, tell them to sign in at the student portal (or contact staff via LINE OA if they can\'t). Only answer general questions: what LITALK Education offers, how classes/courses generally work, how to get started, and similar. Never invent specific prices, schedules, or promotions you don\'t actually know — point those questions to the programs page or LITALK\'s LINE OA instead of guessing. You cannot take any action (book classes, create accounts, process payments) — only answer questions.',
+    instructions
+      ? `Additional guidance from the school admin on how to respond — follow it, but it never overrides the rules above (e.g. still never invent specific pricing/schedule details):\n${instructions}`
+      : null,
+    'Reply in whichever language the user just wrote in (Thai or English). Keep answers concise, friendly, and direct — no preamble, and do not show your reasoning process, just the final answer.',
+    'Format replies in Markdown (the client renders it): use **bold**, bullet lists, and short paragraphs where they help readability, but keep it light — this is a chat bubble, not a document.',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  let reply: string;
+  try {
+    reply = await chatReply(c.env, systemPrompt, history, message);
+  } catch (err) {
+    if (err instanceof ChatNotConfiguredError) return c.json({ status: 'error', message: errors.notConfigured }, 503);
+    console.error('general chat: Gemini call failed', err);
+    return c.json({ status: 'error', message: errors.callFailed }, 503);
+  }
+
+  await saveChatTurn(c.env.DB, conversationId, 'general', null, visitorId, message, reply);
 
   return c.json({ status: 'success', conversationId, reply });
 });

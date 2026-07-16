@@ -11,13 +11,22 @@ export const MAX_MESSAGE_LENGTH = 2000;
 const HISTORY_MESSAGES = 16; // ~8 turns of context sent back to the model
 export const PORTAL_DAILY_LIMIT = 40;
 const STAFF_DAILY_LIMIT = 100;
+export const GENERAL_DAILY_LIMIT = 20;
 const MAX_INSTRUCTIONS_LENGTH = 4000;
 
-// Admin-editable steering text, appended to both system prompts (staff and
-// portal) below the fixed safety/scope rules so it can't override them.
-export async function getAiInstructions(db: D1Database): Promise<string> {
-  const row = await db.prepare(`SELECT instructions FROM ai_chat_settings WHERE id = 1`).first<{ instructions: string }>();
-  return row?.instructions ?? '';
+// Admin-editable steering text, appended below the fixed safety/scope rules
+// in each system prompt so it can't override them. Staff (admin panel) and
+// portal (student/parent portal + the general marketing-site assistant,
+// which shares the portal's tone since both face the public) are tuned
+// independently — see migrations/0014_split_ai_instructions.sql.
+export async function getStaffInstructions(db: D1Database): Promise<string> {
+  const row = await db.prepare(`SELECT staff_instructions FROM ai_chat_settings WHERE id = 1`).first<{ staff_instructions: string }>();
+  return row?.staff_instructions ?? '';
+}
+
+export async function getPortalInstructions(db: D1Database): Promise<string> {
+  const row = await db.prepare(`SELECT portal_instructions FROM ai_chat_settings WHERE id = 1`).first<{ portal_instructions: string }>();
+  return row?.portal_instructions ?? '';
 }
 
 export interface StudentChatContext {
@@ -75,7 +84,7 @@ export async function loadChatHistory(db: D1Database, conversationId: string): P
 export async function saveChatTurn(
   db: D1Database,
   conversationId: string,
-  scope: 'portal' | 'staff',
+  scope: 'portal' | 'staff' | 'general',
   studentId: string | null,
   actor: string | null,
   userMessage: string,
@@ -113,6 +122,20 @@ async function staffMessageCountToday(db: D1Database, actor: string): Promise<nu
   return row?.n ?? 0;
 }
 
+// Rate-limits the general marketing-site assistant, which has no student id
+// or staff identity to key off of — the frontend generates and persists a
+// random visitorId (localStorage) purely for this purpose, not identity.
+export async function generalMessageCountToday(db: D1Database, visitorId: string): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM ai_chat_messages
+       WHERE scope = 'general' AND actor = ? AND role = 'user' AND created_at >= datetime('now', '-1 day')`,
+    )
+    .bind(visitorId)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
 // Shared closing rule set for both system prompts: keep it short, don't
 // show reasoning, match the user's language.
 const STYLE_RULES =
@@ -144,7 +167,7 @@ chat.post('/chat', async (c) => {
   const history = await loadChatHistory(c.env.DB, conversationId);
 
   const roleLabel = isAdmin(user) ? 'an admin' : 'a teacher';
-  const instructions = await getAiInstructions(c.env.DB);
+  const instructions = await getStaffInstructions(c.env.DB);
   const systemPrompt = [
     `You are น้องลิลลี่ (Nong Lilly), the AI assistant inside LITALK Education's admin panel, helping ${roleLabel} named ${user.name} with questions about using the system and, when given below, about one specific student. If asked your name, say น้องลิลลี่.`,
     context
@@ -174,20 +197,27 @@ chat.post('/chat', async (c) => {
   return c.json({ conversationId, reply });
 });
 
-// Admin-only: view/edit the steering text appended to every chat system
-// prompt (staff panel and public portal alike).
+// Admin-only: view/edit the steering text appended to each chat system
+// prompt. Staff (admin panel) and portal (student/parent portal + the
+// general marketing-site assistant) are tuned independently.
 chat.get('/settings/ai-instructions', requireAdmin, async (c) => {
-  const instructions = await getAiInstructions(c.env.DB);
-  return c.json({ instructions });
+  const [staffInstructions, portalInstructions] = await Promise.all([
+    getStaffInstructions(c.env.DB),
+    getPortalInstructions(c.env.DB),
+  ]);
+  return c.json({ staffInstructions, portalInstructions });
 });
 
 chat.put('/settings/ai-instructions', requireAdmin, async (c) => {
-  const body = await c.req.json<{ instructions?: string }>().catch(() => ({}) as never);
-  const instructions = (body.instructions ?? '').slice(0, MAX_INSTRUCTIONS_LENGTH);
-  await c.env.DB.prepare(`UPDATE ai_chat_settings SET instructions = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ? WHERE id = 1`)
-    .bind(instructions, c.get('user').email)
+  const body = await c.req.json<{ staffInstructions?: string; portalInstructions?: string }>().catch(() => ({}) as never);
+  const staffInstructions = (body.staffInstructions ?? '').slice(0, MAX_INSTRUCTIONS_LENGTH);
+  const portalInstructions = (body.portalInstructions ?? '').slice(0, MAX_INSTRUCTIONS_LENGTH);
+  await c.env.DB.prepare(
+    `UPDATE ai_chat_settings SET staff_instructions = ?, portal_instructions = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ? WHERE id = 1`,
+  )
+    .bind(staffInstructions, portalInstructions, c.get('user').email)
     .run();
-  return c.json({ ok: true, instructions });
+  return c.json({ ok: true, staffInstructions, portalInstructions });
 });
 
 export default chat;

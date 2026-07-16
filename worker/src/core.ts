@@ -367,6 +367,10 @@ core.get('/dashboard', requirePermission('data:read'), async (c) => {
       unpaid: unpaid.length,
     },
     todayClasses: todayRows,
+    // Bangkok calendar date for todayClasses (the query is bound to it, but
+    // each row only carries a time) — the admin panel needs this to convert
+    // each class time into the viewer's own device timezone for display.
+    today,
     weekClasses,
     weekStart,
     weekEnd,
