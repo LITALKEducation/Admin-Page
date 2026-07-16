@@ -5018,7 +5018,7 @@
                                 <span class="card-icon"><i class="fas fa-calendar-day"></i></span>
                                 <div>
                                     <h3>วันเรียนที่กำลังจะถึง</h3>
-                                    <p>คลาสที่จองไว้ และสถานะตารางเรียนรายเดือน</p>
+                                    <p>คลาสที่จองไว้ และสถานะตารางเรียนรายเดือน (เวลาแสดงตามอุปกรณ์ของคุณ)</p>
                                 </div>
                             </div>
                             <div class="row-list" id="check-upcoming"></div>
@@ -5163,7 +5163,7 @@
                             <span class="card-icon"><i class="fas fa-list-check"></i></span>
                             <div>
                                 <h3>รายการตารางเรียน</h3>
-                                <p>สถานะ: รออนุมัติ → อนุมัติแล้ว (รอชำระเงิน) → กำลังใช้งาน</p>
+                                <p>สถานะ: รออนุมัติ → อนุมัติแล้ว (รอชำระเงิน) → กำลังใช้งาน (เวลาแสดงตามอุปกรณ์ของคุณ)</p>
                             </div>
                         </div>
                         <div class="row-list" id="schedule-list">
@@ -5237,7 +5237,7 @@
                             <span class="card-icon"><i class="fas fa-clipboard-list"></i></span>
                             <div>
                                 <h3>คำร้องเพิ่ม/ถอนชั่วโมงเรียน</h3>
-                                <p>รายการคำร้องล่าสุด</p>
+                                <p>รายการคำร้องล่าสุด (เวลาแสดงตามอุปกรณ์ของคุณ)</p>
                             </div>
                         </div>
                         <div class="row-list" id="amendment-list">
@@ -7998,7 +7998,7 @@
             const upcoming = d.upcomingClasses || [];
             document.getElementById('check-upcoming').innerHTML = upcoming.length ? upcoming.map(b => `
                 <div class="class-row">
-                    <div class="class-time">${escapeHtml(b.time)}</div>
+                    <div class="class-time">${escapeHtml(formatClassTimeLocal(b.date, b.time))}</div>
                     <div class="class-info"><div class="name">${escapeHtml(new Date(b.date + 'T00:00:00').toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long' }))}</div><div class="course">${escapeHtml(b.notes || '')}</div></div>
                 </div>`).join('') : '<div class="form-hint">ยังไม่มีคลาสที่จองไว้ล่วงหน้า</div>';
 
@@ -8008,7 +8008,7 @@
                 const sessionRows = sessions.map(s => `
                     <tr>
                         <td>${escapeHtml(formatShortThaiDate(s.date))}</td>
-                        <td>${escapeHtml(s.time)}</td>
+                        <td>${escapeHtml(formatClassTimeLocal(s.date, s.time))}</td>
                     </tr>`).join('');
                 return `
                 <div class="payment-row" style="align-items: flex-start;">
@@ -8490,7 +8490,7 @@
         }
 
         function renderScheduleRow(r, admin) {
-            const sessions = (r.sessions || []).map(s => `${formatShortThaiDate(s.date)} ${s.time}`).join(' · ');
+            const sessions = (r.sessions || []).map(s => `${formatShortThaiDate(s.date)} ${formatClassTimeLocal(s.date, s.time)}`).join(' · ');
             const statusColor = r.status === 'active' ? 'var(--accent-success)' : (r.status === 'rejected' || r.status === 'cancelled') ? 'var(--accent-danger)' : (r.status === 'revise' ? 'var(--accent-danger)' : 'var(--text-muted)');
             const mine = filesApiMe && (r.createdBy || '').toLowerCase() === (filesApiMe.email || '').toLowerCase();
             let buttons = '';
@@ -8837,7 +8837,7 @@
             list.innerHTML = sessions.length ? sessions.map((s, i) => `
                 <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); cursor: pointer;">
                     <input type="checkbox" class="amend-remove-check" data-date="${escapeHtml(s.date)}" data-time="${escapeHtml(s.time)}">
-                    ${escapeHtml(formatShortThaiDate(s.date))} ${escapeHtml(s.time)}
+                    ${escapeHtml(formatShortThaiDate(s.date))} ${escapeHtml(formatClassTimeLocal(s.date, s.time))}
                 </label>`).join('') : '<div class="form-hint">เลือกตารางเรียนก่อน</div>';
         }
 
@@ -8918,7 +8918,7 @@
         }
 
         function renderAmendmentRow(r, admin) {
-            const sessions = (r.sessions || []).map(s => `${formatShortThaiDate(s.date)} ${s.time}`).join(' · ');
+            const sessions = (r.sessions || []).map(s => `${formatShortThaiDate(s.date)} ${formatClassTimeLocal(s.date, s.time)}`).join(' · ');
             const statusColor = r.status === 'applied' ? 'var(--accent-success)' : (r.status === 'rejected' || r.status === 'cancelled') ? 'var(--accent-danger)' : 'var(--text-muted)';
             const mine = filesApiMe && (r.createdBy || '').toLowerCase() === (filesApiMe.email || '').toLowerCase();
             let buttons = '';
@@ -9615,7 +9615,7 @@
                 const myEmail = (filesApiMe && filesApiMe.email ? filesApiMe.email : '').toLowerCase();
                 wrap.innerHTML = `
                     <table class="data-table">
-                        <thead><tr><th>วันที่</th><th>เวลา</th><th>นักเรียน</th><th>คอร์ส</th><th>ลิงก์เรียน</th><th>จัดการ</th></tr></thead>
+                        <thead><tr><th>วันที่</th><th>เวลา (ตามอุปกรณ์ของคุณ)</th><th>นักเรียน</th><th>คอร์ส</th><th>ลิงก์เรียน</th><th>จัดการ</th></tr></thead>
                         <tbody>
                             ${rows.map(b => {
                                 // Only the creator (or an admin) may edit/cancel a row.
@@ -9630,7 +9630,7 @@
                                 return `
                                 <tr>
                                     <td>${escapeHtml(new Date(b.date + 'T00:00:00').toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' }))}</td>
-                                    <td>${escapeHtml(b.time)}</td>
+                                    <td>${escapeHtml(formatClassTimeLocal(b.date, b.time))}</td>
                                     <td>${escapeHtml(b.studentName)}</td>
                                     <td>${escapeHtml(b.course || '-')}</td>
                                     <td>${linkCell}</td>
