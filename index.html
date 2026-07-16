@@ -10999,8 +10999,10 @@
             <button type="submit" class="ai-chat-panel__send" id="ai-chat-send" aria-label="ส่ง"><i class="fas fa-paper-plane"></i></button>
         </form>
         <div class="ai-chat-settings" id="ai-chat-settings">
-            <span class="ai-chat-settings__label">คำแนะนำเพิ่มเติมสำหรับ AI (กำหนดทิศทางการตอบ เช่น น้ำเสียง สิ่งที่ควรเน้นหรือหลีกเลี่ยง) — มีผลกับแชทของครู/แอดมินและพอร์ทัลนักเรียน/ผู้ปกครองทั้งหมด</span>
-            <textarea class="ai-chat-settings__textarea" id="ai-chat-settings-input" maxlength="4000" placeholder="เช่น ตอบให้กระชับเป็นพิเศษ, เน้นแนะนำให้ติดต่อเจ้าหน้าที่สำหรับเรื่องการเงิน, ใช้คำลงท้าย 'ค่ะ'..."></textarea>
+            <span class="ai-chat-settings__label">คำแนะนำสำหรับแชทของครู/แอดมิน (ในระบบหลังบ้านนี้เท่านั้น)</span>
+            <textarea class="ai-chat-settings__textarea" id="ai-chat-settings-staff-input" maxlength="4000" placeholder="เช่น ตอบให้กระชับเป็นพิเศษ, เน้นแนะนำให้ติดต่อเจ้าหน้าที่สำหรับเรื่องการเงิน..."></textarea>
+            <span class="ai-chat-settings__label">คำแนะนำสำหรับแชทฝั่งผู้ปกครอง/นักเรียน (พอร์ทัลนักเรียน และแชททั่วไปบนหน้าเว็บหลัก)</span>
+            <textarea class="ai-chat-settings__textarea" id="ai-chat-settings-portal-input" maxlength="4000" placeholder="เช่น ใช้คำลงท้าย 'ค่ะ', เน้นน้ำเสียงเป็นกันเอง..."></textarea>
             <div class="ai-chat-settings__actions">
                 <button type="button" class="btn-secondary" onclick="toggleAIChatSettings(false)">ยกเลิก</button>
                 <button type="button" class="btn-primary" id="ai-chat-settings-save" onclick="saveAIChatSettings()">บันทึก</button>
@@ -11127,29 +11129,36 @@
             const open = typeof force === 'boolean' ? force : !panel.classList.contains('open');
             panel.classList.toggle('open', open);
             if (open) {
-                const textarea = document.getElementById('ai-chat-settings-input');
-                textarea.value = 'กำลังโหลด...';
-                textarea.disabled = true;
+                const staffTextarea = document.getElementById('ai-chat-settings-staff-input');
+                const portalTextarea = document.getElementById('ai-chat-settings-portal-input');
+                staffTextarea.value = 'กำลังโหลด...';
+                portalTextarea.value = 'กำลังโหลด...';
+                staffTextarea.disabled = true;
+                portalTextarea.disabled = true;
                 try {
                     const res = await apiFetch('/settings/ai-instructions');
                     const data = await res.json().catch(() => ({}));
-                    textarea.value = res.ok ? (data.instructions || '') : '';
+                    staffTextarea.value = res.ok ? (data.staffInstructions || '') : '';
+                    portalTextarea.value = res.ok ? (data.portalInstructions || '') : '';
                 } catch (err) {
-                    textarea.value = '';
+                    staffTextarea.value = '';
+                    portalTextarea.value = '';
                 } finally {
-                    textarea.disabled = false;
+                    staffTextarea.disabled = false;
+                    portalTextarea.disabled = false;
                 }
             }
         }
 
         async function saveAIChatSettings() {
-            const textarea = document.getElementById('ai-chat-settings-input');
+            const staffTextarea = document.getElementById('ai-chat-settings-staff-input');
+            const portalTextarea = document.getElementById('ai-chat-settings-portal-input');
             const saveBtn = document.getElementById('ai-chat-settings-save');
             saveBtn.disabled = true;
             try {
                 const res = await apiFetch('/settings/ai-instructions', {
                     method: 'PUT',
-                    body: JSON.stringify({ instructions: textarea.value }),
+                    body: JSON.stringify({ staffInstructions: staffTextarea.value, portalInstructions: portalTextarea.value }),
                 });
                 if (!res.ok) {
                     if (typeof showModal === 'function') showModal('ผิดพลาด', 'บันทึกไม่สำเร็จ กรุณาลองใหม่', 'error');
