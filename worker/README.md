@@ -394,6 +394,7 @@ permissions scoped to this account.
 | DELETE | `/links/:id`             | (any valid token) | Creator or admin only |
 | POST   | `/import`                | `data:write`   | One-time Sheet migration (see above) |
 | POST   | `/stripe/webhook`        | (Stripe signature) | Records paid checkout sessions |
+| GET    | `/portal/whoami`         | (any valid portal token) | Resolves the caller's Auth0 token to their student id (email local part → students row, else sub → `students.auth0_user_id`); the portal uses this instead of guessing the id from the email client-side |
 | GET    | `/portal/:studentId`     | (public)       | Student portal data for litalkeducation.com |
 | PATCH  | `/portal/:studentId/profile` | (student's own Auth0 token) | Self-service nickname edit |
 | POST   | `/portal/:studentId/avatar` | (student's own Auth0 token) | Self-service photo upload (multipart `file`, image, ≤5MB) |
