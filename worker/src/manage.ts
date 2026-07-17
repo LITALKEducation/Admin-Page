@@ -1282,6 +1282,61 @@ manage.post('/bookings/:id/checkin-token', requirePermission('data:write'), asyn
   return c.json({ ok: true, url: `https://litalkeducation.com/checkin?t=${token}`, expiresAt });
 });
 
+// ===== On-site / event check-in (docs/UX-REDESIGN.md phase 4) =====
+// One QR per event that many students scan; each scanner identifies
+// themselves by student id on the scan page. Any teacher/staff can run an
+// event (data:write), and the attendee list resolves student names.
+
+const EVENT_TOKEN_TTL_HOURS_DEFAULT = 8; // an on-site event day
+const EVENT_TOKEN_TTL_HOURS_MAX = 24;
+
+manage.post('/checkin-events', requirePermission('data:write'), async (c) => {
+  const body = await c.req.json<{ title?: string; ttlHours?: number }>().catch(() => ({}) as never);
+  const title = (body.title ?? '').trim();
+  if (!title) return c.json({ error: 'กรุณากรอกชื่อกิจกรรม' }, 400);
+  if (title.length > 200) return c.json({ error: 'ชื่อกิจกรรมยาวเกินไป' }, 400);
+  const ttl = Math.min(EVENT_TOKEN_TTL_HOURS_MAX, Math.max(1, Number(body.ttlHours) || EVENT_TOKEN_TTL_HOURS_DEFAULT));
+
+  const token = crypto.randomUUID().replace(/-/g, '');
+  const expiresAt = new Date(Date.now() + ttl * 3600_000).toISOString();
+  const result = await c.env.DB.prepare(
+    `INSERT INTO checkin_events (title, token, expires_at, created_by) VALUES (?, ?, ?, ?)`,
+  )
+    .bind(title, token, expiresAt, c.get('user').email)
+    .run();
+
+  return c.json({ ok: true, id: Number(result.meta.last_row_id), url: `https://litalkeducation.com/checkin?t=${token}`, expiresAt });
+});
+
+manage.get('/checkin-events', requirePermission('data:read'), async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT e.id, e.title, e.token, e.expires_at AS expiresAt, e.created_by AS createdBy, e.created_at AS createdAt,
+            (SELECT COUNT(*) FROM event_attendance ea WHERE ea.event_id = e.id) AS attendees
+     FROM checkin_events e ORDER BY e.id DESC LIMIT 20`,
+  ).all<{ token: string; expiresAt: string }>();
+  return c.json(
+    (results ?? []).map((e) => ({
+      ...e,
+      url: `https://litalkeducation.com/checkin?t=${e.token}`,
+      expired: Date.parse(e.expiresAt) < Date.now(),
+    })),
+  );
+});
+
+manage.get('/checkin-events/:id/attendees', requirePermission('data:read'), async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id)) return c.json({ error: 'Invalid event id' }, 400);
+  const { results } = await c.env.DB.prepare(
+    `SELECT ea.student_id AS studentId, COALESCE(s.name, ea.student_id) AS name, s.nickname,
+            ea.checked_in_at AS checkedInAt
+     FROM event_attendance ea LEFT JOIN students s ON s.id = ea.student_id
+     WHERE ea.event_id = ? ORDER BY ea.checked_in_at`,
+  )
+    .bind(id)
+    .all();
+  return c.json(results ?? []);
+});
+
 // ===== Finance overview (admin): all transactions + per-teacher income =====
 
 manage.get('/finance', requireAdmin, async (c) => {

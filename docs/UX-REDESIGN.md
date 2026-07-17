@@ -246,6 +246,10 @@ opens a per-booking QR from the booking screen (screen-shared in the Meet class 
 shown on-site); scanning hits the public `POST /checkin` with a short-lived,
 revocable token — possession of a fresh token is the proof of presence, so the
 student needs no login. Attendance shows as a green badge on the booking table.
+On-site/group events are covered too: staff mint one shared QR per event
+(`/checkin-events`, TTL-bound) from the booking screen; scanners self-identify with
+their student id (prefilled from the portal cookie, validated against the roster)
+and the attendee list is viewable per event in the admin panel.
 Still open: certificates, push notifications.
 
 **Phase 5 — scale**: parent accounts as first-class Auth0 identities (today the portal
