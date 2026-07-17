@@ -1238,8 +1238,10 @@ manage.get('/bookings', requirePermission('data:read'), async (c) => {
   const from = isYmd(c.req.query('from')) ? c.req.query('from')! : bangkokToday();
   const { results } = await c.env.DB.prepare(
     `SELECT b.id, b.student_id AS studentId, COALESCE(s.name, b.student_id) AS studentName, s.course AS course,
-            b.booking_date AS date, b.booking_time AS time, b.notes, b.created_by AS createdBy, b.meet_link AS meetLink
+            b.booking_date AS date, b.booking_time AS time, b.notes, b.created_by AS createdBy, b.meet_link AS meetLink,
+            a.checked_in_at AS checkedInAt
      FROM bookings b LEFT JOIN students s ON s.id = b.student_id
+     LEFT JOIN attendance a ON a.booking_id = b.id
      WHERE b.status = 'booked' AND b.booking_date >= ?
      ORDER BY b.booking_date, b.booking_time LIMIT 200`,
   )
@@ -1248,6 +1250,36 @@ manage.get('/bookings', requirePermission('data:read'), async (c) => {
   const visible = await visibleStudentIds(c.env.DB, c.get('user'));
   const rows = visible === null ? (results ?? []) : (results ?? []).filter((r) => visible.has(r.studentId));
   return c.json(rows);
+});
+
+// Mints the short-lived QR check-in token for a class (docs/UX-REDESIGN.md
+// phase 4). The teacher screen-shares (or shows on-site) the returned URL as
+// a QR; scanning it marks the booking attended via the public POST /checkin.
+// Re-minting revokes any previous token for the booking, so a leaked old QR
+// dies the moment a new one is opened.
+const CHECKIN_TOKEN_TTL_MS = 3 * 3600_000; // class hour + generous buffer
+manage.post('/bookings/:id/checkin-token', requirePermission('data:write'), async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id)) return c.json({ error: 'Invalid booking id' }, 400);
+  const booking = await c.env.DB.prepare(
+    `SELECT id, student_id AS studentId, status FROM bookings WHERE id = ?`,
+  )
+    .bind(id)
+    .first<{ id: number; studentId: string; status: string }>();
+  if (!booking || booking.status !== 'booked') return c.json({ error: 'ไม่พบคลาสเรียนนี้ หรือคลาสถูกยกเลิกแล้ว' }, 404);
+
+  const visible = await visibleStudentIds(c.env.DB, c.get('user'));
+  if (!canSeeStudent(visible, booking.studentId)) return c.json({ error: 'Forbidden' }, 403);
+
+  const token = crypto.randomUUID().replace(/-/g, '');
+  const expiresAt = new Date(Date.now() + CHECKIN_TOKEN_TTL_MS).toISOString();
+  await c.env.DB.batch([
+    c.env.DB.prepare(`DELETE FROM checkin_tokens WHERE booking_id = ?`).bind(id),
+    c.env.DB.prepare(`INSERT INTO checkin_tokens (token, booking_id, created_by, expires_at) VALUES (?, ?, ?, ?)`)
+      .bind(token, id, c.get('user').email, expiresAt),
+  ]);
+
+  return c.json({ ok: true, url: `https://litalkeducation.com/checkin?t=${token}`, expiresAt });
 });
 
 // ===== Finance overview (admin): all transactions + per-teacher income =====
