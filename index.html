@@ -5139,6 +5139,29 @@
                                 <div class="form-hint">กำลังโหลดข้อมูล...</div>
                             </div>
                         </div>
+
+                        <!-- On-site / event check-in: one QR many students scan -->
+                        <div class="admin-card" style="margin-top: 24px;">
+                            <div class="card-title-bar">
+                                <span class="card-icon"><i class="fas fa-qrcode"></i></span>
+                                <div>
+                                    <h3>เช็คชื่อกิจกรรม (On-site)</h3>
+                                    <p>สร้าง QR หนึ่งอันให้นักเรียนหลายคนสแกนเช็คชื่อ เช่น เวิร์กช็อป ค่าย หรือกิจกรรมหน้างาน</p>
+                                </div>
+                            </div>
+                            <div class="form-body">
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
+                                    <div class="form-group" style="flex: 1; min-width: 220px; margin: 0;">
+                                        <label><i class="fas fa-tag"></i> ชื่อกิจกรรม</label>
+                                        <input type="text" id="event-checkin-title" maxlength="200" placeholder="เช่น English Camp 2026">
+                                    </div>
+                                    <button class="btn btn-primary" onclick="createCheckinEvent()"><i class="fas fa-qrcode"></i> สร้าง QR</button>
+                                </div>
+                                <div class="row-list tight" id="event-checkin-list" style="margin-top: 16px;">
+                                    <div class="form-hint">กำลังโหลดข้อมูล...</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -6817,6 +6840,7 @@
             if (screen === 'booking') {
                 renderBookingStep();
                 loadBookingTable();
+                loadCheckinEvents();
             }
             if (screen === 'check') {
                 syncPickerText('check');
@@ -10027,6 +10051,95 @@
 
         async function copyCheckinLink(btn) {
             if (checkinQrUrl) await copyPaymentLink(checkinQrUrl, btn);
+        }
+
+        // ===== On-site / event check-in =====
+        // One QR many students scan; each identifies themselves on the scan
+        // page (prefilled from their portal cookie). Attendee lists expand
+        // in place per event.
+        async function createCheckinEvent() {
+            const input = document.getElementById('event-checkin-title');
+            const title = input.value.trim();
+            if (!title) { triggerFieldError('event-checkin-title', 'กรุณากรอกชื่อกิจกรรม'); return; }
+            showLoading();
+            try {
+                const response = await apiFetch('/checkin-events', { method: 'POST', body: JSON.stringify({ title }) });
+                const result = await response.json();
+                hideLoading();
+                if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+                input.value = '';
+                await loadCheckinEvents();
+                openEventQr(result.url, result.expiresAt, title);
+            } catch (error) {
+                hideLoading();
+                console.error('createCheckinEvent:', error);
+                showModal('สร้าง QR กิจกรรมไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
+            }
+        }
+
+        async function loadCheckinEvents() {
+            const list = document.getElementById('event-checkin-list');
+            if (!list) return;
+            try {
+                const response = await apiFetch('/checkin-events');
+                const rows = await response.json();
+                if (!response.ok) throw new Error(rows.error || 'load failed');
+                list.innerHTML = (Array.isArray(rows) && rows.length) ? rows.map(e => `
+                    <div class="payment-row" style="flex-wrap: wrap; gap: 8px;">
+                        <div class="payment-info">
+                            <div class="name">${escapeHtml(e.title)} ${e.expired ? '<span class="form-hint" style="display:inline;margin:0;">(หมดอายุแล้ว)</span>' : ''}</div>
+                            <div class="meta">เช็คชื่อแล้ว ${e.attendees} คน · โดย ${escapeHtml(e.createdBy || '-')}</div>
+                        </div>
+                        <span class="row-actions">
+                            ${!e.expired ? `<button class="icon-btn" title="แสดง QR" onclick="openEventQr('${escapeJs(e.url)}', '${escapeJs(e.expiresAt)}', '${escapeJs(e.title)}')"><i class="fas fa-qrcode"></i> QR</button>` : ''}
+                            <button class="icon-btn" title="รายชื่อผู้เช็คชื่อ" onclick="toggleEventAttendees(${e.id}, this)"><i class="fas fa-users"></i> รายชื่อ</button>
+                        </span>
+                        <div id="event-attendees-${e.id}" style="display: none; width: 100%;"></div>
+                    </div>`).join('') : '<div class="form-hint">ยังไม่มีกิจกรรม</div>';
+            } catch (error) {
+                console.error('loadCheckinEvents:', error);
+                list.innerHTML = '<div class="form-hint">โหลดรายการกิจกรรมไม่สำเร็จ</div>';
+            }
+        }
+
+        function openEventQr(url, expiresAt, title) {
+            checkinQrUrl = url;
+            const holder = document.getElementById('qr-checkin-code');
+            holder.innerHTML = '';
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(holder, { text: url, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
+            } else {
+                holder.innerHTML = `<div class="form-hint" style="word-break: break-all; margin: 0;">${escapeHtml(url)}</div>`;
+            }
+            const exp = new Date(expiresAt);
+            document.getElementById('qr-checkin-expiry').textContent =
+                `${title ? title + ' — ' : ''}ใช้ได้ถึง ${exp.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.`;
+            document.getElementById('qr-checkin-modal').classList.add('active');
+        }
+
+        async function toggleEventAttendees(eventId, btn) {
+            const el = document.getElementById(`event-attendees-${eventId}`);
+            if (!el) return;
+            if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+            el.style.display = 'block';
+            el.innerHTML = '<div class="form-hint">กำลังโหลด...</div>';
+            try {
+                const response = await apiFetch(`/checkin-events/${eventId}/attendees`);
+                const rows = await response.json();
+                if (!response.ok) throw new Error(rows.error || 'load failed');
+                el.innerHTML = (Array.isArray(rows) && rows.length) ? `
+                    <table class="data-table" style="margin-top: 8px;">
+                        <thead><tr><th>รหัส</th><th>ชื่อ</th><th>เวลาเช็คชื่อ</th></tr></thead>
+                        <tbody>${rows.map(r => `
+                            <tr>
+                                <td>${escapeHtml(r.studentId)}</td>
+                                <td>${escapeHtml(r.nickname ? `${r.name} (${r.nickname})` : r.name)}</td>
+                                <td>${escapeHtml(formatCheckinTime(r.checkedInAt))}</td>
+                            </tr>`).join('')}</tbody>
+                    </table>` : '<div class="form-hint" style="margin-top: 8px;">ยังไม่มีใครเช็คชื่อ</div>';
+            } catch (error) {
+                el.innerHTML = '<div class="form-hint" style="margin-top: 8px;">โหลดรายชื่อไม่สำเร็จ</div>';
+            }
         }
 
         // Add or replace a booking's meeting link by hand (Google Meet, Zoom, …).

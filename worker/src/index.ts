@@ -609,7 +609,7 @@ app.post('/chat/general', async (c) => {
 // slot, so the scan attests that booking's own student attended; rescans
 // are idempotent via the UNIQUE(booking_id) constraint.
 app.post('/checkin', async (c) => {
-  const body = await c.req.json<{ token?: string }>().catch(() => ({}) as never);
+  const body = await c.req.json<{ token?: string; studentId?: string }>().catch(() => ({}) as never);
   const token = (body.token ?? '').trim();
   if (!token) return c.json({ status: 'error', message: 'ไม่พบรหัส QR' }, 400);
 
@@ -625,7 +625,47 @@ app.post('/checkin', async (c) => {
     .bind(token)
     .first<{ bookingId: number; expiresAt: string; studentId: string; date: string; time: string; status: string; studentName: string }>();
 
-  if (!row) return c.json({ status: 'error', message: 'QR ไม่ถูกต้อง กรุณาสแกน QR ล่าสุดจากผู้สอน' }, 404);
+  // Not a per-booking token? Try the on-site event tokens (0016): one QR
+  // that many students scan, each identifying themselves by student id —
+  // the scan page prefills it from their portal cookie.
+  if (!row) {
+    const event = await c.env.DB.prepare(
+      `SELECT id, title, expires_at AS expiresAt FROM checkin_events WHERE token = ?`,
+    )
+      .bind(token)
+      .first<{ id: number; title: string; expiresAt: string }>();
+    if (!event) return c.json({ status: 'error', message: 'QR ไม่ถูกต้อง กรุณาสแกน QR ล่าสุดจากผู้สอน' }, 404);
+    if (Date.parse(event.expiresAt) < Date.now()) {
+      return c.json({ status: 'error', message: 'QR หมดอายุแล้ว กรุณาให้ผู้จัดกิจกรรมเปิด QR ใหม่' }, 410);
+    }
+
+    const studentId = (body.studentId ?? '').trim();
+    // First round-trip carries only the token — tell the page to ask who's
+    // scanning (it prefills from the student_id portal cookie).
+    if (!studentId) return c.json({ status: 'need_student', event: event.title });
+
+    const student = await c.env.DB.prepare(
+      `SELECT id, COALESCE(nickname, name) AS studentName FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+    )
+      .bind(studentId)
+      .first<{ id: string; studentName: string }>();
+    if (!student) return c.json({ status: 'error', message: 'ไม่พบรหัสนักเรียนนี้ในระบบ กรุณาตรวจสอบรหัสอีกครั้ง' }, 404);
+
+    const inserted = await c.env.DB.prepare(
+      `INSERT INTO event_attendance (event_id, student_id) VALUES (?, ?)
+       ON CONFLICT(event_id, student_id) DO NOTHING`,
+    )
+      .bind(event.id, student.id)
+      .run();
+
+    return c.json({
+      status: 'success',
+      mode: 'event',
+      already: (inserted.meta.changes ?? 0) === 0,
+      studentName: student.studentName,
+      event: event.title,
+    });
+  }
   if (Date.parse(row.expiresAt) < Date.now()) {
     return c.json({ status: 'error', message: 'QR หมดอายุแล้ว กรุณาให้ผู้สอนเปิด QR ใหม่' }, 410);
   }

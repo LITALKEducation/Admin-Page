@@ -395,7 +395,10 @@ permissions scoped to this account.
 | POST   | `/import`                | `data:write`   | One-time Sheet migration (see above) |
 | POST   | `/stripe/webhook`        | (Stripe signature) | Records paid checkout sessions |
 | POST   | `/bookings/:id/checkin-token` | `data:write`+visibility | Mints the short-lived QR check-in token for a class (3h TTL; re-minting revokes the old one) |
-| POST   | `/checkin`               | (public, token) | Marks the booking attended — possession of a fresh token from the live class's QR is the proof of presence; rescans are idempotent |
+| POST   | `/checkin`               | (public, token) | Marks the booking attended — possession of a fresh token from the live class's QR is the proof of presence; rescans are idempotent. Event tokens answer `need_student` first; re-POST with `studentId` (validated against `students`, case-insensitive) records the attendee |
+| POST   | `/checkin-events`        | `data:write`   | Creates an on-site/group check-in event — one QR shared by everyone (title ≤200 chars, TTL 1–24h, default 8h); returns the scan URL |
+| GET    | `/checkin-events`        | `data:read`    | Last 20 events with attendee counts and expiry state |
+| GET    | `/checkin-events/:id/attendees` | `data:read` | Attendee list (student id, name, check-in time) for one event |
 | GET    | `/portal/whoami`         | (any valid portal token) | Resolves the caller's Auth0 token to their student id (email local part → students row, else sub → `students.auth0_user_id`); the portal uses this instead of guessing the id from the email client-side |
 | GET    | `/portal/:studentId`     | (public)       | Student portal data for litalkeducation.com |
 | PATCH  | `/portal/:studentId/profile` | (student's own Auth0 token) | Self-service nickname edit |
