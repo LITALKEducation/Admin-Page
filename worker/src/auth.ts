@@ -59,16 +59,13 @@ export async function verifyAuth(c: Context<AppBindings>, next: Next) {
   }
 }
 
-// Best-effort ownership check for the public student portal. Unlike
-// verifyAuth this never rejects the request — it returns whether the caller
-// presented a valid Auth0 token whose login identity is this very student
-// (`<studentId>@STUDENT_EMAIL_DOMAIN`). The portal stays public for basic
-// data but unlocks sensitive fields (files, Meet links) only for the
-// authenticated student themselves.
-export async function portalTokenMatchesStudent(c: Context<AppBindings>, studentId: string): Promise<boolean> {
+// Verifies a portal Bearer token and returns its identity (email claim if
+// present, always the sub), or null for a missing/invalid token. Never
+// throws — portal routes degrade to the unauthenticated view.
+export async function verifyPortalToken(c: Context<AppBindings>): Promise<{ email: string; sub: string } | null> {
   const authHeader = c.req.header('Authorization') || '';
   const [scheme, token] = authHeader.split(' ');
-  if (scheme !== 'Bearer' || !token) return false;
+  if (scheme !== 'Bearer' || !token) return null;
   try {
     const { payload } = await jwtVerify(token, getJwks(c.env.AUTH0_DOMAIN), {
       issuer: `https://${c.env.AUTH0_DOMAIN}/`,
@@ -78,18 +75,34 @@ export async function portalTokenMatchesStudent(c: Context<AppBindings>, student
       (payload[c.env.AUTH0_EMAIL_CLAIM] as string | undefined) ??
       (payload.email as string | undefined) ??
       '';
-    const localPart = email.split('@')[0];
-    if (localPart) return localPart.toLowerCase() === studentId.toLowerCase();
+    return { email, sub: payload.sub as string };
+  } catch {
+    return null;
+  }
+}
 
-    // No email claim on the token — the Auth0 Action from README step 5
-    // isn't deployed for this login. Fall back to matching the raw Auth0
-    // sub against the student's cached login user id instead of failing
-    // closed for every student (see resolveStudentAuth0Id in db.ts).
+// Best-effort ownership check for the public student portal. Unlike
+// verifyAuth this never rejects the request — it returns whether the caller
+// presented a valid Auth0 token whose login identity is this very student
+// (`<studentId>@STUDENT_EMAIL_DOMAIN`). The portal stays public for basic
+// data but unlocks sensitive fields (files, Meet links) only for the
+// authenticated student themselves.
+export async function portalTokenMatchesStudent(c: Context<AppBindings>, studentId: string): Promise<boolean> {
+  const ident = await verifyPortalToken(c);
+  if (!ident) return false;
+  const localPart = ident.email.split('@')[0];
+  if (localPart) return localPart.toLowerCase() === studentId.toLowerCase();
+
+  // No email claim on the token — the Auth0 Action from README step 5
+  // isn't deployed for this login. Fall back to matching the raw Auth0
+  // sub against the student's cached login user id instead of failing
+  // closed for every student (see resolveStudentAuth0Id in db.ts).
+  try {
     const row = await c.env.DB.prepare(`SELECT auth0_user_id AS auth0UserId FROM students WHERE id = ?`)
       .bind(studentId)
       .first<{ auth0UserId: string | null }>();
     const auth0UserId = await resolveStudentAuth0Id(c, studentId, row?.auth0UserId ?? null);
-    return !!auth0UserId && auth0UserId === (payload.sub as string);
+    return !!auth0UserId && auth0UserId === ident.sub;
   } catch {
     return false;
   }

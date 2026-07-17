@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { AppBindings } from './types';
-import { verifyAuth, requirePermission, portalTokenMatchesStudent } from './auth';
+import { verifyAuth, requirePermission, portalTokenMatchesStudent, verifyPortalToken } from './auth';
 import { DOCUMENT_TYPES, extname, insertFileWithUniqueName, logAudit, todayCode } from './db';
 import core, { bangkokToday } from './core';
 import manage, {
@@ -132,6 +132,40 @@ app.post('/stripe/webhook', async (c) => {
   }
 
   return c.json({ received: true });
+});
+
+// NOTE: registered before /portal/:studentId — Hono matches in registration
+// order, and the parameterized route would otherwise capture "whoami" as a
+// student id.
+// Resolves the caller's Auth0 token to their student id — the portal used
+// to guess this client-side by splitting the login email's local part,
+// which silently broke for any account whose email doesn't follow the
+// `<studentId>@STUDENT_EMAIL_DOMAIN` convention (personal signups,
+// admin-edited emails, tokens with no email claim). The server is the
+// authority: match the email local part against a real student row first,
+// then fall back to the Auth0 sub against students.auth0_user_id.
+app.get('/portal/whoami', async (c) => {
+  const ident = await verifyPortalToken(c);
+  if (!ident) return c.json({ status: 'error', message: 'Unauthorized' }, 401);
+
+  const localPart = ident.email.split('@')[0];
+  if (localPart) {
+    const byEmail = await c.env.DB.prepare(
+      `SELECT id FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+    )
+      .bind(localPart)
+      .first<{ id: string }>();
+    if (byEmail) return c.json({ status: 'success', studentId: byEmail.id });
+  }
+
+  const bySub = await c.env.DB.prepare(
+    `SELECT id FROM students WHERE auth0_user_id = ? AND deleted_at IS NULL`,
+  )
+    .bind(ident.sub)
+    .first<{ id: string }>();
+  if (bySub) return c.json({ status: 'success', studentId: bySub.id });
+
+  return c.json({ status: 'error', message: 'ไม่พบบัญชีนักเรียนที่ผูกกับผู้ใช้นี้ในระบบ กรุณาติดต่อเจ้าหน้าที่' }, 404);
 });
 
 // Student portal data for the public website (litalkeducation.com/student.html).
