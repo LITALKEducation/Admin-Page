@@ -602,6 +602,52 @@ app.post('/chat/general', async (c) => {
   return c.json({ status: 'success', conversationId, reply });
 });
 
+// QR check-in: the student scanned the class QR the teacher is showing.
+// No login required — possession of a fresh token IS the proof of presence
+// (the QR only exists inside the live class, expires in hours, and is
+// revoked whenever the teacher mints a new one). A booking is one student's
+// slot, so the scan attests that booking's own student attended; rescans
+// are idempotent via the UNIQUE(booking_id) constraint.
+app.post('/checkin', async (c) => {
+  const body = await c.req.json<{ token?: string }>().catch(() => ({}) as never);
+  const token = (body.token ?? '').trim();
+  if (!token) return c.json({ status: 'error', message: 'ไม่พบรหัส QR' }, 400);
+
+  const row = await c.env.DB.prepare(
+    `SELECT ct.booking_id AS bookingId, ct.expires_at AS expiresAt,
+            b.student_id AS studentId, b.booking_date AS date, b.booking_time AS time, b.status,
+            COALESCE(s.nickname, s.name, b.student_id) AS studentName
+     FROM checkin_tokens ct
+     JOIN bookings b ON b.id = ct.booking_id
+     LEFT JOIN students s ON s.id = b.student_id
+     WHERE ct.token = ?`,
+  )
+    .bind(token)
+    .first<{ bookingId: number; expiresAt: string; studentId: string; date: string; time: string; status: string; studentName: string }>();
+
+  if (!row) return c.json({ status: 'error', message: 'QR ไม่ถูกต้อง กรุณาสแกน QR ล่าสุดจากผู้สอน' }, 404);
+  if (Date.parse(row.expiresAt) < Date.now()) {
+    return c.json({ status: 'error', message: 'QR หมดอายุแล้ว กรุณาให้ผู้สอนเปิด QR ใหม่' }, 410);
+  }
+  if (row.status !== 'booked') return c.json({ status: 'error', message: 'คลาสเรียนนี้ถูกยกเลิกแล้ว' }, 409);
+
+  const result = await c.env.DB.prepare(
+    `INSERT INTO attendance (booking_id, student_id, method) VALUES (?, ?, 'qr')
+     ON CONFLICT(booking_id) DO NOTHING`,
+  )
+    .bind(row.bookingId, row.studentId)
+    .run();
+  const already = (result.meta.changes ?? 0) === 0;
+
+  return c.json({
+    status: 'success',
+    already,
+    studentName: row.studentName,
+    date: row.date,
+    time: row.time,
+  });
+});
+
 // Public file download by opaque token (shareable link). No auth: the token
 // is the capability. Only files with a token set are reachable this way.
 app.get('/public/files/:token', async (c) => {

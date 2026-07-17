@@ -241,8 +241,12 @@ fetches. Also on mobile the AI assistant moved **into** the bottom nav (both app
 instead of a floating button overlapping the bar. **Calendar sync done**:
 `GET /portal/:id/calendar.ics` (Bangkok wall-clock → UTC instants; Meet links
 deliberately excluded from the public feed) + a subscribe row on the portal's
-schedule section (Google / webcal / copy-link). Still open: certificates, push
-notifications, QR attendance.
+schedule section (Google / webcal / copy-link). **QR attendance done**: the teacher
+opens a per-booking QR from the booking screen (screen-shared in the Meet class or
+shown on-site); scanning hits the public `POST /checkin` with a short-lived,
+revocable token — possession of a fresh token is the proof of presence, so the
+student needs no login. Attendance shows as a green badge on the booking table.
+Still open: certificates, push notifications.
 
 **Phase 5 — scale**: parent accounts as first-class Auth0 identities (today the portal
 link is shared) · teacher self-service dashboard · virtualized tables once lists exceed
