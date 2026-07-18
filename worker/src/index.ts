@@ -872,7 +872,7 @@ app.post('/campus-checkin', requirePermission('data:write'), async (c) => {
 
 // Same-day campus check-in/out log, for the admin panel to confirm scans
 // landed correctly.
-app.get('/campus-checkins', requirePermission('data:read'), async (c) => {
+app.get('/campus-checkins', requireAdmin, async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT cc.id, cc.person_type AS personType, cc.person_id AS personId,
             CASE WHEN cc.person_type = 'student' THEN COALESCE(s.nickname, s.name, cc.person_id)
