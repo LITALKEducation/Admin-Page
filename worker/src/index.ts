@@ -138,6 +138,42 @@ app.post('/stripe/webhook', async (c) => {
 // student and staff mint endpoints.
 const ID_CARD_TOKEN_TTL_MS = 2 * 60_000;
 
+// Backs GET /portal/:studentId/checkin-status and GET /staff/checkin-status
+// — the card itself polls this while open so the card holder's own device
+// can react (vibrate/beep) the instant staff scan them, without needing a
+// websocket/push channel for something this low-frequency. `since` is
+// whatever ISO timestamp the caller already saw; SQLite's datetime()
+// parses ISO 8601 (including the trailing "Z") the same as JS's Date.
+async function latestCheckinEventSince(
+  db: D1Database,
+  personType: 'student' | 'staff',
+  personId: string,
+  since: string | undefined,
+): Promise<{ action: 'checked_in' | 'checked_out'; at: string } | null> {
+  const sinceIso = since && !isNaN(Date.parse(since)) ? since : new Date(0).toISOString();
+  const row = await db
+    .prepare(
+      `SELECT checked_in_at AS checkedInAt, checked_out_at AS checkedOutAt FROM campus_checkins
+       WHERE person_type = ? AND person_id = ? COLLATE NOCASE
+         AND (checked_in_at > datetime(?) OR checked_out_at > datetime(?))
+       ORDER BY id DESC LIMIT 1`,
+    )
+    .bind(personType, personId, sinceIso, sinceIso)
+    .first<{ checkedInAt: string | null; checkedOutAt: string | null }>();
+  if (!row) return null;
+
+  const sinceMs = Date.parse(sinceIso);
+  const inAt = row.checkedInAt ? new Date(row.checkedInAt.replace(' ', 'T') + 'Z') : null;
+  const outAt = row.checkedOutAt ? new Date(row.checkedOutAt.replace(' ', 'T') + 'Z') : null;
+  if (outAt && outAt.getTime() > sinceMs && (!inAt || outAt.getTime() >= inAt.getTime())) {
+    return { action: 'checked_out', at: outAt.toISOString() };
+  }
+  if (inAt && inAt.getTime() > sinceMs) {
+    return { action: 'checked_in', at: inAt.toISOString() };
+  }
+  return null;
+}
+
 // NOTE: registered before /portal/:studentId — Hono matches in registration
 // order, and the parameterized route would otherwise capture "whoami" as a
 // student id.
@@ -435,6 +471,15 @@ app.post('/portal/:studentId/id-card-token', async (c) => {
   ]);
 
   return c.json({ status: 'success', token, expiresAt });
+});
+
+// Lets the card itself notice its own scan — the ID card modal polls this
+// while open so the card holder's own device can vibrate/beep the moment
+// staff scan them, not just the scanning device at the front desk.
+app.get('/portal/:studentId/checkin-status', async (c) => {
+  const studentId = c.req.param('studentId');
+  if (!(await portalTokenMatchesStudent(c, studentId))) return c.json({ status: 'error', message: 'Unauthorized' }, 401);
+  return c.json({ status: 'success', event: await latestCheckinEventSince(c.env.DB, 'student', studentId, c.req.query('since')) });
 });
 
 // Self-service avatar upload/removal — same R2 key convention
@@ -773,6 +818,13 @@ app.post('/staff/id-card-token', async (c) => {
       .bind(token, user.email, expiresAt),
   ]);
   return c.json({ status: 'success', token, expiresAt });
+});
+
+// Staff/teacher counterpart to GET /portal/:studentId/checkin-status —
+// always "my own" status, same self-only reasoning as POST /staff/id-card-token.
+app.get('/staff/checkin-status', async (c) => {
+  const user = c.get('user');
+  return c.json({ status: 'success', event: await latestCheckinEventSince(c.env.DB, 'staff', user.email, c.req.query('since')) });
 });
 
 // ===== Campus check-in/out (front-desk QR/barcode/NFC scanning) =====
