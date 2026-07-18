@@ -178,10 +178,10 @@ app.get('/portal/:studentId', async (c) => {
   const studentId = c.req.param('studentId');
   // NOCASE: the id comes from the Auth0 email local part, which is lowercased.
   const student = await c.env.DB.prepare(
-    `SELECT id, name, nickname, course, avatar_key AS avatarKey FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+    `SELECT id, name, nickname, course, email, avatar_key AS avatarKey FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
   )
     .bind(studentId)
-    .first<{ id: string; name: string; nickname: string | null; course: string | null; avatarKey: string | null }>();
+    .first<{ id: string; name: string; nickname: string | null; course: string | null; email: string | null; avatarKey: string | null }>();
   if (!student) {
     return c.json({ status: 'error', message: 'ไม่พบข้อมูลนักเรียนรหัสนี้ในระบบ' }, 404);
   }
@@ -252,6 +252,9 @@ app.get('/portal/:studentId', async (c) => {
         name: student.name,
         nickname: student.nickname ?? null,
         course: student.course ?? '-',
+        // Digital ID card / profile edit need the contact email, but like
+        // files and Meet links it only goes to the student themselves.
+        email: authed ? (student.email ?? null) : null,
         lastPaid: payments[0]?.timestamp ?? '-',
         creditBalance: balance,
         hasAvatar: !!student.avatarKey,
