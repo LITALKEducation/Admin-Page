@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { AppBindings } from './types';
-import { verifyAuth, requirePermission, portalTokenMatchesStudent, verifyPortalToken, resolveStudentIdFromIdent } from './auth';
+import { verifyAuth, requirePermission, portalTokenMatchesStudent, verifyPortalToken, resolveStudentIdFromIdent, debugPortalAuth } from './auth';
 import { DOCUMENT_TYPES, extname, insertFileWithUniqueName, logAudit, todayCode } from './db';
 import core, { bangkokToday, generateCheckinCode } from './core';
 import manage, {
@@ -178,7 +178,9 @@ app.get('/portal/:studentId', async (c) => {
 
   const authed = await portalTokenMatchesStudent(c, student.id);
   if (!authed) {
-    return c.json({ status: 'error', message: 'กรุณาเข้าสู่ระบบเพื่อดูข้อมูลนี้' }, 401);
+    // TEMPORARY debug field — see debugPortalAuth in auth.ts.
+    const debug = await debugPortalAuth(c, student.id).catch((err) => ({ error: String(err) }));
+    return c.json({ status: 'error', message: 'กรุณาเข้าสู่ระบบเพื่อดูข้อมูลนี้', debug }, 401);
   }
 
   // Lazy backfill for any row the 0017 migration's UPDATE missed (e.g. one

@@ -139,6 +139,36 @@ export async function portalTokenMatchesStudent(c: Context<AppBindings>, student
   }
 }
 
+// TEMPORARY — live-incident diagnostic for "logged in via Auth0 but the
+// portal shows nothing" (PR #66 fixed one cause of this but it's still
+// reproducing). Reveals only the caller's own token shape and whether it
+// matches the *requested* studentId — never another student's data — so
+// it's safe to return directly in the 401 response. Delete once the actual
+// cause is confirmed and fixed for good.
+export async function debugPortalAuth(c: Context<AppBindings>, studentId: string) {
+  const ident = await verifyPortalToken(c);
+  if (!ident) return { hasToken: false as const };
+
+  const resolved = await resolveStudentIdFromIdent(c, ident);
+  const row = await c.env.DB.prepare(
+    `SELECT auth0_user_id AS auth0UserId FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+  )
+    .bind(studentId)
+    .first<{ auth0UserId: string | null }>();
+
+  return {
+    hasToken: true as const,
+    hasEmailClaim: !!ident.email,
+    emailLocalPart: ident.email ? ident.email.split('@')[0] : null,
+    resolvedStudentId: resolved,
+    requestedStudentId: studentId,
+    resolvedMatchesRequested: resolved !== null && resolved.toLowerCase() === studentId.toLowerCase(),
+    requestedStudentRowExists: !!row,
+    requestedStudentHasCachedAuth0Id: !!row?.auth0UserId,
+    mgmtApiConfigured: !!(c.env.AUTH0_MGMT_CLIENT_ID && c.env.AUTH0_MGMT_CLIENT_SECRET),
+  };
+}
+
 export function requirePermission(permission: string) {
   return async (c: Context<AppBindings>, next: Next) => {
     const user = c.get('user');
