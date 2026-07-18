@@ -4491,6 +4491,9 @@
                     <button class="hamburger-btn" onclick="openCommandPalette()" aria-label="ค้นหา">
                         <i class="fas fa-magnifying-glass"></i>
                     </button>
+                    <button class="hamburger-btn" onclick="openStaffIdCardModal()" aria-label="บัตรประจำตัวดิจิทัล" title="บัตรประจำตัวดิจิทัล">
+                        <i class="fas fa-id-card"></i>
+                    </button>
                     <button class="hamburger-btn" onclick="openMobileMenu()" aria-label="Open Menu">
                         <i class="fas fa-bars"></i>
                     </button>
@@ -6342,6 +6345,7 @@
             </div>
             <nav class="mobile-menu-nav">
                 <a href="javascript:void(0)" class="active" data-screen="dashboard" onclick="goScreen('dashboard')"><i class="fas fa-gauge-high"></i> Dashboard</a>
+                <a href="javascript:void(0)" onclick="openStaffIdCardModal(); closeMobileMenu();"><i class="fas fa-id-card"></i> บัตรประจำตัวดิจิทัล</a>
                 <div class="sidebar-nav-heading" style="margin-top: 10px;">นักเรียน</div>
                 <a href="javascript:void(0)" data-screen="students" onclick="goScreen('students')"><i class="fas fa-users"></i> รายชื่อนักเรียน</a>
                 <a href="javascript:void(0)" data-screen="check" onclick="goScreen('check')"><i class="fas fa-id-card"></i> โปรไฟล์นักเรียน</a>
