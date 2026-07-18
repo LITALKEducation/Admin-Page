@@ -498,7 +498,7 @@
             <div id="stage-camera" class="kiosk-stage-view">
                 <video id="scan-video" autoplay playsinline muted></video>
                 <div class="scan-frame" aria-hidden="true"></div>
-                <div class="scan-idle-hint"><i class="fas fa-qrcode"></i> วางบัตรดิจิทัลให้อยู่ในกรอบเพื่อสแกน</div>
+                <div class="scan-idle-hint" id="scan-idle-hint"><i class="fas fa-qrcode"></i> วางบัตรดิจิทัลให้อยู่ในกรอบเพื่อสแกน</div>
                 <div id="camera-unavailable">
                     <i class="fas fa-video-slash"></i>
                     <span>เปิดกล้องไม่สำเร็จ</span>
@@ -772,19 +772,39 @@
 
         // ---------- Camera QR scanning ----------
         let videoStream = null;
-        const barcodeDetector = ('BarcodeDetector' in window) ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
+        // Some Chrome installs (esp. freshly-provisioned Windows machines)
+        // report `BarcodeDetector` as present, but its on-device detection
+        // component was never downloaded — every .detect() call then
+        // rejects forever with no visible sign except "nothing happens".
+        // barcodeDetectorBroken latches true the first time that happens
+        // so the loop below permanently switches to the jsQR fallback
+        // instead of silently failing scan after scan.
+        let barcodeDetector = ('BarcodeDetector' in window) ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
+        let barcodeDetectorBroken = false;
         const scanCanvas = document.createElement('canvas');
         const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
 
         async function startCamera(facingMode) {
             const video = document.getElementById('scan-video');
             document.getElementById('camera-unavailable').style.display = 'none';
+            // Request a sharp-enough stream for reliable decoding — the
+            // browser default resolution can be too low/blurry for jsQR
+            // (the fallback decoder) to pick a QR code out of the frame.
+            const videoConstraints = { width: { ideal: 1280 }, height: { ideal: 720 } };
+            if (facingMode) videoConstraints.facingMode = { ideal: facingMode };
             try {
-                const constraints = facingMode ? { video: { facingMode: { ideal: facingMode } } } : { video: true };
-                videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
                 video.srcObject = videoStream;
                 await video.play();
                 requestAnimationFrame(scanLoop);
+                if (!barcodeDetector && typeof jsQR === 'undefined') {
+                    // Neither the native decoder nor the jsQR fallback is
+                    // available (e.g. cdnjs blocked on this network) — say
+                    // so instead of scanning forever with no way to detect
+                    // a code.
+                    const hint = document.getElementById('scan-idle-hint');
+                    if (hint) hint.innerHTML = '<i class="fas fa-triangle-exclamation"></i> โหลดตัวถอดรหัส QR ไม่สำเร็จ กรุณารีเฟรชหน้าเว็บหรือแจ้งผู้ดูแลระบบ';
+                }
                 return true;
             } catch (err) {
                 console.warn('Camera unavailable:', err);
@@ -803,20 +823,33 @@
             if (video) video.srcObject = null;
         }
 
+        async function decodeWithJsQr(video) {
+            if (typeof jsQR === 'undefined') return null;
+            scanCanvas.width = video.videoWidth;
+            scanCanvas.height = video.videoHeight;
+            scanCtx.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height);
+            const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+            const result = jsQR(imageData.data, imageData.width, imageData.height);
+            return result && result.data ? result.data : null;
+        }
+
         async function scanLoop() {
             const video = document.getElementById('scan-video');
             if (videoStream && video.readyState === video.HAVE_ENOUGH_DATA && !scanBusy) {
                 try {
-                    if (barcodeDetector) {
-                        const codes = await barcodeDetector.detect(video);
-                        if (codes.length) submitScan(codes[0].rawValue, 'qr');
-                    } else if (typeof jsQR !== 'undefined') {
-                        scanCanvas.width = video.videoWidth;
-                        scanCanvas.height = video.videoHeight;
-                        scanCtx.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height);
-                        const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
-                        const result = jsQR(imageData.data, imageData.width, imageData.height);
-                        if (result && result.data) submitScan(result.data, 'qr');
+                    if (barcodeDetector && !barcodeDetectorBroken) {
+                        try {
+                            const codes = await barcodeDetector.detect(video);
+                            if (codes.length) submitScan(codes[0].rawValue, 'qr');
+                        } catch (detectErr) {
+                            console.warn('BarcodeDetector.detect failed — falling back to jsQR:', detectErr);
+                            barcodeDetectorBroken = true;
+                            const data = await decodeWithJsQr(video);
+                            if (data) submitScan(data, 'qr');
+                        }
+                    } else {
+                        const data = await decodeWithJsQr(video);
+                        if (data) submitScan(data, 'qr');
                     }
                 } catch (err) {
                     // Transient decode failures are normal (blurry frame, no
