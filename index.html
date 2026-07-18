@@ -4269,7 +4269,13 @@
         .idcard-field-value { font-size: 13px; font-weight: 600; color: var(--text-secondary); overflow-wrap: anywhere; }
         .idcard-qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 20px 22px; border-top: 1px dashed var(--border-color); }
         .idcard-qr-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); display: inline-flex; align-items: center; gap: 6px; margin-bottom: 2px; }
-        .idcard-qr { width: 168px; height: 168px; display: flex; align-items: center; justify-content: center; background: #ffffff; border-radius: var(--radius-sm, 8px); padding: 8px; box-shadow: 0 0 0 1px var(--border-color); }
+        /* padding is a real quiet zone, not just visual breathing room: the
+           token QR is a 29x29-module (version 3) code, so the ISO spec's
+           4-module quiet zone needs ~21px of contiguous white margin. In
+           light mode that was accidentally satisfied by the surrounding
+           white card; in dark mode the old 8px padding was the only white
+           pixels near the code — well short of what a camera needs. */
+        .idcard-qr { width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; background: #ffffff; border-radius: var(--radius-sm, 8px); padding: 24px; box-shadow: 0 0 0 1px var(--border-color); }
         .idcard-qr-fallback { font-size: 13px; font-weight: 700; color: #1d1d1f; text-align: center; word-break: break-all; }
         .idcard-qr-fallback.idcard-qr-error { color: var(--accent-danger); font-size: 12px; font-weight: 600; line-height: 1.5; }
         .idcard-qr-countdown { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px; }
@@ -8323,7 +8329,23 @@
                 staffIdCardQrExpiresAt = Date.parse(data.expiresAt) || (Date.now() + 120000);
                 qrHolder.innerHTML = '';
                 if (typeof QRCode !== 'undefined') {
-                    new QRCode(qrHolder, { text: data.token, width: 168, height: 168, correctLevel: QRCode.CorrectLevel.M });
+                    // Render well above the on-screen 168px size and scale down
+                    // via CSS — qrcodejs draws each module as a canvas
+                    // fillRect, so at a low pixel size the module edges land
+                    // on fractional pixels and get anti-aliased into a soft
+                    // gray band, which camera QR decoders can't threshold
+                    // reliably. Rendering large keeps that blur negligible.
+                    new QRCode(qrHolder, { text: data.token, width: 400, height: 400, correctLevel: QRCode.CorrectLevel.M });
+                    // qrcodejs draws to an off-screen <canvas> and displays a
+                    // separate <img> (canvas.toDataURL()) with the canvas
+                    // hidden — the <img> is what's actually visible, so
+                    // that's what needs the CSS scale-down. querySelector
+                    // ('img, canvas') is a selector LIST — it returns
+                    // whichever matches first in document order, not list
+                    // order, and the canvas is always appended first, so
+                    // img must be selected explicitly.
+                    const rendered = qrHolder.querySelector('img') || qrHolder.querySelector('canvas');
+                    if (rendered) { rendered.style.width = '100%'; rendered.style.height = '100%'; }
                 } else {
                     qrHolder.innerHTML = `<div class="idcard-qr-fallback">${escapeHtml(data.token)}</div>`;
                 }

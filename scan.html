@@ -197,6 +197,41 @@
 
         #stage-ipad-idle { cursor: pointer; }
 
+        /* Soft brand-color glow behind the welcome/idle content — the one
+           bit of decorative flourish on an otherwise plain dark screen.
+           Painted first (pseudo-content is generated before real children),
+           so the logo/text/button below naturally paint over it without
+           any z-index bookkeeping. */
+        #stage-desktop-welcome::before,
+        #stage-ipad-idle::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(circle at 18% 15%, rgba(76, 154, 255, 0.16), transparent 45%),
+                radial-gradient(circle at 85% 85%, rgba(62, 207, 142, 0.12), transparent 42%);
+            pointer-events: none;
+        }
+
+        .stage-logo-wrap {
+            width: 132px;
+            height: 132px;
+            border-radius: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, rgba(76, 154, 255, 0.16), rgba(62, 207, 142, 0.1));
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+            animation: scan-pulse-soft 2.6s ease-in-out infinite;
+        }
+
+        .stage-logo {
+            width: 82px;
+            height: 82px;
+            border-radius: 20px;
+            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4);
+        }
+
         .stage-hero-icon {
             width: 108px;
             height: 108px;
@@ -215,22 +250,32 @@
             50% { box-shadow: 0 0 0 18px rgba(76, 154, 255, 0); }
         }
 
-        .stage-title { font-size: 21px; font-weight: 800; margin: 0; }
+        .stage-title { font-size: 24px; font-weight: 800; margin: 0; letter-spacing: -0.01em; }
         .stage-desc { font-size: 14.5px; color: var(--text-muted); margin: 0; max-width: 380px; line-height: 1.6; }
 
         .stage-chips {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 16px;
+            gap: 10px;
             flex-wrap: wrap;
             font-size: 12.5px;
             color: var(--text-muted);
         }
 
+        .stage-chips .scan-status-chip {
+            padding: 7px 14px;
+            border-radius: 999px;
+            background: var(--bg-panel);
+            box-shadow: inset 0 0 0 1px var(--border);
+        }
+
         #desktop-fallback-qr {
+            /* padding is a real quiet zone, not just visual spacing — this
+               page's dark background means it's the only white margin
+               around the code, same reasoning as the ID card fix. */
             background: #fff;
-            padding: 14px;
+            padding: 24px;
             border-radius: 16px;
             display: inline-flex;
         }
@@ -305,17 +350,39 @@
             max-width: 360px;
             background: var(--bg-panel);
             border: 1px solid var(--border);
-            border-radius: 26px;
+            border-radius: 28px;
             overflow: hidden;
-            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+            box-shadow: 0 28px 70px rgba(0, 0, 0, 0.55);
             text-align: center;
         }
 
+        /* Badge, then avatar, in normal flex flow with a real gap between
+           them — the avatar's negative-bottom-margin below pulls
+           .scan-result-body up underneath it, not the avatar up into the
+           badge. That distinction is the whole fix: the old version pulled
+           the avatar itself upward by more than the badge's own height,
+           so the photo covered the badge every time. */
         .scan-result-banner {
-            padding: 22px 20px 52px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            padding: 26px 20px 0;
             color: #fff;
             background: linear-gradient(135deg, #3a3d46, #565a66);
             transition: background 0.2s ease;
+            overflow: hidden;
+        }
+
+        /* Faint diagonal texture — same decorative touch as the full
+           digital ID card, kept consistent across the whole system. */
+        .scan-result-banner::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0 2px, transparent 2px 16px);
+            pointer-events: none;
         }
 
         .scan-result-banner.checkin { background: linear-gradient(135deg, #1f8a5c, #3ecf8e); }
@@ -324,42 +391,47 @@
         .scan-result-banner.loading { background: linear-gradient(135deg, #3a3d46, #565a66); }
 
         .scan-result-badge {
+            position: relative;
             display: inline-flex;
             align-items: center;
             gap: 7px;
             font-size: 13px;
             font-weight: 700;
-            background: rgba(255, 255, 255, 0.18);
-            padding: 7px 15px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
             border-radius: 999px;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
         }
 
         .scan-result-avatar-wrap {
-            width: 96px;
-            height: 96px;
+            position: relative;
+            width: 108px;
+            height: 108px;
             border-radius: 50%;
-            margin: -46px auto 0;
+            margin-bottom: -54px;
             border: 4px solid var(--bg-panel);
             background: var(--bg-elevated);
             overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 32px;
+            font-size: 36px;
             font-weight: 800;
             color: var(--text-muted);
+            box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+            flex-shrink: 0;
         }
 
         .scan-result-avatar-wrap img { width: 100%; height: 100%; object-fit: cover; }
 
-        .scan-result-body { padding: 58px 22px 26px; }
+        .scan-result-body { padding: 68px 24px 28px; }
 
-        .scan-result-name { font-size: 20px; font-weight: 800; word-break: break-word; }
-        .scan-result-id { font-size: 13px; color: var(--text-muted); margin-top: 5px; }
+        .scan-result-name { font-size: 21px; font-weight: 800; word-break: break-word; }
+        .scan-result-id { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
 
         .scan-result-time {
-            margin-top: 16px;
-            padding-top: 14px;
+            margin-top: 18px;
+            padding-top: 16px;
             border-top: 1px dashed var(--border);
             font-size: 13px;
             color: var(--text-muted);
@@ -469,7 +541,7 @@
         <div class="scan-stage" id="scan-stage">
             <!-- Windows / Stand-Computer: background listeners + explicit camera fallback -->
             <div id="stage-desktop-welcome" class="kiosk-stage-view">
-                <div class="stage-hero-icon"><i class="fas fa-id-card-clip"></i></div>
+                <div class="stage-logo-wrap"><img src="img/icon-192.png" alt="LITALK" class="stage-logo"></div>
                 <h2 class="stage-title">ยินดีต้อนรับ</h2>
                 <p class="stage-desc">แสกนที่เครื่องแสกนบัตร หรือแตะที่เครื่องแตะบัตรเพื่อลงชื่อ</p>
                 <button class="scan-btn" onclick="attemptDesktopCamera()"><i class="fas fa-camera"></i> แสกนด้วยกล้อง</button>
@@ -489,7 +561,7 @@
 
             <!-- iPad at the classroom door: tap anywhere, front camera -->
             <div id="stage-ipad-idle" class="kiosk-stage-view" onclick="startIpadScan()">
-                <div class="stage-hero-icon"><i class="fas fa-qrcode"></i></div>
+                <div class="stage-logo-wrap"><img src="img/icon-192.png" alt="LITALK" class="stage-logo"></div>
                 <h2 class="stage-title">แตะที่ใดก็ได้เพื่อแสกน QR</h2>
                 <p class="stage-desc">นำบัตรประจำตัวดิจิทัลมาแสดงที่กล้องหน้าเครื่อง</p>
             </div>
@@ -823,19 +895,45 @@
             if (video) video.srcObject = null;
         }
 
+        // Crops to a comfortably-larger area than the on-screen guide frame
+        // — jsQR only needs to decode this region, so shrinking its input
+        // measurably speeds up every scan attempt on the JS-only fallback
+        // path (the one that matters most, since the native BarcodeDetector
+        // is hardware-accelerated and already fast).
+        function getScanCropRect(video) {
+            const marginX = 0.12;
+            const marginY = 0.08;
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+            return {
+                sx: Math.round(w * marginX),
+                sy: Math.round(h * marginY),
+                sw: Math.round(w * (1 - marginX * 2)),
+                sh: Math.round(h * (1 - marginY * 2)),
+            };
+        }
+
         async function decodeWithJsQr(video) {
             if (typeof jsQR === 'undefined') return null;
-            scanCanvas.width = video.videoWidth;
-            scanCanvas.height = video.videoHeight;
-            scanCtx.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height);
-            const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+            const { sx, sy, sw, sh } = getScanCropRect(video);
+            scanCanvas.width = sw;
+            scanCanvas.height = sh;
+            scanCtx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+            const imageData = scanCtx.getImageData(0, 0, sw, sh);
             const result = jsQR(imageData.data, imageData.width, imageData.height);
             return result && result.data ? result.data : null;
         }
 
+        // Guards against requestAnimationFrame firing again before the
+        // previous (async) decode attempt has finished — without it, a slow
+        // jsQR pass on lower-end hardware can pile up overlapping decodes
+        // and make scanning feel sluggish instead of faster.
+        let decoding = false;
+
         async function scanLoop() {
             const video = document.getElementById('scan-video');
-            if (videoStream && video.readyState === video.HAVE_ENOUGH_DATA && !scanBusy) {
+            if (videoStream && video.readyState === video.HAVE_ENOUGH_DATA && !scanBusy && !decoding) {
+                decoding = true;
                 try {
                     if (barcodeDetector && !barcodeDetectorBroken) {
                         try {
@@ -855,6 +953,7 @@
                     // Transient decode failures are normal (blurry frame, no
                     // code in view) — nothing to surface to the user.
                 }
+                decoding = false;
             }
             if (videoStream) requestAnimationFrame(scanLoop);
         }
