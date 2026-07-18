@@ -748,7 +748,16 @@ app.route('/', chat);
 app.route('/', blog);
 app.route('/', shortLinks);
 
-app.get('/me', (c) => c.json(c.get('user')));
+// Also carries title/phone/hasAvatar from the staff table (not part of the
+// JWT claims) so the admin panel's own digital ID card doesn't need a
+// second endpoint just for those three fields.
+app.get('/me', async (c) => {
+  const user = c.get('user');
+  const staff = await c.env.DB.prepare(`SELECT title, phone, avatar_key AS avatarKey FROM staff WHERE identity = ? COLLATE NOCASE`)
+    .bind(user.email)
+    .first<{ title: string | null; phone: string | null; avatarKey: string | null }>();
+  return c.json({ ...user, title: staff?.title ?? null, phone: staff?.phone ?? null, hasAvatar: !!staff?.avatarKey });
+});
 
 // Rotating token for the staff/teacher digital ID card's QR — mirrors
 // POST /portal/:studentId/id-card-token (see ID_CARD_TOKEN_TTL_MS above).
