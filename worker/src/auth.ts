@@ -81,22 +81,26 @@ export async function verifyPortalToken(c: Context<AppBindings>): Promise<{ emai
   }
 }
 
-// Best-effort ownership check for the public student portal. Unlike
-// verifyAuth this never rejects the request — it returns whether the caller
-// presented a valid Auth0 token whose login identity is this very student
-// (`<studentId>@STUDENT_EMAIL_DOMAIN`). The portal stays public for basic
-// data but unlocks sensitive fields (files, Meet links) only for the
-// authenticated student themselves.
+// Ownership check for the student portal — returns whether the caller
+// presented a valid Auth0 token that proves they are this exact student.
+// GET /portal/:studentId (and every other portal route: self-edit, files,
+// avatar upload) rejects the request outright when this is false, so both
+// resolution paths below must be tried, same as /portal/whoami:
+//  1. email-claim local part === studentId (`<studentId>@STUDENT_EMAIL_DOMAIN`)
+//  2. Auth0 sub === the student's cached login user id (resolveStudentAuth0Id)
+// Path 2 used to run only when the token had *no* email claim at all, which
+// silently failed closed for any real student whose login email doesn't
+// follow the <studentId>@domain convention (personal signups, admin-edited
+// emails) — the email claim was present, just for a different address, so
+// the sub fallback never ran even though it would have matched. Now it
+// always runs when the email check doesn't match, not just when there's no
+// email claim to check.
 export async function portalTokenMatchesStudent(c: Context<AppBindings>, studentId: string): Promise<boolean> {
   const ident = await verifyPortalToken(c);
   if (!ident) return false;
   const localPart = ident.email.split('@')[0];
-  if (localPart) return localPart.toLowerCase() === studentId.toLowerCase();
+  if (localPart && localPart.toLowerCase() === studentId.toLowerCase()) return true;
 
-  // No email claim on the token — the Auth0 Action from README step 5
-  // isn't deployed for this login. Fall back to matching the raw Auth0
-  // sub against the student's cached login user id instead of failing
-  // closed for every student (see resolveStudentAuth0Id in db.ts).
   try {
     const row = await c.env.DB.prepare(`SELECT auth0_user_id AS auth0UserId FROM students WHERE id = ?`)
       .bind(studentId)
