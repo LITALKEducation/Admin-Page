@@ -45,6 +45,11 @@ id = "6243b958ee0e4207932489e5197a449e"
 
 [vars]
 AUTH0_DOMAIN = "litalkeducation.us.auth0.com"
+# The student site's Auth0Client (Website/js/student-portal.js) authenticates
+# through this custom domain, not AUTH0_DOMAIN above — its tokens' `iss`
+# claim is this domain, so portal token verification (verifyPortalToken in
+# auth.ts) needs it specifically. Keep in sync with that file's `domain:`.
+AUTH0_PORTAL_DOMAIN = "auth.litalkeducation.com"
 AUTH0_AUDIENCE = "https://admin.litalkeducation.com/files-api" # Auth0 API ID 6a475ce71d0772bca086a160
 AUTH0_EMAIL_CLAIM = "https://admin.litalkeducation.com/email" # namespaced claim added by an Auth0 Action; falls back to `sub` if absent
 AUTH0_NAME_CLAIM = "https://admin.litalkeducation.com/name"   # namespaced display-name claim; falls back to name/nickname/email
