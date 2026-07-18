@@ -23,6 +23,13 @@ The SPA currently only requests an ID token, which isn't suitable for a
 server to verify. Create a dedicated API so the frontend can request a scoped
 access token instead:
 
+**Custom domains:** if the student site's `Auth0Client` (`Website/js/student-portal.js`)
+is configured with a custom domain (e.g. `auth.litalkeducation.com`) rather than the
+raw tenant domain, its tokens' `iss` claim is that custom domain — set
+`AUTH0_PORTAL_DOMAIN` in `wrangler.toml` to match, or `verifyPortalToken` (auth.ts)
+rejects every student token with "unexpected iss claim value" no matter what else is
+configured correctly. Only the admin panel (`index.html`) uses the raw `AUTH0_DOMAIN`.
+
 1. Auth0 Dashboard → **Applications → APIs → Create API**.
    - Name: `Litalk Admin Files API` (or anything).
    - Identifier: a URI-style string that does **not** need to resolve, e.g.

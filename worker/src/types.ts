@@ -8,6 +8,10 @@ export interface Env {
   SHORT_DOMAIN_GO: string;
   SHORT_DOMAIN_PAYMENT: string;
   AUTH0_DOMAIN: string;
+  // The student site's Auth0Client uses this custom domain (not
+  // AUTH0_DOMAIN) so student portal tokens carry it as their `iss` claim —
+  // see verifyPortalToken in auth.ts. Falls back to AUTH0_DOMAIN if unset.
+  AUTH0_PORTAL_DOMAIN?: string;
   AUTH0_AUDIENCE: string;
   AUTH0_EMAIL_CLAIM: string;
   AUTH0_NAME_CLAIM: string;

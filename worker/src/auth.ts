@@ -62,13 +62,29 @@ export async function verifyAuth(c: Context<AppBindings>, next: Next) {
 // Verifies a portal Bearer token and returns its identity (email claim if
 // present, always the sub), or null for a missing/invalid token. Never
 // throws — portal routes degrade to the unauthenticated view.
+//
+// This is THE root cause of the "logged in via Auth0 but the portal shows
+// no data" incident: the student site's Auth0Client is configured with
+// `domain: 'auth.litalkeducation.com'` (a custom domain, presumably for a
+// nicer-looking login page URL), while the admin panel's uses the raw
+// tenant domain (AUTH0_DOMAIN, `litalkeducation.us.auth0.com`) and that's
+// what this check verified against. Every portal token's `iss` claim is
+// therefore `https://auth.litalkeducation.com/`, which never matched
+// `https://${AUTH0_DOMAIN}/` — jwtVerify rejected every single one with
+// "unexpected iss claim value", 100% reproducibly, regardless of Auth0
+// dashboard settings (Allow Offline Access / Refresh Token Rotation don't
+// matter if the resulting token can never pass verification in the first
+// place). AUTH0_PORTAL_DOMAIN carries the domain the student site actually
+// authenticates through; falls back to AUTH0_DOMAIN if unset so a missing
+// var doesn't silently break this differently.
 export async function verifyPortalToken(c: Context<AppBindings>): Promise<{ email: string; sub: string } | null> {
   const authHeader = c.req.header('Authorization') || '';
   const [scheme, token] = authHeader.split(' ');
   if (scheme !== 'Bearer' || !token) return null;
+  const domain = c.env.AUTH0_PORTAL_DOMAIN || c.env.AUTH0_DOMAIN;
   try {
-    const { payload } = await jwtVerify(token, getJwks(c.env.AUTH0_DOMAIN), {
-      issuer: `https://${c.env.AUTH0_DOMAIN}/`,
+    const { payload } = await jwtVerify(token, getJwks(domain), {
+      issuer: `https://${domain}/`,
       audience: c.env.AUTH0_AUDIENCE,
     });
     const email =
