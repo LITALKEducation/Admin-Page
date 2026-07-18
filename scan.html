@@ -229,8 +229,11 @@
         }
 
         #desktop-fallback-qr {
+            /* padding is a real quiet zone, not just visual spacing — this
+               page's dark background means it's the only white margin
+               around the code, same reasoning as the ID card fix. */
             background: #fff;
-            padding: 14px;
+            padding: 24px;
             border-radius: 16px;
             display: inline-flex;
         }
