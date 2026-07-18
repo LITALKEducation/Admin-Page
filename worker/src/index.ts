@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { AppBindings } from './types';
-import { verifyAuth, requirePermission, portalTokenMatchesStudent, verifyPortalToken, resolveStudentIdFromIdent, debugPortalAuth } from './auth';
+import { verifyAuth, requirePermission, requireAdmin, portalTokenMatchesStudent, verifyPortalToken, resolveStudentIdFromIdent, debugPortalAuth } from './auth';
 import { DOCUMENT_TYPES, extname, insertFileWithUniqueName, logAudit, todayCode } from './db';
 import core, { bangkokToday, generateCheckinCode } from './core';
 import manage, {
@@ -133,6 +133,10 @@ app.post('/stripe/webhook', async (c) => {
 
   return c.json({ received: true });
 });
+
+// Rotating digital-ID-card QR token TTL (migrations/0018) — shared by the
+// student and staff mint endpoints.
+const ID_CARD_TOKEN_TTL_MS = 2 * 60_000;
 
 // NOTE: registered before /portal/:studentId — Hono matches in registration
 // order, and the parameterized route would otherwise capture "whoami" as a
@@ -410,6 +414,27 @@ app.patch('/portal/:studentId/profile', async (c) => {
   await c.env.DB.prepare(`UPDATE students SET nickname = ? WHERE id = ?`).bind(body.nickname.trim() || null, student.id).run();
   await logAudit(c.env.DB, null, 'STUDENT_SELF_EDIT_PROFILE', student.id, null, true);
   return c.json({ status: 'success', message: 'บันทึกข้อมูลสำเร็จ' });
+});
+
+// Rotating token for the digital ID card's QR (migrations/0018) — the card
+// calls this on open and again every ~110s to keep the QR live for the
+// front-desk scanner (POST /campus-checkin resolves it). 2-minute TTL means
+// a photo of someone's screen is only good for a couple of minutes, not a
+// permanent stand-in for the card. Self-only, same gating as the rest of
+// this student's private routes.
+app.post('/portal/:studentId/id-card-token', async (c) => {
+  const studentId = c.req.param('studentId');
+  if (!(await portalTokenMatchesStudent(c, studentId))) return c.json({ status: 'error', message: 'Unauthorized' }, 401);
+
+  const token = crypto.randomUUID().replace(/-/g, '');
+  const expiresAt = new Date(Date.now() + ID_CARD_TOKEN_TTL_MS).toISOString();
+  await c.env.DB.batch([
+    c.env.DB.prepare(`DELETE FROM id_card_tokens WHERE person_type = 'student' AND person_id = ? COLLATE NOCASE`).bind(studentId),
+    c.env.DB.prepare(`INSERT INTO id_card_tokens (token, person_type, person_id, expires_at) VALUES (?, 'student', ?, ?)`)
+      .bind(token, studentId, expiresAt),
+  ]);
+
+  return c.json({ status: 'success', token, expiresAt });
 });
 
 // Self-service avatar upload/removal — same R2 key convention
@@ -724,6 +749,172 @@ app.route('/', blog);
 app.route('/', shortLinks);
 
 app.get('/me', (c) => c.json(c.get('user')));
+
+// Rotating token for the staff/teacher digital ID card's QR — mirrors
+// POST /portal/:studentId/id-card-token (see ID_CARD_TOKEN_TTL_MS above).
+// Always "my own" token: any authenticated staff member, no extra
+// permission needed, same as /me.
+app.post('/staff/id-card-token', async (c) => {
+  const user = c.get('user');
+  const token = crypto.randomUUID().replace(/-/g, '');
+  const expiresAt = new Date(Date.now() + ID_CARD_TOKEN_TTL_MS).toISOString();
+  await c.env.DB.batch([
+    c.env.DB.prepare(`DELETE FROM id_card_tokens WHERE person_type = 'staff' AND person_id = ?`).bind(user.email),
+    c.env.DB.prepare(`INSERT INTO id_card_tokens (token, person_type, person_id, expires_at) VALUES (?, 'staff', ?, ?)`)
+      .bind(token, user.email, expiresAt),
+  ]);
+  return c.json({ status: 'success', token, expiresAt });
+});
+
+// ===== Campus check-in/out (front-desk QR/barcode/NFC scanning) =====
+// staff scans a student's or teacher's digital ID card (QR from
+// id_card_tokens, or a registered NFC tag from nfc_cards) at scan.html.
+// Toggle semantics: no open row for this person today -> check them in; an
+// open row exists -> check them out. Independent of the per-booking QR
+// attendance (0015/0016) but opportunistically links today's booking when
+// one exists, so it also enriches that picture without requiring it.
+app.post('/campus-checkin', requirePermission('data:write'), async (c) => {
+  const body = await c.req.json<{ code?: string; method?: string }>().catch(() => ({}) as never);
+  const code = (body.code ?? '').trim();
+  if (!code) return c.json({ status: 'error', message: 'ไม่พบข้อมูลที่สแกน' }, 400);
+  const method = (['qr', 'barcode', 'nfc'] as const).includes(body.method as never) ? (body.method as string) : 'qr';
+
+  let personType: 'student' | 'staff';
+  let personId: string;
+
+  // Try the rotating ID-card token first (QR/barcode), then a registered
+  // NFC tag — the declared `method` is stored for the audit trail only, not
+  // trusted for resolution, since a QR misread as a barcode (or vice versa)
+  // still carries the same token string either way.
+  const tokenRow = await c.env.DB.prepare(
+    `SELECT person_type AS personType, person_id AS personId, expires_at AS expiresAt FROM id_card_tokens WHERE token = ?`,
+  )
+    .bind(code)
+    .first<{ personType: string; personId: string; expiresAt: string }>();
+
+  if (tokenRow) {
+    if (Date.parse(tokenRow.expiresAt) < Date.now()) {
+      return c.json({ status: 'error', message: 'QR หมดอายุแล้ว ให้เจ้าของบัตรเปิดบัตรใหม่แล้วสแกนอีกครั้ง' }, 410);
+    }
+    personType = tokenRow.personType as 'student' | 'staff';
+    personId = tokenRow.personId;
+  } else {
+    const nfcRow = await c.env.DB.prepare(
+      `SELECT person_type AS personType, person_id AS personId FROM nfc_cards WHERE uid = ?`,
+    )
+      .bind(code)
+      .first<{ personType: string; personId: string }>();
+    if (!nfcRow) return c.json({ status: 'error', message: 'ไม่พบรหัสนี้ในระบบ กรุณาสแกนใหม่อีกครั้ง' }, 404);
+    personType = nfcRow.personType as 'student' | 'staff';
+    personId = nfcRow.personId;
+  }
+
+  let personName = personId;
+  let bookingId: number | null = null;
+  if (personType === 'student') {
+    const student = await c.env.DB.prepare(
+      `SELECT COALESCE(nickname, name) AS name FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+    )
+      .bind(personId)
+      .first<{ name: string }>();
+    if (!student) return c.json({ status: 'error', message: 'ไม่พบบัญชีนักเรียนนี้ในระบบ (อาจถูกลบไปแล้ว)' }, 404);
+    personName = student.name;
+
+    const booking = await c.env.DB.prepare(
+      `SELECT id FROM bookings WHERE student_id = ? COLLATE NOCASE AND booking_date = ? AND status = 'booked' ORDER BY booking_time LIMIT 1`,
+    )
+      .bind(personId, bangkokToday())
+      .first<{ id: number }>();
+    bookingId = booking?.id ?? null;
+  } else {
+    const staff = await c.env.DB.prepare(`SELECT name FROM staff WHERE identity = ?`).bind(personId).first<{ name: string | null }>();
+    if (!staff) return c.json({ status: 'error', message: 'ไม่พบบัญชีเจ้าหน้าที่นี้ในระบบ' }, 404);
+    personName = staff.name || personId;
+  }
+
+  const scannedBy = c.get('user').email;
+  const open = await c.env.DB.prepare(
+    `SELECT id FROM campus_checkins WHERE person_type = ? AND person_id = ? COLLATE NOCASE AND checked_out_at IS NULL ORDER BY id DESC LIMIT 1`,
+  )
+    .bind(personType, personId)
+    .first<{ id: number }>();
+
+  if (open) {
+    await c.env.DB.prepare(`UPDATE campus_checkins SET checked_out_at = CURRENT_TIMESTAMP, checked_out_by = ? WHERE id = ?`)
+      .bind(scannedBy, open.id)
+      .run();
+    return c.json({ status: 'success', action: 'checked_out', personType, personId, personName });
+  }
+
+  await c.env.DB.prepare(
+    `INSERT INTO campus_checkins (person_type, person_id, booking_id, scan_method, checked_in_by) VALUES (?, ?, ?, ?, ?)`,
+  )
+    .bind(personType, personId, bookingId, method, scannedBy)
+    .run();
+  return c.json({ status: 'success', action: 'checked_in', personType, personId, personName });
+});
+
+// Same-day campus check-in/out log, for the admin panel to confirm scans
+// landed correctly.
+app.get('/campus-checkins', requirePermission('data:read'), async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT cc.id, cc.person_type AS personType, cc.person_id AS personId,
+            CASE WHEN cc.person_type = 'student' THEN COALESCE(s.nickname, s.name, cc.person_id)
+                 ELSE COALESCE(st.name, cc.person_id) END AS personName,
+            cc.booking_id AS bookingId, cc.scan_method AS scanMethod,
+            cc.checked_in_at AS checkedInAt, cc.checked_in_by AS checkedInBy,
+            cc.checked_out_at AS checkedOutAt, cc.checked_out_by AS checkedOutBy
+     FROM campus_checkins cc
+     LEFT JOIN students s ON cc.person_type = 'student' AND s.id = cc.person_id COLLATE NOCASE
+     LEFT JOIN staff st ON cc.person_type = 'staff' AND st.identity = cc.person_id
+     WHERE date(cc.checked_in_at, '+7 hours') = date('now', '+7 hours')
+     ORDER BY cc.checked_in_at DESC LIMIT 200`,
+  ).all();
+  return c.json(results ?? []);
+});
+
+// ===== NFC card registration (physical cards for students/teachers) =====
+app.get('/nfc-cards', requirePermission('data:read'), async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT uid, person_type AS personType, person_id AS personId, registered_by AS registeredBy, registered_at AS registeredAt
+     FROM nfc_cards ORDER BY registered_at DESC LIMIT 500`,
+  ).all();
+  return c.json(results ?? []);
+});
+
+app.post('/nfc-cards', requireAdmin, async (c) => {
+  const body = await c.req.json<{ uid?: string; personType?: string; personId?: string }>().catch(() => ({}) as never);
+  const uid = (body.uid ?? '').trim();
+  const personType = body.personType === 'staff' ? 'staff' : body.personType === 'student' ? 'student' : null;
+  const personId = (body.personId ?? '').trim();
+  if (!uid || !personType || !personId) return c.json({ error: 'กรุณาระบุ UID บัตรและเลือกเจ้าของบัตร' }, 400);
+
+  if (personType === 'student') {
+    const row = await c.env.DB.prepare(`SELECT id FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`).bind(personId).first();
+    if (!row) return c.json({ error: 'ไม่พบนักเรียนรหัสนี้ในระบบ' }, 404);
+  } else {
+    const row = await c.env.DB.prepare(`SELECT identity FROM staff WHERE identity = ?`).bind(personId).first();
+    if (!row) return c.json({ error: 'ไม่พบเจ้าหน้าที่คนนี้ในระบบ' }, 404);
+  }
+
+  try {
+    await c.env.DB.prepare(`INSERT INTO nfc_cards (uid, person_type, person_id, registered_by) VALUES (?, ?, ?, ?)`)
+      .bind(uid, personType, personId, c.get('user').email)
+      .run();
+  } catch (err) {
+    if (String(err).includes('UNIQUE')) return c.json({ error: 'บัตร NFC นี้ถูกลงทะเบียนไว้แล้ว' }, 409);
+    throw err;
+  }
+  await logAudit(c.env.DB, c.get('user'), 'REGISTER_NFC_CARD', personId, uid, true);
+  return c.json({ ok: true });
+});
+
+app.delete('/nfc-cards/:uid', requireAdmin, async (c) => {
+  const uid = c.req.param('uid');
+  await c.env.DB.prepare(`DELETE FROM nfc_cards WHERE uid = ?`).bind(uid).run();
+  await logAudit(c.env.DB, c.get('user'), 'DELETE_NFC_CARD', null, uid ?? null, true);
+  return c.json({ ok: true });
+});
 
 app.get('/students/:id/files', requirePermission('files:read'), async (c) => {
   const studentId = c.req.param('id');
