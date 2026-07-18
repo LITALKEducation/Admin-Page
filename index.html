@@ -9864,7 +9864,7 @@
                     listEl.innerHTML = '<div class="empty-state"><i class="far fa-folder-open"></i><p>ยังไม่มีบัตร NFC ที่ลงทะเบียน</p></div>';
                     return;
                 }
-                listEl.innerHTML = `<div class="table-wrapper"><table class="data-table"><thead><tr>
+                listEl.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr>
                     <th>UID</th><th>ประเภท</th><th>เจ้าของบัตร</th><th>ลงทะเบียนโดย</th><th>วันที่</th><th></th>
                 </tr></thead><tbody>${rows.map((r) => `
                     <tr id="${nfcCardRowKey(r.uid)}">
@@ -9903,7 +9903,7 @@
                     listEl.innerHTML = '<div class="empty-state"><i class="far fa-folder-open"></i><p>ยังไม่มีการเช็คชื่อเข้า-ออกวันนี้</p></div>';
                     return;
                 }
-                listEl.innerHTML = `<div class="table-wrapper"><table class="data-table"><thead><tr>
+                listEl.innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr>
                     <th>ชื่อ</th><th>ประเภท</th><th>เข้า</th><th>ออก</th><th>วิธี</th>
                 </tr></thead><tbody>${rows.map((r) => `
                     <tr>
