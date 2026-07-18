@@ -4216,6 +4216,67 @@
             .blog-wizard-step__label { display: none; }
             .blog-wizard-steps { margin-bottom: 16px; }
         }
+
+        /* ============ Staff/teacher digital ID card ============
+           Same component language as the student portal's card
+           (Website/css/student-portal.css) translated to this app's own
+           token names — monochrome header, rotating QR minted every ~2min
+           for front-desk scan.html check-in/out. */
+        .idcard-modal-box.modal-box { max-width: 400px; text-align: left; padding: 0; overflow: hidden; }
+        .idcard-modal-head {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 18px 20px; border-bottom: 1px solid var(--border-color);
+        }
+        .idcard-modal-head h3 { font-size: 16px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px; margin: 0; }
+        .idcard-modal-close {
+            background: none; border: none; color: var(--text-muted); width: 32px; height: 32px;
+            border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 15px;
+        }
+        .idcard-modal-close:hover { background-color: var(--bg-tertiary); color: var(--text-primary); }
+        .idcard-modal-body { padding: 20px; }
+        .idcard {
+            border-radius: var(--radius-lg, 12px); border: 1px solid var(--border-color);
+            overflow: hidden; background: var(--bg-secondary); box-shadow: var(--shadow-pop);
+        }
+        .idcard-top {
+            position: relative; display: flex; align-items: center; gap: 10px; padding: 16px 20px;
+            background: linear-gradient(135deg, var(--brand-secondary), var(--brand-primary)); color: var(--brand-btn-text); overflow: hidden;
+        }
+        .idcard-top::before {
+            content: ''; position: absolute; inset: 0; pointer-events: none;
+            background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0 2px, transparent 2px 16px);
+        }
+        .idcard-logo { position: relative; width: 26px; height: 26px; border-radius: 7px; object-fit: contain; background: rgba(255, 255, 255, 0.15); padding: 3px; }
+        .idcard-brand { position: relative; font-weight: 700; font-size: 15px; letter-spacing: 0.2px; }
+        .idcard-main { display: flex; gap: 16px; padding: 22px 20px 18px; }
+        .idcard-photo {
+            width: 76px; height: 76px; border-radius: var(--radius-md, 10px); overflow: hidden; flex-shrink: 0;
+            background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 0 1px var(--border-color);
+        }
+        .idcard-photo img { width: 100%; height: 100%; object-fit: cover; }
+        .idcard-photo-fallback { font-size: 26px; font-weight: 700; color: var(--text-muted); }
+        .idcard-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+        .idcard-role {
+            font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--brand-primary);
+            background: var(--bg-tertiary); padding: 2px 8px; border-radius: 999px; width: fit-content;
+        }
+        .idcard-name { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); margin: 3px 0 0; overflow-wrap: anywhere; }
+        .idcard-title { font-size: 12.5px; color: var(--text-muted); }
+        .idcard-field { display: flex; flex-direction: column; gap: 1px; margin-top: 5px; }
+        .idcard-field[hidden] { display: none; }
+        .idcard-field-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+        .idcard-field-value { font-size: 13px; font-weight: 600; color: var(--text-secondary); overflow-wrap: anywhere; }
+        .idcard-qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 20px 22px; border-top: 1px dashed var(--border-color); }
+        .idcard-qr-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); display: inline-flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+        .idcard-qr { width: 168px; height: 168px; display: flex; align-items: center; justify-content: center; background: #ffffff; border-radius: var(--radius-sm, 8px); padding: 8px; box-shadow: 0 0 0 1px var(--border-color); }
+        .idcard-qr-fallback { font-size: 13px; font-weight: 700; color: #1d1d1f; text-align: center; word-break: break-all; }
+        .idcard-qr-fallback.idcard-qr-error { color: var(--accent-danger); font-size: 12px; font-weight: 600; line-height: 1.5; }
+        .idcard-qr-countdown { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px; }
+        .idcard-qr-countdown::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-success); animation: idcard-qr-pulse 1.6s ease-in-out infinite; }
+        @keyframes idcard-qr-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.75); } }
+        .idcard-qr-hint { font-size: 12px; color: var(--text-muted); text-align: center; }
+        @media (prefers-reduced-motion: reduce) { .idcard-qr-countdown::before { animation: none; } }
     </style>
 </head>
 
@@ -4401,6 +4462,9 @@
                             <button class="sidebar-nav-item" data-screen="credits" onclick="goScreen('credits')" title="แก้ไขเครดิต">
                                 <i class="fas fa-coins"></i> <span class="sidebar-label">แก้ไขเครดิต</span>
                             </button>
+                            <button class="sidebar-nav-item" data-screen="nfc" onclick="goScreen('nfc')" title="บัตร NFC">
+                                <i class="fas fa-wifi"></i> <span class="sidebar-label">บัตร NFC</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -4456,6 +4520,9 @@
                         <div class="notif-list" id="notif-list"></div>
                     </div>
                 </div>
+                <button class="topbar-icon-btn" onclick="openStaffIdCardModal()" aria-label="บัตรประจำตัวดิจิทัล" title="บัตรประจำตัวดิจิทัล">
+                    <i class="fas fa-id-card"></i>
+                </button>
                 <button class="topbar-icon-btn" onclick="toggleTheme()" aria-label="สลับธีม" title="สลับธีม">
                     <i class="fas fa-circle-half-stroke"></i>
                 </button>
@@ -5832,6 +5899,62 @@
                     </div>
                 </div>
 
+                <!-- ============ NFC CARDS (physical cards for campus check-in/out) ============ -->
+                <div id="screen-nfc" class="tab-content" data-screen-panel="nfc">
+                    <div class="screen-header">
+                        <h1>บัตร NFC</h1>
+                        <p>ลงทะเบียนบัตร NFC จริงที่แจกให้นักเรียนหรือเจ้าหน้าที่ — แตะบัตรที่เครื่องสแกนหน้างาน (scan.html) เพื่อเช็คชื่อเข้า-ออก เช่นเดียวกับ QR บนบัตรดิจิทัล</p>
+                    </div>
+
+                    <div class="admin-card">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-wifi"></i></span>
+                            <div>
+                                <h3>ลงทะเบียนบัตรใหม่</h3>
+                                <p>แตะบัตรที่อุปกรณ์นี้เพื่ออ่าน UID อัตโนมัติ (รองรับเฉพาะ Chrome บน Android) หรือกรอก UID เองก็ได้</p>
+                            </div>
+                        </div>
+                        <div class="form-body">
+                            <div style="display: grid; grid-template-columns: 2fr 1fr 2fr; gap: 12px;">
+                                <div class="form-group">
+                                    <label><i class="fas fa-wifi"></i> UID บัตร</label>
+                                    <div style="display: flex; gap: 8px;">
+                                        <input type="text" id="nfc-uid-input" placeholder="แตะบัตร หรือพิมพ์เอง" style="flex: 1;">
+                                        <button type="button" class="btn btn-secondary" onclick="scanNfcForRegistration()" title="อ่าน UID จากบัตรด้วย NFC"><i class="fas fa-wifi"></i></button>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-user-tag"></i> ประเภท</label>
+                                    <select id="nfc-person-type" onchange="loadNfcPersonDatalist()">
+                                        <option value="student">นักเรียน</option>
+                                        <option value="staff">ครู/พนักงาน</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-id-badge"></i> เจ้าของบัตร</label>
+                                    <input type="text" id="nfc-person-id" list="nfc-person-datalist" placeholder="รหัสนักเรียนหรืออีเมลเจ้าหน้าที่">
+                                    <datalist id="nfc-person-datalist"></datalist>
+                                </div>
+                            </div>
+                            <div id="nfc-register-error" class="form-hint" style="color: var(--accent-danger); min-height: 18px;"></div>
+                            <button type="button" class="btn btn-primary" onclick="registerNfcCard()"><i class="fas fa-floppy-disk"></i> บันทึก</button>
+                        </div>
+                    </div>
+
+                    <div class="admin-card">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-list"></i></span>
+                            <div>
+                                <h3>บัตรที่ลงทะเบียนแล้ว</h3>
+                                <p>ล่าสุด 500 ใบ</p>
+                            </div>
+                        </div>
+                        <div id="nfc-cards-list">
+                            <div class="form-hint">กำลังโหลด...</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- ============ BLOG (website articles) ============ -->
                 <div id="screen-blog" class="tab-content" data-screen-panel="blog">
                     <div class="screen-header">
@@ -6132,6 +6255,45 @@
     </div>
 
     <!-- QR check-in modal (booking screen) -->
+    <!-- Staff/teacher digital ID card (own card only) -->
+    <div id="staff-idcard-modal" class="modal-overlay" onclick="if(event.target===this) closeStaffIdCardModal()">
+        <div class="modal-box idcard-modal-box">
+            <div class="idcard-modal-head">
+                <h3><i class="fas fa-id-card"></i> บัตรประจำตัวดิจิทัล</h3>
+                <button type="button" class="idcard-modal-close" onclick="closeStaffIdCardModal()" aria-label="ปิด"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="idcard-modal-body">
+                <div class="idcard">
+                    <div class="idcard-top">
+                        <img src="../img/icon-192.png" class="idcard-logo" alt="">
+                        <span class="idcard-brand">LITALK Education</span>
+                    </div>
+                    <div class="idcard-main">
+                        <div class="idcard-photo">
+                            <img id="staffIdCardAvatar" alt="รูปโปรไฟล์" style="display:none;">
+                            <div id="staffIdCardAvatarFallback" class="idcard-photo-fallback" aria-hidden="true"></div>
+                        </div>
+                        <div class="idcard-info">
+                            <span class="idcard-role" id="staffIdCardRole">STAFF</span>
+                            <h4 class="idcard-name" id="staffIdCardName">-</h4>
+                            <span class="idcard-title" id="staffIdCardTitle"></span>
+                            <div class="idcard-field" id="staffIdCardIdentityRow" hidden>
+                                <span class="idcard-field-label">อีเมล/บัญชี</span>
+                                <span class="idcard-field-value" id="staffIdCardIdentity">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="idcard-qr-wrap">
+                        <div class="idcard-qr-label"><i class="fas fa-qrcode"></i> QR เช็คชื่อเข้า-ออก</div>
+                        <div class="idcard-qr" id="staffIdCardQr"></div>
+                        <span class="idcard-qr-countdown" id="staffIdCardQrCountdown">กำลังออก QR...</span>
+                        <span class="idcard-qr-hint">ให้เจ้าหน้าที่อีกคนสแกนที่จุดเช็คชื่อ — สแกนครั้งแรกเช็คชื่อเข้า ครั้งถัดไปเช็คชื่อออก</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="qr-checkin-modal" class="modal-overlay">
         <div class="modal-box">
             <h3 class="modal-title">QR เช็คชื่อเข้าเรียน</h3>
@@ -6199,6 +6361,7 @@
                 <a href="javascript:void(0)" data-screen="staff" data-admin-only style="display: none;" onclick="goScreen('staff')"><i class="fas fa-users-gear"></i> ครูและพนักงาน</a>
                 <a href="javascript:void(0)" data-screen="access" data-admin-only style="display: none;" onclick="goScreen('access')"><i class="fas fa-user-shield"></i> สิทธิ์การมองเห็น</a>
                 <a href="javascript:void(0)" data-screen="credits" data-admin-only style="display: none;" onclick="goScreen('credits')"><i class="fas fa-coins"></i> แก้ไขเครดิต</a>
+                <a href="javascript:void(0)" data-screen="nfc" data-admin-only style="display: none;" onclick="goScreen('nfc')"><i class="fas fa-wifi"></i> บัตร NFC</a>
             </nav>
             <div class="mobile-menu-footer">
                 <div class="mobile-menu-email" id="mobile-menu-email">loading...</div>
@@ -6327,7 +6490,7 @@
 
         // Supports shareable links like ?screen=logs&student=litalk12345
         // (e.g. the "คัดลอกลิงก์ Study Log" button on the check screen).
-        const DEEP_LINK_SCREENS = ['dashboard', 'students', 'logs', 'payments', 'create', 'files', 'booking', 'check', 'schedule', 'hours', 'finance', 'access', 'credits', 'blog'];
+        const DEEP_LINK_SCREENS = ['dashboard', 'students', 'logs', 'payments', 'create', 'files', 'booking', 'check', 'schedule', 'hours', 'finance', 'access', 'credits', 'blog', 'nfc'];
         function applyDeepLink() {
             const params = new URLSearchParams(window.location.search);
             const student = params.get('student');
@@ -6858,6 +7021,10 @@
             if (screen === 'credits') {
                 syncPickerText('credits');
                 loadStudentCredits();
+            }
+            if (screen === 'nfc') {
+                loadNfcCards();
+                loadNfcPersonDatalist();
             }
             if (screen === 'finance') {
                 loadFinance();
@@ -8080,6 +8247,101 @@
             el.textContent = filesApiPermissions.includes('files:delete')
                 ? 'สิทธิ์ปัจจุบัน: Admin — อัปโหลด ดาวน์โหลด และลบไฟล์ได้'
                 : 'สิทธิ์ปัจจุบัน: Teacher — อัปโหลดและดาวน์โหลดได้ แต่ลบไฟล์ไม่ได้';
+        }
+
+        // ===== Staff/teacher digital ID card (own card only) =====
+        // Rotating QR (POST /staff/id-card-token, 2-minute TTL) that a
+        // front-desk scanner (scan.html) reads to toggle campus check-in/out
+        // — same mechanism as the student portal's card. filesApiMe (from
+        // GET /me) now also carries title/phone/hasAvatar from the staff
+        // table, not just the JWT claims.
+        const STAFF_IDCARD_QR_REFRESH_MS = 100_000; // refresh before the server's 2-min TTL
+        let staffIdCardQrTimer = null;
+        let staffIdCardQrCountdownTimer = null;
+        let staffIdCardQrExpiresAt = 0;
+
+        async function openStaffIdCardModal() {
+            const modal = document.getElementById('staff-idcard-modal');
+            if (!modal) return;
+
+            if (!filesApiMe || filesApiMe.title === undefined) {
+                try {
+                    const token = await getFilesApiToken();
+                    const res = await fetch(`${filesApiUrl}/me`, { headers: { Authorization: `Bearer ${token}` } });
+                    filesApiMe = await res.json();
+                } catch (err) {
+                    console.warn('Failed to load staff profile for ID card:', err);
+                }
+            }
+            const me = filesApiMe || {};
+
+            const avatar = document.getElementById('staffIdCardAvatar');
+            const avatarFallback = document.getElementById('staffIdCardAvatarFallback');
+            if (me.hasAvatar && me.email) {
+                avatar.src = `${filesApiUrl}/staff/${encodeURIComponent(me.email)}/avatar?v=${Date.now()}`;
+                avatar.style.display = '';
+                avatarFallback.hidden = true;
+            } else {
+                avatar.style.display = 'none';
+                const initial = String(me.name || me.email || '').trim().charAt(0);
+                avatarFallback.innerText = initial ? initial.toUpperCase() : '';
+                avatarFallback.hidden = false;
+            }
+
+            document.getElementById('staffIdCardRole').textContent = isAdminUser() ? 'ADMIN' : 'TEACHER';
+            document.getElementById('staffIdCardName').textContent = me.name || me.email || '-';
+            document.getElementById('staffIdCardTitle').textContent = me.title || '';
+
+            const identityRow = document.getElementById('staffIdCardIdentityRow');
+            if (me.email) {
+                document.getElementById('staffIdCardIdentity').textContent = me.email;
+                identityRow.hidden = false;
+            } else {
+                identityRow.hidden = true;
+            }
+
+            modal.classList.add('active');
+            refreshStaffIdCardQr();
+            if (staffIdCardQrTimer) clearInterval(staffIdCardQrTimer);
+            staffIdCardQrTimer = setInterval(refreshStaffIdCardQr, STAFF_IDCARD_QR_REFRESH_MS);
+            if (staffIdCardQrCountdownTimer) clearInterval(staffIdCardQrCountdownTimer);
+            staffIdCardQrCountdownTimer = setInterval(updateStaffIdCardQrCountdown, 1000);
+        }
+
+        async function refreshStaffIdCardQr() {
+            const qrHolder = document.getElementById('staffIdCardQr');
+            if (!qrHolder) return;
+            try {
+                const res = await apiFetch('/staff/id-card-token', { method: 'POST' });
+                const data = await res.json().catch(() => ({}));
+                if (data.status !== 'success' || !data.token) throw new Error(data.message || 'mint failed');
+
+                staffIdCardQrExpiresAt = Date.parse(data.expiresAt) || (Date.now() + 120000);
+                qrHolder.innerHTML = '';
+                if (typeof QRCode !== 'undefined') {
+                    new QRCode(qrHolder, { text: data.token, width: 168, height: 168, correctLevel: QRCode.CorrectLevel.M });
+                } else {
+                    qrHolder.innerHTML = `<div class="idcard-qr-fallback">${escapeHtml(data.token)}</div>`;
+                }
+                updateStaffIdCardQrCountdown();
+            } catch (err) {
+                console.warn('refreshStaffIdCardQr failed:', err);
+                qrHolder.innerHTML = `<div class="idcard-qr-fallback idcard-qr-error"><i class="fas fa-triangle-exclamation"></i> ออก QR ไม่สำเร็จ<br>ลองปิดแล้วเปิดบัตรใหม่</div>`;
+            }
+        }
+
+        function updateStaffIdCardQrCountdown() {
+            const el = document.getElementById('staffIdCardQrCountdown');
+            if (!el) return;
+            const secondsLeft = Math.max(0, Math.round((staffIdCardQrExpiresAt - Date.now()) / 1000));
+            el.textContent = `รีเฟรชอัตโนมัติใน ${secondsLeft} วิ`;
+        }
+
+        function closeStaffIdCardModal() {
+            const modal = document.getElementById('staff-idcard-modal');
+            if (modal) modal.classList.remove('active');
+            if (staffIdCardQrTimer) { clearInterval(staffIdCardQrTimer); staffIdCardQrTimer = null; }
+            if (staffIdCardQrCountdownTimer) { clearInterval(staffIdCardQrCountdownTimer); staffIdCardQrCountdownTimer = null; }
         }
 
         async function loadFilesForSelectedStudent() {
@@ -9439,6 +9701,128 @@
                 hideLoading();
                 console.error('createStaffAccount:', error);
                 showModal('สร้างบัญชีไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาด', 'error');
+            }
+        }
+
+        // ===== NFC card registration (physical cards for campus check-in/out) =====
+        async function loadNfcPersonDatalist() {
+            const type = document.getElementById('nfc-person-type').value;
+            const datalist = document.getElementById('nfc-person-datalist');
+            if (!datalist) return;
+            if (type === 'staff') {
+                try {
+                    const res = await apiFetch('/staff');
+                    const rows = await res.json();
+                    datalist.innerHTML = (Array.isArray(rows) ? rows : [])
+                        .map((r) => `<option value="${escapeHtml(r.identity)}">${escapeHtml(r.name || r.identity)}</option>`)
+                        .join('');
+                } catch (err) {
+                    datalist.innerHTML = '';
+                }
+            } else {
+                datalist.innerHTML = (allStudentsData || [])
+                    .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name || s.id)}</option>`)
+                    .join('');
+            }
+        }
+
+        async function registerNfcCard() {
+            const uidInput = document.getElementById('nfc-uid-input');
+            const personType = document.getElementById('nfc-person-type').value;
+            const personIdInput = document.getElementById('nfc-person-id');
+            const errorEl = document.getElementById('nfc-register-error');
+            const uid = uidInput.value.trim();
+            const personId = personIdInput.value.trim();
+            errorEl.textContent = '';
+            if (!uid || !personId) {
+                errorEl.textContent = 'กรุณากรอก UID และเลือกเจ้าของบัตร';
+                return;
+            }
+
+            showLoading();
+            try {
+                const res = await apiFetch('/nfc-cards', {
+                    method: 'POST',
+                    body: JSON.stringify({ uid, personType, personId }),
+                });
+                const data = await res.json();
+                hideLoading();
+                if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+                uidInput.value = '';
+                personIdInput.value = '';
+                loadNfcCards();
+            } catch (err) {
+                hideLoading();
+                errorEl.textContent = err.message || 'บันทึกไม่สำเร็จ';
+            }
+        }
+
+        async function deleteNfcCard(uid) {
+            const ok = await confirmDialog(`ลบบัตร NFC (UID: ${uid}) ออกจากระบบ? นักเรียน/เจ้าหน้าที่คนนี้จะแตะบัตรนี้เพื่อเช็คชื่อไม่ได้อีก`, { title: 'ลบบัตร NFC', danger: true });
+            if (!ok) return;
+            showLoading();
+            try {
+                const res = await apiFetch(`/nfc-cards/${encodeURIComponent(uid)}`, { method: 'DELETE' });
+                hideLoading();
+                if (!res.ok) throw new Error('ลบไม่สำเร็จ');
+                loadNfcCards();
+            } catch (err) {
+                hideLoading();
+                showModal('ลบไม่สำเร็จ', err.message || 'เกิดข้อผิดพลาด', 'error');
+            }
+        }
+
+        // Web NFC (Chrome on Android only) — reads a tag's UID straight into
+        // the form field so staff don't have to copy it by hand. Falls back
+        // to manual entry everywhere else.
+        async function scanNfcForRegistration() {
+            if (!('NDEFReader' in window)) {
+                showModal('ไม่รองรับ NFC', 'อุปกรณ์นี้ไม่รองรับการอ่าน NFC ผ่านเว็บ (ใช้ได้เฉพาะ Chrome บน Android) กรอก UID เองแทนได้', 'error');
+                return;
+            }
+            try {
+                const reader = new NDEFReader();
+                await reader.scan();
+                showModal('พร้อมอ่านบัตร', 'แตะบัตร NFC ที่ต้องการลงทะเบียนที่ด้านหลังอุปกรณ์นี้ได้เลย', 'info');
+                reader.onreading = (event) => {
+                    if (!event.serialNumber) return;
+                    document.getElementById('nfc-uid-input').value = event.serialNumber.replace(/:/g, '').toUpperCase();
+                    closeModal();
+                };
+            } catch (err) {
+                showModal('เปิดการอ่าน NFC ไม่สำเร็จ', err.message || 'กรุณาอนุญาตสิทธิ์ NFC แล้วลองใหม่', 'error');
+            }
+        }
+
+        function nfcCardRowKey(uid) {
+            return 'nfc-row-' + uid.replace(/[^a-zA-Z0-9]/g, '_');
+        }
+
+        async function loadNfcCards() {
+            const listEl = document.getElementById('nfc-cards-list');
+            listEl.innerHTML = '<div class="form-hint">กำลังโหลด...</div>';
+            try {
+                const res = await apiFetch('/nfc-cards');
+                const rows = await res.json();
+                if (!res.ok) throw new Error(rows.error || `HTTP ${res.status}`);
+                if (!Array.isArray(rows) || rows.length === 0) {
+                    listEl.innerHTML = '<div class="empty-state"><i class="far fa-folder-open"></i><p>ยังไม่มีบัตร NFC ที่ลงทะเบียน</p></div>';
+                    return;
+                }
+                listEl.innerHTML = `<div class="table-wrapper"><table class="data-table"><thead><tr>
+                    <th>UID</th><th>ประเภท</th><th>เจ้าของบัตร</th><th>ลงทะเบียนโดย</th><th>วันที่</th><th></th>
+                </tr></thead><tbody>${rows.map((r) => `
+                    <tr id="${nfcCardRowKey(r.uid)}">
+                        <td><code>${escapeHtml(r.uid)}</code></td>
+                        <td>${r.personType === 'staff' ? 'ครู/พนักงาน' : 'นักเรียน'}</td>
+                        <td>${escapeHtml(r.personId)}</td>
+                        <td>${escapeHtml(r.registeredBy || '-')}</td>
+                        <td>${escapeHtml(new Date(String(r.registeredAt).replace(' ', 'T') + 'Z').toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }))}</td>
+                        <td><button class="icon-btn icon-btn-danger" title="ลบบัตรนี้" onclick="deleteNfcCard('${escapeJs(r.uid)}')"><i class="fas fa-trash"></i></button></td>
+                    </tr>`).join('')}</tbody></table></div>`;
+            } catch (err) {
+                console.error('loadNfcCards:', err);
+                listEl.innerHTML = '<div class="form-hint">โหลดรายการไม่สำเร็จ (ต้องเป็นแอดมินเท่านั้น)</div>';
             }
         }
 

@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+    <title>LITALK — จุดเช็คชื่อเข้า-ออก</title>
+    <meta name="description" content="เครื่องสแกน QR/บาร์โค้ด/NFC สำหรับเช็คชื่อเข้า-ออกที่หน้างาน (เจ้าหน้าที่เท่านั้น)">
+    <meta name="robots" content="noindex">
+    <link rel="icon" href="https://litalkeducation.com/img/LITALK-Icon.png" type="image/png">
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --bg: #0b0c0f;
+            --bg-panel: #131418;
+            --bg-elevated: #1c1e24;
+            --border: #272a32;
+            --text: #f4f5f7;
+            --text-muted: #8a90a2;
+            --success: #3ecf8e;
+            --success-bg: rgba(62, 207, 142, 0.14);
+            --info: #4c9aff;
+            --info-bg: rgba(76, 154, 255, 0.14);
+            --danger: #f0644a;
+            --danger-bg: rgba(240, 100, 74, 0.14);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            min-height: 100dvh;
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ---------- Login screen ---------- */
+        #scan-login-screen {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            padding: 24px;
+            text-align: center;
+        }
+
+        #scan-login-screen img { height: 34px; margin-bottom: 8px; }
+        #scan-login-screen h1 { font-size: 20px; margin: 0; }
+        #scan-login-screen p { color: var(--text-muted); font-size: 14px; margin: 0; max-width: 320px; }
+
+        .scan-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 13px 26px;
+            border-radius: 999px;
+            border: none;
+            background: #ffffff;
+            color: #0b0c0f;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .scan-btn:hover { opacity: 0.9; }
+
+        #scan-login-error {
+            color: var(--danger);
+            font-size: 13px;
+            min-height: 18px;
+        }
+
+        /* ---------- Kiosk screen ---------- */
+        #scan-kiosk-screen {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+        }
+
+        .scan-topbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-panel);
+        }
+
+        .scan-topbar img { height: 20px; }
+        .scan-topbar-title { font-weight: 700; font-size: 14px; flex: 1; }
+        .scan-topbar-staff { font-size: 12.5px; color: var(--text-muted); }
+
+        .scan-logout-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            border-radius: 8px;
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .scan-logout-btn:hover { color: var(--text); border-color: var(--text-muted); }
+
+        .scan-stage {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background: #000;
+        }
+
+        #scan-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .scan-frame {
+            position: absolute;
+            inset: 12% 20%;
+            border: 3px solid rgba(255, 255, 255, 0.55);
+            border-radius: 24px;
+            pointer-events: none;
+        }
+
+        .scan-idle-hint {
+            position: absolute;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.55);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        #camera-unavailable {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-muted);
+            padding: 24px;
+            text-align: center;
+        }
+
+        #camera-unavailable i { font-size: 32px; }
+
+        /* Result overlay — big, glanceable, auto-dismisses */
+        #scan-result {
+            position: absolute;
+            inset: 0;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            text-align: center;
+            padding: 24px;
+            background: var(--bg);
+        }
+
+        #scan-result.show { display: flex; }
+
+        .scan-result-icon {
+            width: 88px;
+            height: 88px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+        }
+
+        .scan-result-icon.checkin { background: var(--success-bg); color: var(--success); }
+        .scan-result-icon.checkout { background: var(--info-bg); color: var(--info); }
+        .scan-result-icon.error { background: var(--danger-bg); color: var(--danger); }
+        .scan-result-icon.loading { background: var(--bg-elevated); color: var(--text-muted); }
+
+        .scan-result-title { font-size: 22px; font-weight: 700; }
+        .scan-result-name { font-size: 17px; color: var(--text-muted); }
+        .scan-result-time { font-size: 13px; color: var(--text-muted); }
+
+        .scan-bottom-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            flex-wrap: wrap;
+            padding: 12px 16px;
+            border-top: 1px solid var(--border);
+            background: var(--bg-panel);
+            font-size: 12.5px;
+            color: var(--text-muted);
+        }
+
+        .scan-status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .scan-status-chip .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+
+        .scan-status-chip.nfc-ready .dot {
+            background: var(--success);
+            animation: scan-pulse 1.6s ease-in-out infinite;
+        }
+
+        .scan-status-chip.nfc-unsupported .dot { background: var(--text-muted); }
+
+        @keyframes scan-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.35; transform: scale(0.75); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .scan-status-chip.nfc-ready .dot { animation: none; }
+        }
+
+        /* Kept in the layout but visually hidden — barcode scanners act as a
+           keyboard, so this just needs to stay focused, not be seen. */
+        #scan-hidden-input {
+            position: fixed;
+            top: -100px;
+            left: -100px;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Login screen -->
+    <div id="scan-login-screen">
+        <img src="img/icon-192.png" alt="LITALK">
+        <h1>จุดเช็คชื่อเข้า-ออก</h1>
+        <p>สำหรับเจ้าหน้าที่/ครูเท่านั้น — เข้าสู่ระบบด้วยบัญชีเดียวกับระบบแอดมิน</p>
+        <button class="scan-btn" onclick="loginToScan()"><i class="fas fa-right-to-bracket"></i> เข้าสู่ระบบ</button>
+        <div id="scan-login-error"></div>
+    </div>
+
+    <!-- Kiosk screen -->
+    <div id="scan-kiosk-screen">
+        <div class="scan-topbar">
+            <img src="img/icon-192.png" alt="LITALK">
+            <span class="scan-topbar-title">จุดเช็คชื่อเข้า-ออก <span class="scan-topbar-staff" id="scan-staff-name"></span></span>
+            <button class="scan-logout-btn" onclick="logoutFromScan()" aria-label="ออกจากระบบ" title="ออกจากระบบ"><i class="fas fa-arrow-right-from-bracket"></i></button>
+        </div>
+
+        <div class="scan-stage">
+            <video id="scan-video" autoplay playsinline muted></video>
+            <div class="scan-frame" aria-hidden="true"></div>
+            <div class="scan-idle-hint"><i class="fas fa-qrcode"></i> วางบัตรดิจิทัลให้อยู่ในกรอบเพื่อสแกน</div>
+
+            <div id="camera-unavailable">
+                <i class="fas fa-video-slash"></i>
+                <span>เปิดกล้องไม่สำเร็จ — ยังใช้เครื่องอ่านบาร์โค้ดหรือ NFC ได้ตามปกติ</span>
+            </div>
+
+            <div id="scan-result">
+                <div class="scan-result-icon" id="scan-result-icon"><i class="fas fa-spinner fa-spin"></i></div>
+                <div class="scan-result-title" id="scan-result-title">กำลังตรวจสอบ...</div>
+                <div class="scan-result-name" id="scan-result-name"></div>
+                <div class="scan-result-time" id="scan-result-time"></div>
+            </div>
+        </div>
+
+        <div class="scan-bottom-bar">
+            <span class="scan-status-chip"><i class="fas fa-keyboard"></i> เครื่องอ่านบาร์โค้ดพร้อมใช้งาน</span>
+            <span class="scan-status-chip" id="nfc-status"><span class="dot"></span> กำลังตรวจสอบ NFC...</span>
+        </div>
+
+        <!-- Always-focused so a keyboard-emulating barcode scanner "types"
+             its payload here, terminated by Enter (the device's own
+             behavior — no special driver/API needed). -->
+        <input id="scan-hidden-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" tabindex="-1" aria-hidden="true">
+    </div>
+
+    <script>
+        const filesApiAudience = 'https://admin.litalkeducation.com/files-api';
+        const filesApiUrl = 'https://api.litalkeducation.com';
+
+        const auth0Client = (typeof auth0 !== 'undefined')
+            ? new auth0.Auth0Client({
+                domain: 'litalkeducation.us.auth0.com',
+                clientId: 'IYA9knWCvuP6UXlTI3M6idEFuiBQDXLS',
+                authorizationParams: { redirect_uri: window.location.href.split('?')[0], audience: filesApiAudience },
+                cacheLocation: 'localstorage',
+                useRefreshTokens: true,
+            })
+            : null;
+
+        async function getToken() {
+            return auth0Client.getTokenSilently({ authorizationParams: { audience: filesApiAudience } });
+        }
+
+        async function loginToScan() { await auth0Client.loginWithRedirect(); }
+
+        function stopCamera() {
+            if (videoStream) {
+                videoStream.getTracks().forEach((t) => t.stop());
+                videoStream = null;
+            }
+        }
+
+        async function logoutFromScan() {
+            stopCamera();
+            auth0Client.logout({ logoutParams: { returnTo: window.location.origin + '/scan.html' } });
+        }
+
+        function showFatalError(message) {
+            document.getElementById('scan-kiosk-screen').style.display = 'none';
+            document.getElementById('scan-login-screen').style.display = 'flex';
+            document.getElementById('scan-login-error').textContent = message;
+        }
+
+        // ---------- Scan submission (shared by camera/barcode/NFC) ----------
+        let scanBusy = false;
+        let lastCode = null;
+        let lastCodeAt = 0;
+        let resultResetTimer = null;
+
+        function showResult(kind, title, name, time) {
+            const overlay = document.getElementById('scan-result');
+            const icon = document.getElementById('scan-result-icon');
+            const titleEl = document.getElementById('scan-result-title');
+            const nameEl = document.getElementById('scan-result-name');
+            const timeEl = document.getElementById('scan-result-time');
+
+            const ICONS = {
+                loading: '<i class="fas fa-spinner fa-spin"></i>',
+                checkin: '<i class="fas fa-circle-check"></i>',
+                checkout: '<i class="fas fa-right-from-bracket"></i>',
+                error: '<i class="fas fa-triangle-exclamation"></i>',
+            };
+            icon.className = `scan-result-icon ${kind}`;
+            icon.innerHTML = ICONS[kind] || ICONS.error;
+            titleEl.textContent = title;
+            nameEl.textContent = name || '';
+            timeEl.textContent = time || '';
+            overlay.classList.add('show');
+
+            if (resultResetTimer) clearTimeout(resultResetTimer);
+            if (kind !== 'loading') {
+                resultResetTimer = setTimeout(() => overlay.classList.remove('show'), 3800);
+            }
+        }
+
+        async function submitScan(rawCode, method) {
+            const code = (rawCode || '').trim();
+            if (!code) return;
+            // The camera loop can decode the same QR many times a second
+            // while it's in frame — de-dupe on (code, recency), and while a
+            // request is in flight ignore everything else.
+            const now = Date.now();
+            if (scanBusy) return;
+            if (code === lastCode && now - lastCodeAt < 4000) return;
+            lastCode = code;
+            lastCodeAt = now;
+            scanBusy = true;
+
+            showResult('loading', 'กำลังตรวจสอบ...');
+            try {
+                const token = await getToken();
+                const res = await fetch(`${filesApiUrl}/campus-checkin`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ code, method }),
+                });
+                const data = await res.json().catch(() => ({}));
+                const now2 = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                if (!res.ok || data.status !== 'success') {
+                    showResult('error', data.message || 'สแกนไม่สำเร็จ', '', now2);
+                } else if (data.action === 'checked_in') {
+                    showResult('checkin', 'เช็คชื่อเข้าสำเร็จ', data.personName, now2);
+                } else {
+                    showResult('checkout', 'เช็คชื่อออกสำเร็จ', data.personName, now2);
+                }
+            } catch (err) {
+                showResult('error', 'เชื่อมต่อระบบไม่สำเร็จ กรุณาลองใหม่');
+            } finally {
+                setTimeout(() => { scanBusy = false; }, 1500);
+            }
+        }
+
+        // ---------- Camera QR scanning ----------
+        let videoStream = null;
+        const barcodeDetector = ('BarcodeDetector' in window) ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
+        const scanCanvas = document.createElement('canvas');
+        const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
+
+        async function startCamera() {
+            const video = document.getElementById('scan-video');
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                video.srcObject = videoStream;
+                await video.play();
+                requestAnimationFrame(scanLoop);
+            } catch (err) {
+                console.warn('Camera unavailable:', err);
+                document.getElementById('camera-unavailable').style.display = 'flex';
+            }
+        }
+
+        async function scanLoop() {
+            const video = document.getElementById('scan-video');
+            if (videoStream && video.readyState === video.HAVE_ENOUGH_DATA && !scanBusy) {
+                try {
+                    if (barcodeDetector) {
+                        const codes = await barcodeDetector.detect(video);
+                        if (codes.length) submitScan(codes[0].rawValue, 'qr');
+                    } else if (typeof jsQR !== 'undefined') {
+                        scanCanvas.width = video.videoWidth;
+                        scanCanvas.height = video.videoHeight;
+                        scanCtx.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height);
+                        const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+                        const result = jsQR(imageData.data, imageData.width, imageData.height);
+                        if (result && result.data) submitScan(result.data, 'qr');
+                    }
+                } catch (err) {
+                    // Transient decode failures are normal (blurry frame, no
+                    // code in view) — nothing to surface to the user.
+                }
+            }
+            if (videoStream) requestAnimationFrame(scanLoop);
+        }
+
+        // ---------- Keyboard-emulating barcode scanners ----------
+        function initBarcodeInput() {
+            const input = document.getElementById('scan-hidden-input');
+            const refocus = () => { if (document.activeElement !== input) input.focus({ preventScroll: true }); };
+            setInterval(refocus, 500);
+            document.addEventListener('click', refocus);
+            input.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                const value = input.value;
+                input.value = '';
+                if (value.trim()) submitScan(value, 'barcode');
+            });
+            refocus();
+        }
+
+        // ---------- Web NFC (Chrome on Android only) ----------
+        async function initNfc() {
+            const chip = document.getElementById('nfc-status');
+            if (!('NDEFReader' in window)) {
+                chip.innerHTML = '<span class="dot"></span> อุปกรณ์นี้ไม่รองรับ NFC ผ่านเว็บ (เฉพาะ Chrome บน Android)';
+                chip.classList.add('nfc-unsupported');
+                return;
+            }
+            try {
+                const reader = new NDEFReader();
+                await reader.scan();
+                chip.innerHTML = '<span class="dot"></span> พร้อมแตะบัตร NFC';
+                chip.classList.add('nfc-ready');
+                reader.onreading = (event) => {
+                    if (!event.serialNumber) return;
+                    submitScan(event.serialNumber.replace(/:/g, '').toUpperCase(), 'nfc');
+                };
+                reader.onreadingerror = () => { /* transient — ignore, the next tap will retry */ };
+            } catch (err) {
+                console.warn('Web NFC unavailable:', err);
+                chip.innerHTML = '<span class="dot"></span> เปิดการอ่าน NFC ไม่สำเร็จ (ต้องอนุญาตสิทธิ์)';
+                chip.classList.add('nfc-unsupported');
+            }
+        }
+
+        // ---------- Entry ----------
+        async function enterKiosk() {
+            document.getElementById('scan-login-screen').style.display = 'none';
+            document.getElementById('scan-kiosk-screen').style.display = 'flex';
+
+            try {
+                const token = await getToken();
+                const res = await fetch(`${filesApiUrl}/me`, { headers: { Authorization: `Bearer ${token}` } });
+                const me = await res.json();
+                document.getElementById('scan-staff-name').textContent = me.name ? `— ${me.name}` : '';
+                if (!Array.isArray(me.permissions) || !me.permissions.includes('data:write')) {
+                    showFatalError('บัญชีนี้ไม่มีสิทธิ์เช็คชื่อ กรุณาติดต่อผู้ดูแลระบบ');
+                    return;
+                }
+            } catch (err) {
+                showFatalError('โหลดข้อมูลบัญชีไม่สำเร็จ กรุณารีเฟรชหน้าเว็บ');
+                return;
+            }
+
+            startCamera();
+            initBarcodeInput();
+            initNfc();
+        }
+
+        window.onload = async () => {
+            if (!auth0Client) {
+                document.getElementById('scan-login-screen').style.display = 'flex';
+                document.getElementById('scan-login-error').textContent = 'โหลดระบบยืนยันตัวตนไม่สำเร็จ กรุณารีเฟรชหน้าเว็บ';
+                return;
+            }
+
+            if (location.search.includes('state=') && (location.search.includes('code=') || location.search.includes('error='))) {
+                try {
+                    await auth0Client.handleRedirectCallback();
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                } catch (err) {
+                    document.getElementById('scan-login-screen').style.display = 'flex';
+                    document.getElementById('scan-login-error').textContent = 'เข้าสู่ระบบไม่สำเร็จ: ' + err.message;
+                    return;
+                }
+            }
+
+            const isAuthed = await auth0Client.isAuthenticated();
+            if (isAuthed) {
+                await enterKiosk();
+            } else {
+                document.getElementById('scan-login-screen').style.display = 'flex';
+            }
+        };
+    </script>
+</body>
+
+</html>
