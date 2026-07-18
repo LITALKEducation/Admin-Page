@@ -4471,6 +4471,9 @@
                             <button class="sidebar-nav-item" data-screen="nfc" onclick="goScreen('nfc')" title="บัตร NFC">
                                 <i class="fas fa-wifi"></i> <span class="sidebar-label">บัตร NFC</span>
                             </button>
+                            <button class="sidebar-nav-item" data-screen="checkins" onclick="goScreen('checkins')" title="บันทึกเข้า-ออก">
+                                <i class="fas fa-right-left"></i> <span class="sidebar-label">บันทึกเข้า-ออก</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -5964,6 +5967,28 @@
                     </div>
                 </div>
 
+                <!-- ============ CAMPUS CHECK-IN/OUT LOG (admin-only) ============ -->
+                <div id="screen-checkins" class="tab-content" data-screen-panel="checkins">
+                    <div class="screen-header">
+                        <h1>บันทึกเข้า-ออก</h1>
+                        <p>ประวัติการเช็คชื่อเข้า-ออกวันนี้จากจุดสแกนหน้างาน (scan.html) — ทั้งนักเรียนและเจ้าหน้าที่</p>
+                    </div>
+
+                    <div class="admin-card">
+                        <div class="card-title-bar">
+                            <span class="card-icon"><i class="fas fa-right-left"></i></span>
+                            <div>
+                                <h3>รายการวันนี้</h3>
+                                <p id="checkins-list-sub">ล่าสุด 200 รายการ</p>
+                            </div>
+                            <button type="button" class="btn btn-secondary" style="margin-left: auto;" onclick="loadCampusCheckins()" title="รีเฟรช"><i class="fas fa-rotate"></i></button>
+                        </div>
+                        <div id="checkins-list">
+                            <div class="form-hint">กำลังโหลด...</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- ============ BLOG (website articles) ============ -->
                 <div id="screen-blog" class="tab-content" data-screen-panel="blog">
                     <div class="screen-header">
@@ -6372,6 +6397,7 @@
                 <a href="javascript:void(0)" data-screen="access" data-admin-only style="display: none;" onclick="goScreen('access')"><i class="fas fa-user-shield"></i> สิทธิ์การมองเห็น</a>
                 <a href="javascript:void(0)" data-screen="credits" data-admin-only style="display: none;" onclick="goScreen('credits')"><i class="fas fa-coins"></i> แก้ไขเครดิต</a>
                 <a href="javascript:void(0)" data-screen="nfc" data-admin-only style="display: none;" onclick="goScreen('nfc')"><i class="fas fa-wifi"></i> บัตร NFC</a>
+                <a href="javascript:void(0)" data-screen="checkins" data-admin-only style="display: none;" onclick="goScreen('checkins')"><i class="fas fa-right-left"></i> บันทึกเข้า-ออก</a>
             </nav>
             <div class="mobile-menu-footer">
                 <div class="mobile-menu-email" id="mobile-menu-email">loading...</div>
@@ -6500,7 +6526,7 @@
 
         // Supports shareable links like ?screen=logs&student=litalk12345
         // (e.g. the "คัดลอกลิงก์ Study Log" button on the check screen).
-        const DEEP_LINK_SCREENS = ['dashboard', 'students', 'logs', 'payments', 'create', 'files', 'booking', 'check', 'schedule', 'hours', 'finance', 'access', 'credits', 'blog', 'nfc'];
+        const DEEP_LINK_SCREENS = ['dashboard', 'students', 'logs', 'payments', 'create', 'files', 'booking', 'check', 'schedule', 'hours', 'finance', 'access', 'credits', 'blog', 'nfc', 'checkins'];
         function applyDeepLink() {
             const params = new URLSearchParams(window.location.search);
             const student = params.get('student');
@@ -7035,6 +7061,9 @@
             if (screen === 'nfc') {
                 loadNfcCards();
                 loadNfcPersonDatalist();
+            }
+            if (screen === 'checkins') {
+                loadCampusCheckins();
             }
             if (screen === 'finance') {
                 loadFinance();
@@ -9848,6 +9877,46 @@
                     </tr>`).join('')}</tbody></table></div>`;
             } catch (err) {
                 console.error('loadNfcCards:', err);
+                listEl.innerHTML = '<div class="form-hint">โหลดรายการไม่สำเร็จ (ต้องเป็นแอดมินเท่านั้น)</div>';
+            }
+        }
+
+        const CHECKIN_METHOD_ICON = { qr: 'fa-qrcode', barcode: 'fa-barcode', nfc: 'fa-wifi' };
+        const CHECKIN_METHOD_LABEL = { qr: 'QR', barcode: 'บาร์โค้ด', nfc: 'NFC' };
+
+        function formatCheckinTime(iso) {
+            if (!iso) return '-';
+            const d = new Date(String(iso).replace(' ', 'T') + 'Z');
+            if (isNaN(d.getTime())) return '-';
+            return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        async function loadCampusCheckins() {
+            const listEl = document.getElementById('checkins-list');
+            listEl.innerHTML = '<div class="form-hint">กำลังโหลด...</div>';
+            try {
+                const res = await apiFetch('/campus-checkins');
+                const rows = await res.json();
+                if (!res.ok) throw new Error(rows.error || `HTTP ${res.status}`);
+                document.getElementById('checkins-list-sub').textContent = `${rows.length} รายการวันนี้`;
+                if (!Array.isArray(rows) || rows.length === 0) {
+                    listEl.innerHTML = '<div class="empty-state"><i class="far fa-folder-open"></i><p>ยังไม่มีการเช็คชื่อเข้า-ออกวันนี้</p></div>';
+                    return;
+                }
+                listEl.innerHTML = `<div class="table-wrapper"><table class="data-table"><thead><tr>
+                    <th>ชื่อ</th><th>ประเภท</th><th>เข้า</th><th>ออก</th><th>วิธี</th>
+                </tr></thead><tbody>${rows.map((r) => `
+                    <tr>
+                        <td>${escapeHtml(r.personName)} <span class="form-hint" style="margin: 0;">(${escapeHtml(r.personId)})</span></td>
+                        <td>${r.personType === 'staff' ? 'ครู/พนักงาน' : 'นักเรียน'}</td>
+                        <td>${formatCheckinTime(r.checkedInAt)} <span class="form-hint" style="margin: 0;">${escapeHtml(r.checkedInBy || '-')}</span></td>
+                        <td>${r.checkedOutAt
+                            ? `${formatCheckinTime(r.checkedOutAt)} <span class="form-hint" style="margin: 0;">${escapeHtml(r.checkedOutBy || '-')}</span>`
+                            : '<span class="badge-soft" style="color: var(--accent-success);">ยังอยู่ในสถานที่</span>'}</td>
+                        <td><i class="fas ${CHECKIN_METHOD_ICON[r.scanMethod] || 'fa-qrcode'}" title="${escapeHtml(CHECKIN_METHOD_LABEL[r.scanMethod] || r.scanMethod)}"></i></td>
+                    </tr>`).join('')}</tbody></table></div>`;
+            } catch (err) {
+                console.error('loadCampusCheckins:', err);
                 listEl.innerHTML = '<div class="form-hint">โหลดรายการไม่สำเร็จ (ต้องเป็นแอดมินเท่านั้น)</div>';
             }
         }
