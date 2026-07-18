@@ -8,8 +8,10 @@
     <meta name="description" content="เครื่องสแกน QR/บาร์โค้ด/NFC สำหรับเช็คชื่อเข้า-ออกที่หน้างาน (เจ้าหน้าที่เท่านั้น)">
     <meta name="robots" content="noindex">
     <link rel="icon" href="https://litalkeducation.com/img/LITALK-Icon.png" type="image/png">
+    <link rel="stylesheet" href="css/fonts.css">
     <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         :root {
@@ -35,16 +37,22 @@
             min-height: 100dvh;
             background: var(--bg);
             color: var(--text);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: 'Montserrat', 'Noto Sans Thai', sans-serif;
             display: flex;
             flex-direction: column;
         }
 
-        /* ---------- Login screen ---------- */
-        #scan-login-screen {
+        /* ---------- Shared full-screen panels ---------- */
+        #scan-login-screen,
+        #scan-mode-screen,
+        #scan-kiosk-screen {
             display: none;
             flex: 1;
             flex-direction: column;
+        }
+
+        #scan-login-screen,
+        #scan-mode-screen {
             align-items: center;
             justify-content: center;
             gap: 20px;
@@ -52,9 +60,12 @@
             text-align: center;
         }
 
-        #scan-login-screen img { height: 34px; margin-bottom: 8px; }
-        #scan-login-screen h1 { font-size: 20px; margin: 0; }
-        #scan-login-screen p { color: var(--text-muted); font-size: 14px; margin: 0; max-width: 320px; }
+        #scan-login-screen img,
+        #scan-mode-screen img { height: 34px; margin-bottom: 8px; }
+        #scan-login-screen h1,
+        #scan-mode-screen h1 { font-size: 20px; margin: 0; }
+        #scan-login-screen p,
+        #scan-mode-screen p { color: var(--text-muted); font-size: 14px; margin: 0; max-width: 340px; }
 
         .scan-btn {
             display: inline-flex;
@@ -67,10 +78,23 @@
             color: #0b0c0f;
             font-size: 15px;
             font-weight: 700;
+            font-family: inherit;
             cursor: pointer;
         }
 
         .scan-btn:hover { opacity: 0.9; }
+
+        .scan-link-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-family: inherit;
+            font-size: 13px;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .scan-link-btn:hover { color: var(--text); }
 
         #scan-login-error {
             color: var(--danger);
@@ -78,13 +102,44 @@
             min-height: 18px;
         }
 
-        /* ---------- Kiosk screen ---------- */
-        #scan-kiosk-screen {
-            display: none;
-            flex: 1;
-            flex-direction: column;
+        /* ---------- Device-mode selection ---------- */
+        .mode-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 14px;
+            width: 100%;
+            max-width: 620px;
+            margin-top: 6px;
         }
 
+        .mode-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 28px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--bg-panel);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 14.5px;
+            font-weight: 700;
+            line-height: 1.4;
+            cursor: pointer;
+            transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
+        }
+
+        .mode-card i { font-size: 30px; color: var(--info); }
+
+        .mode-card:hover,
+        .mode-card:active {
+            border-color: var(--info);
+            background: var(--bg-elevated);
+            transform: translateY(-2px);
+        }
+
+        /* ---------- Kiosk topbar ---------- */
         .scan-topbar {
             display: flex;
             align-items: center;
@@ -96,9 +151,9 @@
 
         .scan-topbar img { height: 20px; }
         .scan-topbar-title { font-weight: 700; font-size: 14px; flex: 1; }
-        .scan-topbar-staff { font-size: 12.5px; color: var(--text-muted); }
+        .scan-topbar-staff { font-size: 12.5px; color: var(--text-muted); font-weight: 400; }
 
-        .scan-logout-btn {
+        .scan-icon-btn {
             background: none;
             border: 1px solid var(--border);
             color: var(--text-muted);
@@ -111,16 +166,77 @@
             cursor: pointer;
         }
 
-        .scan-logout-btn:hover { color: var(--text); border-color: var(--text-muted); }
+        .scan-icon-btn:hover { color: var(--text); border-color: var(--text-muted); }
 
+        /* ---------- Kiosk stage (welcome / idle / camera / fallback) ---------- */
         .scan-stage {
             flex: 1;
             position: relative;
             display: flex;
-            align-items: center;
-            justify-content: center;
             overflow: hidden;
             background: #000;
+        }
+
+        .kiosk-stage-view {
+            position: absolute;
+            inset: 0;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .kiosk-stage-view.active { display: flex; }
+
+        #stage-desktop-welcome,
+        #stage-desktop-fallback,
+        #stage-ipad-idle { background: var(--bg); }
+
+        #stage-ipad-idle { cursor: pointer; }
+
+        .stage-hero-icon {
+            width: 108px;
+            height: 108px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 46px;
+            background: var(--info-bg);
+            color: var(--info);
+            animation: scan-pulse-soft 2.4s ease-in-out infinite;
+        }
+
+        @keyframes scan-pulse-soft {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(76, 154, 255, 0.35); }
+            50% { box-shadow: 0 0 0 18px rgba(76, 154, 255, 0); }
+        }
+
+        .stage-title { font-size: 21px; font-weight: 800; margin: 0; }
+        .stage-desc { font-size: 14.5px; color: var(--text-muted); margin: 0; max-width: 380px; line-height: 1.6; }
+
+        .stage-chips {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            font-size: 12.5px;
+            color: var(--text-muted);
+        }
+
+        #desktop-fallback-qr {
+            background: #fff;
+            padding: 14px;
+            border-radius: 16px;
+            display: inline-flex;
+        }
+
+        #stage-camera {
+            padding: 0;
         }
 
         #scan-video {
@@ -155,53 +271,103 @@
 
         #camera-unavailable {
             display: none;
+            position: absolute;
+            inset: 0;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
             gap: 10px;
             color: var(--text-muted);
             padding: 24px;
             text-align: center;
+            background: var(--bg);
         }
 
         #camera-unavailable i { font-size: 32px; }
 
-        /* Result overlay — big, glanceable, auto-dismisses */
+        /* ---------- Result overlay — mini digital-ID card, auto-dismisses ---------- */
         #scan-result {
             position: absolute;
             inset: 0;
+            z-index: 5;
             display: none;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 14px;
-            text-align: center;
             padding: 24px;
-            background: var(--bg);
+            background: rgba(11, 12, 15, 0.92);
+            backdrop-filter: blur(6px);
         }
 
         #scan-result.show { display: flex; }
 
-        .scan-result-icon {
-            width: 88px;
-            height: 88px;
+        .scan-result-card {
+            width: 100%;
+            max-width: 360px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 26px;
+            overflow: hidden;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+            text-align: center;
+        }
+
+        .scan-result-banner {
+            padding: 22px 20px 52px;
+            color: #fff;
+            background: linear-gradient(135deg, #3a3d46, #565a66);
+            transition: background 0.2s ease;
+        }
+
+        .scan-result-banner.checkin { background: linear-gradient(135deg, #1f8a5c, #3ecf8e); }
+        .scan-result-banner.checkout { background: linear-gradient(135deg, #2f6fd6, #4c9aff); }
+        .scan-result-banner.error { background: linear-gradient(135deg, #b5402c, #f0644a); }
+        .scan-result-banner.loading { background: linear-gradient(135deg, #3a3d46, #565a66); }
+
+        .scan-result-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 13px;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.18);
+            padding: 7px 15px;
+            border-radius: 999px;
+        }
+
+        .scan-result-avatar-wrap {
+            width: 96px;
+            height: 96px;
             border-radius: 50%;
+            margin: -46px auto 0;
+            border: 4px solid var(--bg-panel);
+            background: var(--bg-elevated);
+            overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 40px;
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--text-muted);
         }
 
-        .scan-result-icon.checkin { background: var(--success-bg); color: var(--success); }
-        .scan-result-icon.checkout { background: var(--info-bg); color: var(--info); }
-        .scan-result-icon.error { background: var(--danger-bg); color: var(--danger); }
-        .scan-result-icon.loading { background: var(--bg-elevated); color: var(--text-muted); }
+        .scan-result-avatar-wrap img { width: 100%; height: 100%; object-fit: cover; }
 
-        .scan-result-title { font-size: 22px; font-weight: 700; }
-        .scan-result-name { font-size: 17px; color: var(--text-muted); }
-        .scan-result-time { font-size: 13px; color: var(--text-muted); }
+        .scan-result-body { padding: 58px 22px 26px; }
 
+        .scan-result-name { font-size: 20px; font-weight: 800; word-break: break-word; }
+        .scan-result-id { font-size: 13px; color: var(--text-muted); margin-top: 5px; }
+
+        .scan-result-time {
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 1px dashed var(--border);
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        /* ---------- Bottom status bar (desktop mode only) ---------- */
         .scan-bottom-bar {
-            display: flex;
+            display: none;
             align-items: center;
             justify-content: center;
             gap: 18px;
@@ -212,6 +378,8 @@
             font-size: 12.5px;
             color: var(--text-muted);
         }
+
+        body[data-kiosk-mode="desktop"] .scan-bottom-bar { display: flex; }
 
         .scan-status-chip {
             display: inline-flex;
@@ -239,11 +407,13 @@
         }
 
         @media (prefers-reduced-motion: reduce) {
-            .scan-status-chip.nfc-ready .dot { animation: none; }
+            .scan-status-chip.nfc-ready .dot,
+            .stage-hero-icon { animation: none; }
         }
 
-        /* Kept in the layout but visually hidden — barcode scanners act as a
-           keyboard, so this just needs to stay focused, not be seen. */
+        /* Kept in the layout but visually hidden — barcode/NFC-reader
+           hardware that emulates a keyboard "types" its payload here,
+           terminated by Enter, regardless of which kiosk mode is active. */
         #scan-hidden-input {
             position: fixed;
             top: -100px;
@@ -265,39 +435,99 @@
         <div id="scan-login-error"></div>
     </div>
 
+    <!-- Device-mode selection screen -->
+    <div id="scan-mode-screen">
+        <img src="img/icon-192.png" alt="LITALK">
+        <h1>เลือกอุปกรณ์ที่ใช้งาน</h1>
+        <p id="scan-mode-staff-name"></p>
+        <div class="mode-cards">
+            <button class="mode-card" onclick="selectKioskMode('desktop')">
+                <i class="fas fa-desktop"></i>
+                <span>เครื่อง Stand/Computer เจ้าหน้าที่</span>
+            </button>
+            <button class="mode-card" onclick="selectKioskMode('ipad')">
+                <i class="fas fa-tablet-screen-button"></i>
+                <span>ไอแพดหน้าห้อง</span>
+            </button>
+            <button class="mode-card" onclick="selectKioskMode('phone')">
+                <i class="fas fa-mobile-screen-button"></i>
+                <span>โทรศัพท์เจ้าหน้าที่/ครู</span>
+            </button>
+        </div>
+        <button class="scan-link-btn" onclick="logoutFromScan()">ออกจากระบบ</button>
+    </div>
+
     <!-- Kiosk screen -->
     <div id="scan-kiosk-screen">
         <div class="scan-topbar">
             <img src="img/icon-192.png" alt="LITALK">
             <span class="scan-topbar-title">จุดเช็คชื่อเข้า-ออก <span class="scan-topbar-staff" id="scan-staff-name"></span></span>
-            <button class="scan-logout-btn" onclick="logoutFromScan()" aria-label="ออกจากระบบ" title="ออกจากระบบ"><i class="fas fa-arrow-right-from-bracket"></i></button>
+            <button class="scan-icon-btn" onclick="changeDeviceMode()" aria-label="เปลี่ยนอุปกรณ์" title="เปลี่ยนอุปกรณ์"><i class="fas fa-sliders"></i></button>
+            <button class="scan-icon-btn" onclick="logoutFromScan()" aria-label="ออกจากระบบ" title="ออกจากระบบ"><i class="fas fa-arrow-right-from-bracket"></i></button>
         </div>
 
-        <div class="scan-stage">
-            <video id="scan-video" autoplay playsinline muted></video>
-            <div class="scan-frame" aria-hidden="true"></div>
-            <div class="scan-idle-hint"><i class="fas fa-qrcode"></i> วางบัตรดิจิทัลให้อยู่ในกรอบเพื่อสแกน</div>
-
-            <div id="camera-unavailable">
-                <i class="fas fa-video-slash"></i>
-                <span>เปิดกล้องไม่สำเร็จ — ยังใช้เครื่องอ่านบาร์โค้ดหรือ NFC ได้ตามปกติ</span>
+        <div class="scan-stage" id="scan-stage">
+            <!-- Windows / Stand-Computer: background listeners + explicit camera fallback -->
+            <div id="stage-desktop-welcome" class="kiosk-stage-view">
+                <div class="stage-hero-icon"><i class="fas fa-id-card-clip"></i></div>
+                <h2 class="stage-title">ยินดีต้อนรับ</h2>
+                <p class="stage-desc">แสกนที่เครื่องแสกนบัตร หรือแตะที่เครื่องแตะบัตรเพื่อลงชื่อ</p>
+                <button class="scan-btn" onclick="attemptDesktopCamera()"><i class="fas fa-camera"></i> แสกนด้วยกล้อง</button>
+                <div class="stage-chips">
+                    <span class="scan-status-chip"><i class="fas fa-keyboard"></i> เครื่องแสกนบัตรพร้อมใช้งาน</span>
+                    <span class="scan-status-chip" id="nfc-status-welcome"><span class="dot"></span> กำลังตรวจสอบเครื่องแตะบัตร...</span>
+                </div>
             </div>
 
+            <div id="stage-desktop-fallback" class="kiosk-stage-view">
+                <div class="stage-hero-icon"><i class="fas fa-video-slash"></i></div>
+                <h2 class="stage-title">ไม่พบกล้องในอุปกรณ์นี้</h2>
+                <p class="stage-desc">ให้ผู้ใช้แสกน QR นี้ด้วยโทรศัพท์ของตัวเองแทน เพื่อเปิดหน้าแสกนบัตรบนมือถือ</p>
+                <div id="desktop-fallback-qr"></div>
+                <button class="scan-link-btn" onclick="backToDesktopWelcome()">กลับ</button>
+            </div>
+
+            <!-- iPad at the classroom door: tap anywhere, front camera -->
+            <div id="stage-ipad-idle" class="kiosk-stage-view" onclick="startIpadScan()">
+                <div class="stage-hero-icon"><i class="fas fa-qrcode"></i></div>
+                <h2 class="stage-title">แตะที่ใดก็ได้เพื่อแสกน QR</h2>
+                <p class="stage-desc">นำบัตรประจำตัวดิจิทัลมาแสดงที่กล้องหน้าเครื่อง</p>
+            </div>
+
+            <!-- Shared camera stage: desktop fallback (any camera), iPad (front), phone (rear) -->
+            <div id="stage-camera" class="kiosk-stage-view">
+                <video id="scan-video" autoplay playsinline muted></video>
+                <div class="scan-frame" aria-hidden="true"></div>
+                <div class="scan-idle-hint"><i class="fas fa-qrcode"></i> วางบัตรดิจิทัลให้อยู่ในกรอบเพื่อสแกน</div>
+                <div id="camera-unavailable">
+                    <i class="fas fa-video-slash"></i>
+                    <span>เปิดกล้องไม่สำเร็จ</span>
+                </div>
+            </div>
+
+            <!-- Result — mini digital-ID card, shown 5s then auto-dismisses -->
             <div id="scan-result">
-                <div class="scan-result-icon" id="scan-result-icon"><i class="fas fa-spinner fa-spin"></i></div>
-                <div class="scan-result-title" id="scan-result-title">กำลังตรวจสอบ...</div>
-                <div class="scan-result-name" id="scan-result-name"></div>
-                <div class="scan-result-time" id="scan-result-time"></div>
+                <div class="scan-result-card">
+                    <div class="scan-result-banner" id="scan-result-banner">
+                        <span class="scan-result-badge" id="scan-result-badge"></span>
+                        <div class="scan-result-avatar-wrap" id="scan-result-avatar-wrap"></div>
+                    </div>
+                    <div class="scan-result-body">
+                        <div class="scan-result-name" id="scan-result-name"></div>
+                        <div class="scan-result-id" id="scan-result-id"></div>
+                        <div class="scan-result-time" id="scan-result-time"></div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="scan-bottom-bar">
-            <span class="scan-status-chip"><i class="fas fa-keyboard"></i> เครื่องอ่านบาร์โค้ดพร้อมใช้งาน</span>
+        <div class="scan-bottom-bar" id="scan-bottom-bar">
+            <span class="scan-status-chip"><i class="fas fa-keyboard"></i> เครื่องอ่านบาร์โค้ด/บัตรพร้อมใช้งาน</span>
             <span class="scan-status-chip" id="nfc-status"><span class="dot"></span> กำลังตรวจสอบ NFC...</span>
         </div>
 
-        <!-- Always-focused so a keyboard-emulating barcode scanner "types"
-             its payload here, terminated by Enter (the device's own
+        <!-- Always-focused so a keyboard-emulating barcode/NFC-card reader
+             "types" its payload here, terminated by Enter (the device's own
              behavior — no special driver/API needed). -->
         <input id="scan-hidden-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" tabindex="-1" aria-hidden="true">
     </div>
@@ -305,6 +535,7 @@
     <script>
         const filesApiAudience = 'https://admin.litalkeducation.com/files-api';
         const filesApiUrl = 'https://api.litalkeducation.com';
+        const RESULT_DISPLAY_MS = 5000;
 
         const auth0Client = (typeof auth0 !== 'undefined')
             ? new auth0.Auth0Client({
@@ -322,22 +553,88 @@
 
         async function loginToScan() { await auth0Client.loginWithRedirect(); }
 
-        function stopCamera() {
-            if (videoStream) {
-                videoStream.getTracks().forEach((t) => t.stop());
-                videoStream = null;
-            }
-        }
-
         async function logoutFromScan() {
             stopCamera();
             auth0Client.logout({ logoutParams: { returnTo: window.location.origin + '/scan.html' } });
         }
 
+        // ---------- Screen / stage navigation ----------
+        let currentKioskMode = localStorage.getItem('scan_kiosk_mode');
+
+        function showScreen(id) {
+            ['scan-login-screen', 'scan-mode-screen', 'scan-kiosk-screen'].forEach((s) => {
+                document.getElementById(s).style.display = (s === id) ? 'flex' : 'none';
+            });
+        }
+
+        function showStageView(id) {
+            document.querySelectorAll('.kiosk-stage-view').forEach((el) => el.classList.remove('active'));
+            const target = document.getElementById(id);
+            if (target) target.classList.add('active');
+        }
+
         function showFatalError(message) {
-            document.getElementById('scan-kiosk-screen').style.display = 'none';
-            document.getElementById('scan-login-screen').style.display = 'flex';
+            stopCamera();
+            showScreen('scan-login-screen');
             document.getElementById('scan-login-error').textContent = message;
+        }
+
+        function selectKioskMode(mode) {
+            localStorage.setItem('scan_kiosk_mode', mode);
+            applyKioskMode(mode);
+        }
+
+        function applyKioskMode(mode) {
+            currentKioskMode = mode;
+            document.body.dataset.kioskMode = mode;
+            showScreen('scan-kiosk-screen');
+            stopCamera();
+            document.getElementById('camera-unavailable').style.display = 'none';
+
+            if (mode === 'desktop') {
+                showStageView('stage-desktop-welcome');
+                initBarcodeInput();
+                initNfc();
+            } else if (mode === 'ipad') {
+                showStageView('stage-ipad-idle');
+            } else if (mode === 'phone') {
+                showStageView('stage-camera');
+                startCamera('environment');
+            }
+        }
+
+        function changeDeviceMode() {
+            stopCamera();
+            localStorage.removeItem('scan_kiosk_mode');
+            currentKioskMode = null;
+            delete document.body.dataset.kioskMode;
+            document.getElementById('scan-mode-staff-name').textContent = document.getElementById('scan-staff-name').textContent.replace(/^—\s*/, '');
+            showScreen('scan-mode-screen');
+        }
+
+        async function attemptDesktopCamera() {
+            showStageView('stage-camera');
+            const ok = await startCamera();
+            if (!ok) showDesktopFallbackQr();
+        }
+
+        function backToDesktopWelcome() {
+            stopCamera();
+            showStageView('stage-desktop-welcome');
+        }
+
+        function showDesktopFallbackQr() {
+            showStageView('stage-desktop-fallback');
+            const holder = document.getElementById('desktop-fallback-qr');
+            holder.innerHTML = '';
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(holder, { text: window.location.href.split('?')[0], width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+            }
+        }
+
+        function startIpadScan() {
+            showStageView('stage-camera');
+            startCamera('user');
         }
 
         // ---------- Scan submission (shared by camera/barcode/NFC) ----------
@@ -345,31 +642,97 @@
         let lastCode = null;
         let lastCodeAt = 0;
         let resultResetTimer = null;
+        let resultAvatarBlobUrl = null;
 
-        function showResult(kind, title, name, time) {
-            const overlay = document.getElementById('scan-result');
-            const icon = document.getElementById('scan-result-icon');
-            const titleEl = document.getElementById('scan-result-title');
-            const nameEl = document.getElementById('scan-result-name');
-            const timeEl = document.getElementById('scan-result-time');
+        function formatResultTime(iso) {
+            const d = iso ? new Date(iso) : new Date();
+            return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
 
-            const ICONS = {
-                loading: '<i class="fas fa-spinner fa-spin"></i>',
-                checkin: '<i class="fas fa-circle-check"></i>',
-                checkout: '<i class="fas fa-right-from-bracket"></i>',
-                error: '<i class="fas fa-triangle-exclamation"></i>',
-            };
-            icon.className = `scan-result-icon ${kind}`;
-            icon.innerHTML = ICONS[kind] || ICONS.error;
-            titleEl.textContent = title;
-            nameEl.textContent = name || '';
-            timeEl.textContent = time || '';
-            overlay.classList.add('show');
+        function setResultAvatarInitial(text) {
+            if (resultAvatarBlobUrl) { URL.revokeObjectURL(resultAvatarBlobUrl); resultAvatarBlobUrl = null; }
+            const wrap = document.getElementById('scan-result-avatar-wrap');
+            wrap.innerHTML = '';
+            wrap.textContent = (text || '').trim().charAt(0).toUpperCase();
+        }
 
-            if (resultResetTimer) clearTimeout(resultResetTimer);
-            if (kind !== 'loading') {
-                resultResetTimer = setTimeout(() => overlay.classList.remove('show'), 3800);
+        async function loadResultAvatar(personType, personId, token) {
+            const wrap = document.getElementById('scan-result-avatar-wrap');
+            try {
+                const path = personType === 'student'
+                    ? `/students/${encodeURIComponent(personId)}/avatar`
+                    : `/staff/${encodeURIComponent(personId)}/avatar`;
+                const res = await fetch(`${filesApiUrl}${path}`, { headers: { Authorization: `Bearer ${token}` } });
+                if (!res.ok) return;
+                const blob = await res.blob();
+                if (resultAvatarBlobUrl) URL.revokeObjectURL(resultAvatarBlobUrl);
+                resultAvatarBlobUrl = URL.createObjectURL(blob);
+                wrap.innerHTML = '';
+                const img = document.createElement('img');
+                img.src = resultAvatarBlobUrl;
+                wrap.appendChild(img);
+            } catch (err) {
+                // Keep the initial-letter fallback already showing.
             }
+        }
+
+        function showLoadingResult() {
+            if (resultResetTimer) { clearTimeout(resultResetTimer); resultResetTimer = null; }
+            document.getElementById('scan-result-banner').className = 'scan-result-banner loading';
+            document.getElementById('scan-result-badge').innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังตรวจสอบ...';
+            setResultAvatarInitial('');
+            document.getElementById('scan-result-name').textContent = 'กำลังตรวจสอบ...';
+            document.getElementById('scan-result-id').textContent = '';
+            document.getElementById('scan-result-time').textContent = '';
+            document.getElementById('scan-result').classList.add('show');
+        }
+
+        function showErrorResult(message) {
+            document.getElementById('scan-result-banner').className = 'scan-result-banner error';
+            document.getElementById('scan-result-badge').innerHTML = '<i class="fas fa-triangle-exclamation"></i> ไม่สำเร็จ';
+            setResultAvatarInitial('!');
+            document.getElementById('scan-result-name').textContent = message;
+            document.getElementById('scan-result-id').textContent = '';
+            document.getElementById('scan-result-time').textContent = formatResultTime();
+            scheduleResultDismiss();
+        }
+
+        async function showSuccessResult(data, token) {
+            const isCheckin = data.action === 'checked_in';
+            document.getElementById('scan-result-banner').className = `scan-result-banner ${isCheckin ? 'checkin' : 'checkout'}`;
+            document.getElementById('scan-result-badge').innerHTML = isCheckin
+                ? '<i class="fas fa-circle-check"></i> เช็คชื่อเข้าสำเร็จ'
+                : '<i class="fas fa-right-from-bracket"></i> เช็คชื่อออกสำเร็จ';
+            document.getElementById('scan-result-name').textContent = data.personName || data.personId;
+            document.getElementById('scan-result-id').textContent = `หมายเลขประจำตัว: ${data.personId}`;
+            document.getElementById('scan-result-time').textContent = formatResultTime(data.at);
+
+            if (data.hasAvatar) {
+                setResultAvatarInitial(data.personName || data.personId);
+                await loadResultAvatar(data.personType, data.personId, token);
+            } else {
+                setResultAvatarInitial(data.personName || data.personId);
+            }
+            scheduleResultDismiss();
+        }
+
+        function scheduleResultDismiss() {
+            if (resultResetTimer) clearTimeout(resultResetTimer);
+            resultResetTimer = setTimeout(returnToIdleAfterResult, RESULT_DISPLAY_MS);
+        }
+
+        function returnToIdleAfterResult() {
+            resultResetTimer = null;
+            document.getElementById('scan-result').classList.remove('show');
+            if (currentKioskMode === 'desktop') {
+                stopCamera();
+                showStageView('stage-desktop-welcome');
+            } else if (currentKioskMode === 'ipad') {
+                stopCamera();
+                showStageView('stage-ipad-idle');
+            }
+            // Phone mode has no separate idle screen — the camera keeps
+            // running on stage-camera so the next student can scan right away.
         }
 
         async function submitScan(rawCode, method) {
@@ -385,25 +748,23 @@
             lastCodeAt = now;
             scanBusy = true;
 
-            showResult('loading', 'กำลังตรวจสอบ...');
+            showLoadingResult();
+            let token = null;
             try {
-                const token = await getToken();
+                token = await getToken();
                 const res = await fetch(`${filesApiUrl}/campus-checkin`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                     body: JSON.stringify({ code, method }),
                 });
                 const data = await res.json().catch(() => ({}));
-                const now2 = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 if (!res.ok || data.status !== 'success') {
-                    showResult('error', data.message || 'สแกนไม่สำเร็จ', '', now2);
-                } else if (data.action === 'checked_in') {
-                    showResult('checkin', 'เช็คชื่อเข้าสำเร็จ', data.personName, now2);
+                    showErrorResult(data.message || 'สแกนไม่สำเร็จ');
                 } else {
-                    showResult('checkout', 'เช็คชื่อออกสำเร็จ', data.personName, now2);
+                    await showSuccessResult(data, token);
                 }
             } catch (err) {
-                showResult('error', 'เชื่อมต่อระบบไม่สำเร็จ กรุณาลองใหม่');
+                showErrorResult('เชื่อมต่อระบบไม่สำเร็จ กรุณาลองใหม่');
             } finally {
                 setTimeout(() => { scanBusy = false; }, 1500);
             }
@@ -415,17 +776,31 @@
         const scanCanvas = document.createElement('canvas');
         const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
 
-        async function startCamera() {
+        async function startCamera(facingMode) {
             const video = document.getElementById('scan-video');
+            document.getElementById('camera-unavailable').style.display = 'none';
             try {
-                videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                const constraints = facingMode ? { video: { facingMode: { ideal: facingMode } } } : { video: true };
+                videoStream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = videoStream;
                 await video.play();
                 requestAnimationFrame(scanLoop);
+                return true;
             } catch (err) {
                 console.warn('Camera unavailable:', err);
+                videoStream = null;
                 document.getElementById('camera-unavailable').style.display = 'flex';
+                return false;
             }
+        }
+
+        function stopCamera() {
+            if (videoStream) {
+                videoStream.getTracks().forEach((t) => t.stop());
+                videoStream = null;
+            }
+            const video = document.getElementById('scan-video');
+            if (video) video.srcObject = null;
         }
 
         async function scanLoop() {
@@ -451,7 +826,7 @@
             if (videoStream) requestAnimationFrame(scanLoop);
         }
 
-        // ---------- Keyboard-emulating barcode scanners ----------
+        // ---------- Keyboard-emulating barcode/NFC-card readers (desktop) ----------
         function initBarcodeInput() {
             const input = document.getElementById('scan-hidden-input');
             const refocus = () => { if (document.activeElement !== input) input.focus({ preventScroll: true }); };
@@ -469,17 +844,21 @@
 
         // ---------- Web NFC (Chrome on Android only) ----------
         async function initNfc() {
-            const chip = document.getElementById('nfc-status');
+            const chips = [document.getElementById('nfc-status'), document.getElementById('nfc-status-welcome')].filter(Boolean);
             if (!('NDEFReader' in window)) {
-                chip.innerHTML = '<span class="dot"></span> อุปกรณ์นี้ไม่รองรับ NFC ผ่านเว็บ (เฉพาะ Chrome บน Android)';
-                chip.classList.add('nfc-unsupported');
+                chips.forEach((chip) => {
+                    chip.innerHTML = '<span class="dot"></span> อุปกรณ์นี้ไม่รองรับ NFC ผ่านเว็บ';
+                    chip.classList.add('nfc-unsupported');
+                });
                 return;
             }
             try {
                 const reader = new NDEFReader();
                 await reader.scan();
-                chip.innerHTML = '<span class="dot"></span> พร้อมแตะบัตร NFC';
-                chip.classList.add('nfc-ready');
+                chips.forEach((chip) => {
+                    chip.innerHTML = '<span class="dot"></span> พร้อมแตะบัตร NFC';
+                    chip.classList.add('nfc-ready');
+                });
                 reader.onreading = (event) => {
                     if (!event.serialNumber) return;
                     submitScan(event.serialNumber.replace(/:/g, '').toUpperCase(), 'nfc');
@@ -487,21 +866,22 @@
                 reader.onreadingerror = () => { /* transient — ignore, the next tap will retry */ };
             } catch (err) {
                 console.warn('Web NFC unavailable:', err);
-                chip.innerHTML = '<span class="dot"></span> เปิดการอ่าน NFC ไม่สำเร็จ (ต้องอนุญาตสิทธิ์)';
-                chip.classList.add('nfc-unsupported');
+                chips.forEach((chip) => {
+                    chip.innerHTML = '<span class="dot"></span> เปิดการอ่าน NFC ไม่สำเร็จ';
+                    chip.classList.add('nfc-unsupported');
+                });
             }
         }
 
         // ---------- Entry ----------
         async function enterKiosk() {
-            document.getElementById('scan-login-screen').style.display = 'none';
-            document.getElementById('scan-kiosk-screen').style.display = 'flex';
-
+            let me = {};
             try {
                 const token = await getToken();
                 const res = await fetch(`${filesApiUrl}/me`, { headers: { Authorization: `Bearer ${token}` } });
-                const me = await res.json();
+                me = await res.json();
                 document.getElementById('scan-staff-name').textContent = me.name ? `— ${me.name}` : '';
+                document.getElementById('scan-mode-staff-name').textContent = me.name || '';
                 if (!Array.isArray(me.permissions) || !me.permissions.includes('data:write')) {
                     showFatalError('บัญชีนี้ไม่มีสิทธิ์เช็คชื่อ กรุณาติดต่อผู้ดูแลระบบ');
                     return;
@@ -511,14 +891,17 @@
                 return;
             }
 
-            startCamera();
-            initBarcodeInput();
-            initNfc();
+            const savedMode = localStorage.getItem('scan_kiosk_mode');
+            if (savedMode && ['desktop', 'ipad', 'phone'].includes(savedMode)) {
+                applyKioskMode(savedMode);
+            } else {
+                showScreen('scan-mode-screen');
+            }
         }
 
         window.onload = async () => {
             if (!auth0Client) {
-                document.getElementById('scan-login-screen').style.display = 'flex';
+                showScreen('scan-login-screen');
                 document.getElementById('scan-login-error').textContent = 'โหลดระบบยืนยันตัวตนไม่สำเร็จ กรุณารีเฟรชหน้าเว็บ';
                 return;
             }
@@ -528,7 +911,7 @@
                     await auth0Client.handleRedirectCallback();
                     window.history.replaceState({}, document.title, window.location.pathname);
                 } catch (err) {
-                    document.getElementById('scan-login-screen').style.display = 'flex';
+                    showScreen('scan-login-screen');
                     document.getElementById('scan-login-error').textContent = 'เข้าสู่ระบบไม่สำเร็จ: ' + err.message;
                     return;
                 }
@@ -538,7 +921,7 @@
             if (isAuthed) {
                 await enterKiosk();
             } else {
-                document.getElementById('scan-login-screen').style.display = 'flex';
+                showScreen('scan-login-screen');
             }
         };
     </script>
