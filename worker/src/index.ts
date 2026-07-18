@@ -3,7 +3,7 @@ import { cors } from 'hono/cors';
 import type { AppBindings } from './types';
 import { verifyAuth, requirePermission, portalTokenMatchesStudent, verifyPortalToken } from './auth';
 import { DOCUMENT_TYPES, extname, insertFileWithUniqueName, logAudit, todayCode } from './db';
-import core, { bangkokToday } from './core';
+import core, { bangkokToday, generateCheckinCode } from './core';
 import manage, {
   activateSchedule,
   activateApprovedSchedulesForStudent,
@@ -169,27 +169,37 @@ app.get('/portal/whoami', async (c) => {
 });
 
 // Student portal data for the public website (litalkeducation.com/student.html).
-// Public and keyed by student id (the student site "logs in" client-side only),
-// exposing the basic profile / study / payment data the old GAS Sheet endpoint
-// did, plus credit balance. Sensitive fields — private files and Google Meet
-// links — are returned only when the caller presents a valid Auth0 token for
-// this same student (see portalTokenMatchesStudent).
+// Requires a valid Auth0 token for this exact student (see
+// portalTokenMatchesStudent) — the old ?id=-in-the-URL shortcut that let
+// anyone with a guessable student id read payment/study-log data without
+// logging in has been retired; the portal now only "logs in" via Auth0.
 app.get('/portal/:studentId', async (c) => {
   const studentId = c.req.param('studentId');
   // NOCASE: the id comes from the Auth0 email local part, which is lowercased.
   const student = await c.env.DB.prepare(
-    `SELECT id, name, nickname, course, avatar_key AS avatarKey FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+    `SELECT id, name, nickname, course, email, avatar_key AS avatarKey, checkin_code AS checkinCode FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
   )
     .bind(studentId)
-    .first<{ id: string; name: string; nickname: string | null; course: string | null; avatarKey: string | null }>();
+    .first<{
+      id: string; name: string; nickname: string | null; course: string | null; email: string | null;
+      avatarKey: string | null; checkinCode: string | null;
+    }>();
   if (!student) {
     return c.json({ status: 'error', message: 'ไม่พบข้อมูลนักเรียนรหัสนี้ในระบบ' }, 404);
   }
 
-  // The portal is public by student id, but files and Meet links are only
-  // returned to the authenticated student themselves (Auth0 token whose login
-  // identity matches this id). Everything else stays visible to the ?id= link.
   const authed = await portalTokenMatchesStudent(c, student.id);
+  if (!authed) {
+    return c.json({ status: 'error', message: 'กรุณาเข้าสู่ระบบเพื่อดูข้อมูลนี้' }, 401);
+  }
+
+  // Lazy backfill for any row the 0017 migration's UPDATE missed (e.g. one
+  // inserted between the ALTER and the UPDATE during deploy).
+  let checkinCode = student.checkinCode;
+  if (!checkinCode) {
+    checkinCode = generateCheckinCode();
+    await c.env.DB.prepare(`UPDATE students SET checkin_code = ? WHERE id = ?`).bind(checkinCode, student.id).run();
+  }
 
   const today = bangkokToday();
   const [logs, pays, upcoming, pendingLinks, teachers] = await c.env.DB.batch([
@@ -223,23 +233,16 @@ app.get('/portal/:studentId', async (c) => {
 
   const balance = await creditBalance(c.env.DB, student.id);
 
-  // Meet links are a join-the-class capability — strip them unless the caller
-  // proved they are this student.
-  const schedule = ((upcoming.results ?? []) as Array<{ date: string; time: string; meet: string | null }>).map((s) =>
-    authed ? s : { date: s.date, time: s.time, meet: null },
-  );
+  const schedule = upcoming.results ?? [];
 
-  // Downloadable documents (homework, certificates, …) — authenticated only.
-  let files: unknown[] = [];
-  if (authed) {
-    const { results } = await c.env.DB.prepare(
-      `SELECT id, filename, file_type AS fileType, size, uploaded_at AS uploadedAt
-       FROM student_files WHERE student_id = ? AND deleted_at IS NULL ORDER BY uploaded_at DESC LIMIT 100`,
-    )
-      .bind(student.id)
-      .all();
-    files = results ?? [];
-  }
+  // Downloadable documents (homework, certificates, …).
+  const { results: fileResults } = await c.env.DB.prepare(
+    `SELECT id, filename, file_type AS fileType, size, uploaded_at AS uploadedAt
+     FROM student_files WHERE student_id = ? AND deleted_at IS NULL ORDER BY uploaded_at DESC LIMIT 100`,
+  )
+    .bind(student.id)
+    .all();
+  const files = fileResults ?? [];
 
   const payments = (pays.results ?? []) as Array<{ timestamp: string }>;
   const teacherRows = (teachers.results ?? []) as Array<{
@@ -252,10 +255,14 @@ app.get('/portal/:studentId', async (c) => {
         name: student.name,
         nickname: student.nickname ?? null,
         course: student.course ?? '-',
+        email: student.email ?? null,
         lastPaid: payments[0]?.timestamp ?? '-',
         creditBalance: balance,
         hasAvatar: !!student.avatarKey,
-        authed,
+        // Self-identify credential for checkin.html and the digital ID
+        // card — opaque, so it's safe to cache on the device (unlike the
+        // real student id).
+        checkinCode,
       },
       studyLogs: logs.results ?? [],
       payments,
@@ -609,7 +616,7 @@ app.post('/chat/general', async (c) => {
 // slot, so the scan attests that booking's own student attended; rescans
 // are idempotent via the UNIQUE(booking_id) constraint.
 app.post('/checkin', async (c) => {
-  const body = await c.req.json<{ token?: string; studentId?: string }>().catch(() => ({}) as never);
+  const body = await c.req.json<{ token?: string; checkinCode?: string }>().catch(() => ({}) as never);
   const token = (body.token ?? '').trim();
   if (!token) return c.json({ status: 'error', message: 'ไม่พบรหัส QR' }, 400);
 
@@ -626,8 +633,11 @@ app.post('/checkin', async (c) => {
     .first<{ bookingId: number; expiresAt: string; studentId: string; date: string; time: string; status: string; studentName: string }>();
 
   // Not a per-booking token? Try the on-site event tokens (0016): one QR
-  // that many students scan, each identifying themselves by student id —
-  // the scan page prefills it from their portal cookie.
+  // that many students scan, each identifying themselves by their opaque
+  // checkin_code (0017) — the scan page auto-fills it from the code cached
+  // on the device when the portal/digital ID card last loaded. Using the
+  // code instead of the real student id means a scanner (or a shared/lost
+  // device) can't check in an arbitrary student by guessing their id.
   if (!row) {
     const event = await c.env.DB.prepare(
       `SELECT id, title, expires_at AS expiresAt FROM checkin_events WHERE token = ?`,
@@ -639,17 +649,17 @@ app.post('/checkin', async (c) => {
       return c.json({ status: 'error', message: 'QR หมดอายุแล้ว กรุณาให้ผู้จัดกิจกรรมเปิด QR ใหม่' }, 410);
     }
 
-    const studentId = (body.studentId ?? '').trim();
+    const checkinCode = (body.checkinCode ?? '').trim().toUpperCase();
     // First round-trip carries only the token — tell the page to ask who's
-    // scanning (it prefills from the student_id portal cookie).
-    if (!studentId) return c.json({ status: 'need_student', event: event.title });
+    // scanning (it auto-fills the cached checkin code, if any).
+    if (!checkinCode) return c.json({ status: 'need_student', event: event.title });
 
     const student = await c.env.DB.prepare(
-      `SELECT id, COALESCE(nickname, name) AS studentName FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+      `SELECT id, COALESCE(nickname, name) AS studentName FROM students WHERE checkin_code = ? AND deleted_at IS NULL`,
     )
-      .bind(studentId)
+      .bind(checkinCode)
       .first<{ id: string; studentName: string }>();
-    if (!student) return c.json({ status: 'error', message: 'ไม่พบรหัสนักเรียนนี้ในระบบ กรุณาตรวจสอบรหัสอีกครั้ง' }, 404);
+    if (!student) return c.json({ status: 'error', message: 'ไม่พบรหัสนี้ในระบบ กรุณาตรวจสอบรหัสอีกครั้ง' }, 404);
 
     const inserted = await c.env.DB.prepare(
       `INSERT INTO event_attendance (event_id, student_id) VALUES (?, ?)

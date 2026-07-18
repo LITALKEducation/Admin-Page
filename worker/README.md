@@ -395,7 +395,7 @@ permissions scoped to this account.
 | POST   | `/import`                | `data:write`   | One-time Sheet migration (see above) |
 | POST   | `/stripe/webhook`        | (Stripe signature) | Records paid checkout sessions |
 | POST   | `/bookings/:id/checkin-token` | `data:write`+visibility | Mints the short-lived QR check-in token for a class (3h TTL; re-minting revokes the old one) |
-| POST   | `/checkin`               | (public, token) | Marks the booking attended — possession of a fresh token from the live class's QR is the proof of presence; rescans are idempotent. Event tokens answer `need_student` first; re-POST with `studentId` (validated against `students`, case-insensitive) records the attendee |
+| POST   | `/checkin`               | (public, token) | Marks the booking attended — possession of a fresh token from the live class's QR is the proof of presence; rescans are idempotent. Event tokens answer `need_student` first; re-POST with `checkinCode` (the student's opaque `students.checkin_code`, not their id — see migrations/0017) records the attendee |
 | POST   | `/checkin-events`        | `data:write`   | Creates an on-site/group check-in event — one QR shared by everyone (title ≤200 chars, TTL 1–24h, default 8h); returns the scan URL |
 | GET    | `/checkin-events`        | `data:read`    | Last 20 events with attendee counts and expiry state |
 | GET    | `/checkin-events/:id/attendees` | `data:read` | Attendee list (student id, name, check-in time) for one event |
@@ -555,29 +555,35 @@ when the current token carries no email. Setting up the Action from step
 - `DELETE /students/:id` soft-deletes (sets `deleted_at`) and cancels the
   student's future bookings; study logs, payments, and files are kept, and
   the student's Auth0 login account is deliberately **not** deleted.
-- `GET /portal/:studentId` is **public by student id**, mirroring the GAS
-  endpoint it replaces (the student site "logs in" client-side only). It
-  exposes the same data the old Sheet endpoint did — name, course, study
-  logs, and payment history — plus additions for the student site:
-  `nickname`/`avatar`, `creditBalance` (remaining class hours),
-  `schedule` (upcoming `booked` classes only; a withdrawn hour flips its
-  booking to `cancelled` and simply disappears from this list),
-  `pendingPayments` (active Stripe payment links awaiting checkout, so the
-  site can show a "pay now" prompt), and `teachers` (whoever the admin
-  assigned this student to via `teacher_students` — the same mapping the
-  admin panel's visibility/access screen manages — with name/title/phone
-  and a `hasAvatar` flag; the photo itself streams from
-  `GET /portal/:studentId/teacher-avatar/:identity`, which re-checks the
-  assignment so it can't be used to fetch an unrelated staff member's photo).
-  Two fields are **sensitive** and are returned only when the request carries
-  a valid Auth0 access token whose login identity is this same student
-  (`portalTokenMatchesStudent`): each schedule row's `meet` (Google Meet join
-  link) and the `files` list. Those tokens are minted by the student site via
-  `getTokenSilently({ audience: AUTH0_AUDIENCE })`; students who arrive through
-  the `?id=` / cookie shortcut (no Auth0 login) simply don't see those two.
-  `GET /portal/:studentId/avatar` streams the profile photo (public), and
-  `GET /portal/:studentId/files/:fileId` streams a document (token-gated, same
-  ownership check).
+- `GET /portal/:studentId` **requires a valid Auth0 access token whose login
+  identity is this same student** (`portalTokenMatchesStudent`) — it 401s
+  otherwise. This used to be public by student id (mirroring the old GAS
+  endpoint), with only `files` and each schedule row's `meet` link gated by
+  auth; the student site had a `?id=`/cookie shortcut that let anyone who
+  knew (or guessed) a student id read everything else — name, course, study
+  logs, and full payment history — with no login at all. That shortcut has
+  been removed and the endpoint now fails closed: every field, including the
+  ones below, only goes to the student themselves. Tokens are minted by the
+  student site via `getTokenSilently({ audience: AUTH0_AUDIENCE })`.
+  On success the response includes: `name`/`nickname`/`course`/`email`,
+  `avatar` (`hasAvatar` flag), `checkinCode` (opaque self-check-in credential,
+  lazily backfilled if a row predates migration 0017 — see the digital ID
+  card and `POST /checkin`'s event branch above), `creditBalance` (remaining
+  class hours),
+  `schedule` (upcoming `booked` classes with their `meet` join link; a
+  withdrawn hour flips its booking to `cancelled` and simply disappears from
+  this list), `studyLogs`, `payments`, `files`, `pendingPayments` (active
+  Stripe payment links awaiting checkout, so the site can show a "pay now"
+  prompt), and `teachers` (whoever the admin assigned this student to via
+  `teacher_students` — the same mapping the admin panel's visibility/access
+  screen manages — with name/title/phone and a `hasAvatar` flag; the photo
+  itself streams from `GET /portal/:studentId/teacher-avatar/:identity`,
+  which re-checks the assignment so it can't be used to fetch an unrelated
+  staff member's photo).
+  `GET /portal/:studentId/avatar` streams the profile photo (public — used
+  by the digital ID card and hero avatar without a round-trip auth check),
+  and `GET /portal/:studentId/files/:fileId` streams a document (token-gated,
+  same ownership check).
 - Self-service editing (`PATCH /portal/:studentId/profile`,
   `POST`/`DELETE /portal/:studentId/avatar`) lets the signed-in student change
   their own nickname and photo, gated by the same `portalTokenMatchesStudent`
