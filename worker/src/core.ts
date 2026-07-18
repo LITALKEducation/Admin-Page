@@ -13,6 +13,14 @@ export { bangkokToday, bangkokMonth } from './dates';
 
 const core = new Hono<AppBindings>();
 
+// Opaque check-in code (see migrations/0017_checkin_code.sql) — carries no
+// information about the student, unlike their id, so it's safe as the
+// self-identify credential on checkin.html and the digital ID card.
+export function generateCheckinCode(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(4));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
 // ===== Students =====
 
 core.get('/students', requirePermission('data:read'), async (c) => {
@@ -37,11 +45,12 @@ core.post('/students', requireAdmin, async (c) => {
   // rare collision.
   for (let attempt = 0; attempt < 20; attempt++) {
     const id = 'litalk' + String(Math.floor(10000 + Math.random() * 90000));
+    const checkinCode = generateCheckinCode();
     try {
       await c.env.DB.prepare(
-        `INSERT INTO students (id, name, nickname, email, phone, course, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO students (id, name, nickname, email, phone, course, created_by, checkin_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-        .bind(id, body.name, body.nickname ?? null, body.email ?? null, body.phone ?? null, body.course, user.email)
+        .bind(id, body.name, body.nickname ?? null, body.email ?? null, body.phone ?? null, body.course, user.email, checkinCode)
         .run();
       await logAudit(c.env.DB, user, 'CREATE_STUDENT', id, null, true);
 
@@ -730,10 +739,10 @@ core.post('/import', requirePermission('data:write'), async (c) => {
     if (!s.id || !s.name) continue;
     stmts.push(
       c.env.DB.prepare(
-        `INSERT INTO students (id, name, nickname, email, phone, course, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO students (id, name, nickname, email, phone, course, created_by, checkin_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET name = excluded.name, nickname = excluded.nickname, email = excluded.email,
            phone = excluded.phone, course = excluded.course`,
-      ).bind(s.id, s.name, s.nickname ?? null, s.email ?? null, s.phone ?? null, s.course ?? null, user.email),
+      ).bind(s.id, s.name, s.nickname ?? null, s.email ?? null, s.phone ?? null, s.course ?? null, user.email, generateCheckinCode()),
     );
   }
   for (const l of body.studyLogs ?? []) {
