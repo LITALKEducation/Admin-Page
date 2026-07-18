@@ -169,11 +169,10 @@ app.get('/portal/whoami', async (c) => {
 });
 
 // Student portal data for the public website (litalkeducation.com/student.html).
-// Public and keyed by student id (the student site "logs in" client-side only),
-// exposing the basic profile / study / payment data the old GAS Sheet endpoint
-// did, plus credit balance. Sensitive fields — private files and Google Meet
-// links — are returned only when the caller presents a valid Auth0 token for
-// this same student (see portalTokenMatchesStudent).
+// Requires a valid Auth0 token for this exact student (see
+// portalTokenMatchesStudent) — the old ?id=-in-the-URL shortcut that let
+// anyone with a guessable student id read payment/study-log data without
+// logging in has been retired; the portal now only "logs in" via Auth0.
 app.get('/portal/:studentId', async (c) => {
   const studentId = c.req.param('studentId');
   // NOCASE: the id comes from the Auth0 email local part, which is lowercased.
@@ -186,10 +185,10 @@ app.get('/portal/:studentId', async (c) => {
     return c.json({ status: 'error', message: 'ไม่พบข้อมูลนักเรียนรหัสนี้ในระบบ' }, 404);
   }
 
-  // The portal is public by student id, but files and Meet links are only
-  // returned to the authenticated student themselves (Auth0 token whose login
-  // identity matches this id). Everything else stays visible to the ?id= link.
   const authed = await portalTokenMatchesStudent(c, student.id);
+  if (!authed) {
+    return c.json({ status: 'error', message: 'กรุณาเข้าสู่ระบบเพื่อดูข้อมูลนี้' }, 401);
+  }
 
   const today = bangkokToday();
   const [logs, pays, upcoming, pendingLinks, teachers] = await c.env.DB.batch([
@@ -223,23 +222,16 @@ app.get('/portal/:studentId', async (c) => {
 
   const balance = await creditBalance(c.env.DB, student.id);
 
-  // Meet links are a join-the-class capability — strip them unless the caller
-  // proved they are this student.
-  const schedule = ((upcoming.results ?? []) as Array<{ date: string; time: string; meet: string | null }>).map((s) =>
-    authed ? s : { date: s.date, time: s.time, meet: null },
-  );
+  const schedule = upcoming.results ?? [];
 
-  // Downloadable documents (homework, certificates, …) — authenticated only.
-  let files: unknown[] = [];
-  if (authed) {
-    const { results } = await c.env.DB.prepare(
-      `SELECT id, filename, file_type AS fileType, size, uploaded_at AS uploadedAt
-       FROM student_files WHERE student_id = ? AND deleted_at IS NULL ORDER BY uploaded_at DESC LIMIT 100`,
-    )
-      .bind(student.id)
-      .all();
-    files = results ?? [];
-  }
+  // Downloadable documents (homework, certificates, …).
+  const { results: fileResults } = await c.env.DB.prepare(
+    `SELECT id, filename, file_type AS fileType, size, uploaded_at AS uploadedAt
+     FROM student_files WHERE student_id = ? AND deleted_at IS NULL ORDER BY uploaded_at DESC LIMIT 100`,
+  )
+    .bind(student.id)
+    .all();
+  const files = fileResults ?? [];
 
   const payments = (pays.results ?? []) as Array<{ timestamp: string }>;
   const teacherRows = (teachers.results ?? []) as Array<{
@@ -252,13 +244,10 @@ app.get('/portal/:studentId', async (c) => {
         name: student.name,
         nickname: student.nickname ?? null,
         course: student.course ?? '-',
-        // Digital ID card / profile edit need the contact email, but like
-        // files and Meet links it only goes to the student themselves.
-        email: authed ? (student.email ?? null) : null,
+        email: student.email ?? null,
         lastPaid: payments[0]?.timestamp ?? '-',
         creditBalance: balance,
         hasAvatar: !!student.avatarKey,
-        authed,
       },
       studyLogs: logs.results ?? [],
       payments,

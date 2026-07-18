@@ -247,14 +247,24 @@ shown on-site); scanning hits the public `POST /checkin` with a short-lived,
 revocable token — possession of a fresh token is the proof of presence, so the
 student needs no login. Attendance shows as a green badge on the booking table.
 On-site/group events are covered too: staff mint one shared QR per event
-(`/checkin-events`, TTL-bound) from the booking screen; scanners self-identify with
-their student id (prefilled from the portal cookie, validated against the roster)
-and the attendee list is viewable per event in the admin panel.
-Still open: certificates, push notifications.
+(`/checkin-events`, TTL-bound) from the booking screen; scanners self-identify by
+typing their student id (validated against the roster) and the attendee list is
+viewable per event in the admin panel. **Digital ID card done**: the portal hero
+menu (and nav/drawer on all three portal pages) opens a wallet-style card — photo,
+name, student id, course, membership status — with a QR that deep-links into this
+admin panel's existing student check screen (`?screen=check&student=<id>`) so staff
+can scan it on-site to pull up and verify the student's profile.
+**Portal login hardened**: the `?id=`-in-the-URL / cookie shortcut that let anyone
+who knew (or guessed) a student id read that student's payments and study logs
+without ever signing in has been retired — `GET /portal/:studentId` now requires a
+matching Auth0 token, so every portal page (and the digital ID card) is Auth0-only.
+Still open: certificates, push notifications, first-class parent accounts.
 
-**Phase 5 — scale**: parent accounts as first-class Auth0 identities (today the portal
-link is shared) · teacher self-service dashboard · virtualized tables once lists exceed
-~500 rows · real-time updates (Durable Objects / SSE) · dark-mode scheduling.
+**Phase 5 — scale**: parent accounts as first-class Auth0 identities (parents
+currently share the student's own Auth0 login — there is no separate parent
+identity, and the portal's ?id= shortcut has been removed) · teacher self-service
+dashboard · virtualized tables once lists exceed ~500 rows · real-time updates
+(Durable Objects / SSE) · dark-mode scheduling.
 
 ---
 
