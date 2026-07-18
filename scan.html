@@ -823,19 +823,45 @@
             if (video) video.srcObject = null;
         }
 
+        // Crops to a comfortably-larger area than the on-screen guide frame
+        // — jsQR only needs to decode this region, so shrinking its input
+        // measurably speeds up every scan attempt on the JS-only fallback
+        // path (the one that matters most, since the native BarcodeDetector
+        // is hardware-accelerated and already fast).
+        function getScanCropRect(video) {
+            const marginX = 0.12;
+            const marginY = 0.08;
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+            return {
+                sx: Math.round(w * marginX),
+                sy: Math.round(h * marginY),
+                sw: Math.round(w * (1 - marginX * 2)),
+                sh: Math.round(h * (1 - marginY * 2)),
+            };
+        }
+
         async function decodeWithJsQr(video) {
             if (typeof jsQR === 'undefined') return null;
-            scanCanvas.width = video.videoWidth;
-            scanCanvas.height = video.videoHeight;
-            scanCtx.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height);
-            const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+            const { sx, sy, sw, sh } = getScanCropRect(video);
+            scanCanvas.width = sw;
+            scanCanvas.height = sh;
+            scanCtx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+            const imageData = scanCtx.getImageData(0, 0, sw, sh);
             const result = jsQR(imageData.data, imageData.width, imageData.height);
             return result && result.data ? result.data : null;
         }
 
+        // Guards against requestAnimationFrame firing again before the
+        // previous (async) decode attempt has finished — without it, a slow
+        // jsQR pass on lower-end hardware can pile up overlapping decodes
+        // and make scanning feel sluggish instead of faster.
+        let decoding = false;
+
         async function scanLoop() {
             const video = document.getElementById('scan-video');
-            if (videoStream && video.readyState === video.HAVE_ENOUGH_DATA && !scanBusy) {
+            if (videoStream && video.readyState === video.HAVE_ENOUGH_DATA && !scanBusy && !decoding) {
+                decoding = true;
                 try {
                     if (barcodeDetector && !barcodeDetectorBroken) {
                         try {
@@ -855,6 +881,7 @@
                     // Transient decode failures are normal (blurry frame, no
                     // code in view) — nothing to surface to the user.
                 }
+                decoding = false;
             }
             if (videoStream) requestAnimationFrame(scanLoop);
         }
