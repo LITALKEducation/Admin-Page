@@ -81,24 +81,55 @@ export async function verifyPortalToken(c: Context<AppBindings>): Promise<{ emai
   }
 }
 
-// Best-effort ownership check for the public student portal. Unlike
-// verifyAuth this never rejects the request — it returns whether the caller
-// presented a valid Auth0 token whose login identity is this very student
-// (`<studentId>@STUDENT_EMAIL_DOMAIN`). The portal stays public for basic
-// data but unlocks sensitive fields (files, Meet links) only for the
-// authenticated student themselves.
+// Resolves which student an already-verified token identity belongs to:
+// the email-claim local part as a student id first, then the Auth0 sub
+// against students.auth0_user_id. Shared by GET /portal/whoami and
+// portalTokenMatchesStudent (below) so the two can never drift out of sync
+// with each other — see portalTokenMatchesStudent's history for what
+// happens when they do (a resolution path that worked for whoami silently
+// wasn't tried by the ownership check, and vice versa).
+export async function resolveStudentIdFromIdent(
+  c: Context<AppBindings>,
+  ident: { email: string; sub: string },
+): Promise<string | null> {
+  const localPart = ident.email.split('@')[0];
+  if (localPart) {
+    const byEmail = await c.env.DB.prepare(
+      `SELECT id FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+    )
+      .bind(localPart)
+      .first<{ id: string }>();
+    if (byEmail) return byEmail.id;
+  }
+
+  const bySub = await c.env.DB.prepare(
+    `SELECT id FROM students WHERE auth0_user_id = ? AND deleted_at IS NULL`,
+  )
+    .bind(ident.sub)
+    .first<{ id: string }>();
+  return bySub?.id ?? null;
+}
+
+// Ownership check for the student portal — returns whether the caller
+// presented a valid Auth0 token that proves they are this exact student.
+// GET /portal/:studentId (and every other portal route: self-edit, files,
+// avatar upload) rejects the request outright when this is false.
 export async function portalTokenMatchesStudent(c: Context<AppBindings>, studentId: string): Promise<boolean> {
   const ident = await verifyPortalToken(c);
   if (!ident) return false;
-  const localPart = ident.email.split('@')[0];
-  if (localPart) return localPart.toLowerCase() === studentId.toLowerCase();
 
-  // No email claim on the token — the Auth0 Action from README step 5
-  // isn't deployed for this login. Fall back to matching the raw Auth0
-  // sub against the student's cached login user id instead of failing
-  // closed for every student (see resolveStudentAuth0Id in db.ts).
+  const resolved = await resolveStudentIdFromIdent(c, ident);
+  if (resolved && resolved.toLowerCase() === studentId.toLowerCase()) return true;
+
+  // Last resort for a student whose auth0_user_id isn't cached yet (e.g.
+  // first login ever, or an account created before that caching existed):
+  // look this exact studentId's Auth0 account up by the conventional login
+  // email via the Management API and compare its user id to the token's
+  // sub. Needs AUTH0_MGMT_CLIENT_ID/SECRET — a no-op (false) without them.
   try {
-    const row = await c.env.DB.prepare(`SELECT auth0_user_id AS auth0UserId FROM students WHERE id = ?`)
+    const row = await c.env.DB.prepare(
+      `SELECT auth0_user_id AS auth0UserId FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+    )
       .bind(studentId)
       .first<{ auth0UserId: string | null }>();
     const auth0UserId = await resolveStudentAuth0Id(c, studentId, row?.auth0UserId ?? null);
