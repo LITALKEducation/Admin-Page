@@ -819,15 +819,17 @@ app.post('/campus-checkin', requirePermission('data:write'), async (c) => {
   }
 
   let personName = personId;
+  let hasAvatar = false;
   let bookingId: number | null = null;
   if (personType === 'student') {
     const student = await c.env.DB.prepare(
-      `SELECT COALESCE(nickname, name) AS name FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+      `SELECT COALESCE(nickname, name) AS name, avatar_key AS avatarKey FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
     )
       .bind(personId)
-      .first<{ name: string }>();
+      .first<{ name: string; avatarKey: string | null }>();
     if (!student) return c.json({ status: 'error', message: 'ไม่พบบัญชีนักเรียนนี้ในระบบ (อาจถูกลบไปแล้ว)' }, 404);
     personName = student.name;
+    hasAvatar = !!student.avatarKey;
 
     const booking = await c.env.DB.prepare(
       `SELECT id FROM bookings WHERE student_id = ? COLLATE NOCASE AND booking_date = ? AND status = 'booked' ORDER BY booking_time LIMIT 1`,
@@ -836,9 +838,12 @@ app.post('/campus-checkin', requirePermission('data:write'), async (c) => {
       .first<{ id: number }>();
     bookingId = booking?.id ?? null;
   } else {
-    const staff = await c.env.DB.prepare(`SELECT name FROM staff WHERE identity = ?`).bind(personId).first<{ name: string | null }>();
+    const staff = await c.env.DB.prepare(`SELECT name, avatar_key AS avatarKey FROM staff WHERE identity = ?`)
+      .bind(personId)
+      .first<{ name: string | null; avatarKey: string | null }>();
     if (!staff) return c.json({ status: 'error', message: 'ไม่พบบัญชีเจ้าหน้าที่นี้ในระบบ' }, 404);
     personName = staff.name || personId;
+    hasAvatar = !!staff.avatarKey;
   }
 
   const scannedBy = c.get('user').email;
@@ -849,18 +854,20 @@ app.post('/campus-checkin', requirePermission('data:write'), async (c) => {
     .first<{ id: number }>();
 
   if (open) {
+    const checkedOutAt = new Date().toISOString();
     await c.env.DB.prepare(`UPDATE campus_checkins SET checked_out_at = CURRENT_TIMESTAMP, checked_out_by = ? WHERE id = ?`)
       .bind(scannedBy, open.id)
       .run();
-    return c.json({ status: 'success', action: 'checked_out', personType, personId, personName });
+    return c.json({ status: 'success', action: 'checked_out', personType, personId, personName, hasAvatar, at: checkedOutAt });
   }
 
+  const checkedInAt = new Date().toISOString();
   await c.env.DB.prepare(
     `INSERT INTO campus_checkins (person_type, person_id, booking_id, scan_method, checked_in_by) VALUES (?, ?, ?, ?, ?)`,
   )
     .bind(personType, personId, bookingId, method, scannedBy)
     .run();
-  return c.json({ status: 'success', action: 'checked_in', personType, personId, personName });
+  return c.json({ status: 'success', action: 'checked_in', personType, personId, personName, hasAvatar, at: checkedInAt });
 });
 
 // Same-day campus check-in/out log, for the admin panel to confirm scans
