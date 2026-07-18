@@ -748,6 +748,51 @@
             }
         }
 
+        // ---------- Feedback: vibration + a synthesized beep on scan result ----------
+        // Generated with the Web Audio API instead of an audio file — no
+        // asset to self-host or have go missing/blocked, works offline.
+        let audioCtx = null;
+        function getAudioCtx() {
+            const AudioCtor = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtor) return null;
+            if (!audioCtx) audioCtx = new AudioCtor();
+            if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+            return audioCtx;
+        }
+
+        function playTones(frequencies, { duration = 0.12, gap = 0.03, type = 'sine' } = {}) {
+            const ctx = getAudioCtx();
+            if (!ctx) return;
+            let t = ctx.currentTime;
+            frequencies.forEach((freq) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = type;
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.0001, t);
+                gain.gain.exponentialRampToValueAtTime(0.28, t + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(t);
+                osc.stop(t + duration + 0.02);
+                t += duration + gap;
+            });
+        }
+
+        // Vibration API has no Safari/iOS support at all — navigator.vibrate
+        // is just undefined there, so this silently no-ops on iPhone/iPad
+        // and only actually vibrates on Android/desktop Chrome.
+        function feedbackSuccess() {
+            if (navigator.vibrate) navigator.vibrate(80);
+            playTones([880, 1320]);
+        }
+
+        function feedbackError() {
+            if (navigator.vibrate) navigator.vibrate([80, 60, 80]);
+            playTones([320], { duration: 0.22, gap: 0, type: 'square' });
+        }
+
         function showLoadingResult() {
             if (resultResetTimer) { clearTimeout(resultResetTimer); resultResetTimer = null; }
             document.getElementById('scan-result-banner').className = 'scan-result-banner loading';
@@ -760,6 +805,7 @@
         }
 
         function showErrorResult(message) {
+            feedbackError();
             document.getElementById('scan-result-banner').className = 'scan-result-banner error';
             document.getElementById('scan-result-badge').innerHTML = '<i class="fas fa-triangle-exclamation"></i> ไม่สำเร็จ';
             setResultAvatarInitial('!');
@@ -770,6 +816,7 @@
         }
 
         async function showSuccessResult(data, token) {
+            feedbackSuccess();
             const isCheckin = data.action === 'checked_in';
             document.getElementById('scan-result-banner').className = `scan-result-banner ${isCheckin ? 'checkin' : 'checkout'}`;
             document.getElementById('scan-result-badge').innerHTML = isCheckin

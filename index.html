@@ -8304,6 +8304,56 @@
         let staffIdCardQrCountdownTimer = null;
         let staffIdCardQrExpiresAt = 0;
 
+        // ---------- "You've been scanned" feedback on the card holder's own device ----------
+        // Mirrors the same feature on the student portal card — polls
+        // GET /staff/checkin-status while the card is open so this device
+        // vibrates/beeps the instant scan.html scans it, not just the
+        // scanning device at the front desk.
+        const STAFF_IDCARD_CHECKIN_POLL_MS = 1500;
+        let staffIdCardCheckinPollTimer = null;
+        let staffIdCardCheckinSince = null;
+        let staffIdCardAudioCtx = null;
+
+        function staffIdCardFeedbackTone() {
+            const AudioCtor = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtor) return;
+            if (!staffIdCardAudioCtx) staffIdCardAudioCtx = new AudioCtor();
+            if (staffIdCardAudioCtx.state === 'suspended') staffIdCardAudioCtx.resume().catch(() => {});
+            let t = staffIdCardAudioCtx.currentTime;
+            [880, 1320].forEach((freq) => {
+                const osc = staffIdCardAudioCtx.createOscillator();
+                const gain = staffIdCardAudioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.0001, t);
+                gain.gain.exponentialRampToValueAtTime(0.28, t + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+                osc.connect(gain);
+                gain.connect(staffIdCardAudioCtx.destination);
+                osc.start(t);
+                osc.stop(t + 0.14);
+                t += 0.15;
+            });
+        }
+
+        function staffIdCardScannedFeedback() {
+            if (navigator.vibrate) navigator.vibrate(80); // no-op on iOS/Safari — no Vibration API there
+            staffIdCardFeedbackTone();
+        }
+
+        async function pollStaffIdCardCheckinStatus() {
+            try {
+                const res = await apiFetch(`/staff/checkin-status?since=${encodeURIComponent(staffIdCardCheckinSince)}`);
+                const data = await res.json().catch(() => ({}));
+                if (data.status === 'success' && data.event) {
+                    staffIdCardCheckinSince = data.event.at;
+                    staffIdCardScannedFeedback();
+                }
+            } catch (err) {
+                // Transient network hiccups just mean the next poll tries again.
+            }
+        }
+
         async function openStaffIdCardModal() {
             const modal = document.getElementById('staff-idcard-modal');
             if (!modal) return;
@@ -8350,6 +8400,10 @@
             staffIdCardQrTimer = setInterval(refreshStaffIdCardQr, STAFF_IDCARD_QR_REFRESH_MS);
             if (staffIdCardQrCountdownTimer) clearInterval(staffIdCardQrCountdownTimer);
             staffIdCardQrCountdownTimer = setInterval(updateStaffIdCardQrCountdown, 1000);
+
+            staffIdCardCheckinSince = new Date().toISOString();
+            if (staffIdCardCheckinPollTimer) clearInterval(staffIdCardCheckinPollTimer);
+            staffIdCardCheckinPollTimer = setInterval(pollStaffIdCardCheckinStatus, STAFF_IDCARD_CHECKIN_POLL_MS);
         }
 
         async function refreshStaffIdCardQr() {
@@ -8402,6 +8456,7 @@
             if (modal) modal.classList.remove('active');
             if (staffIdCardQrTimer) { clearInterval(staffIdCardQrTimer); staffIdCardQrTimer = null; }
             if (staffIdCardQrCountdownTimer) { clearInterval(staffIdCardQrCountdownTimer); staffIdCardQrCountdownTimer = null; }
+            if (staffIdCardCheckinPollTimer) { clearInterval(staffIdCardCheckinPollTimer); staffIdCardCheckinPollTimer = null; }
         }
 
         async function loadFilesForSelectedStudent() {
