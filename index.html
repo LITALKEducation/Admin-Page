@@ -6531,13 +6531,18 @@
             const params = new URLSearchParams(window.location.search);
             const student = params.get('student');
             const screen = params.get('screen');
-            if (!student && !screen) return;
+            const card = params.get('card');
+            if (!student && !screen && !card) return;
             if (student && allStudentsData.some(s => s.id === student)) {
                 selectedStudentId = student;
                 updateSharedStudentIndicators();
                 PICKER_PREFIXES.filter(p => PICKER_TARGETS[p] === 'shared').forEach(syncPickerText);
             }
             if (screen && DEEP_LINK_SCREENS.includes(screen)) goScreen(screen);
+            // ?card=1 — jumps straight to the staff digital ID card, e.g. for
+            // a Shortcuts "Open URL" action pinned to the Home Screen/Action
+            // Button instead of navigating the admin panel by hand.
+            if (card === '1') openStaffIdCardModal();
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 
