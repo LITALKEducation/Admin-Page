@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { AppBindings } from './types';
-import { verifyAuth, requirePermission, portalTokenMatchesStudent, verifyPortalToken } from './auth';
+import { verifyAuth, requirePermission, portalTokenMatchesStudent, verifyPortalToken, resolveStudentIdFromIdent } from './auth';
 import { DOCUMENT_TYPES, extname, insertFileWithUniqueName, logAudit, todayCode } from './db';
 import core, { bangkokToday, generateCheckinCode } from './core';
 import manage, {
@@ -142,28 +142,16 @@ app.post('/stripe/webhook', async (c) => {
 // which silently broke for any account whose email doesn't follow the
 // `<studentId>@STUDENT_EMAIL_DOMAIN` convention (personal signups,
 // admin-edited emails, tokens with no email claim). The server is the
-// authority: match the email local part against a real student row first,
-// then fall back to the Auth0 sub against students.auth0_user_id.
+// authority: resolveStudentIdFromIdent matches the email local part against
+// a real student row first, then falls back to the Auth0 sub against
+// students.auth0_user_id — the exact same resolution portalTokenMatchesStudent
+// uses, so this and GET /portal/:studentId can never disagree about identity.
 app.get('/portal/whoami', async (c) => {
   const ident = await verifyPortalToken(c);
   if (!ident) return c.json({ status: 'error', message: 'Unauthorized' }, 401);
 
-  const localPart = ident.email.split('@')[0];
-  if (localPart) {
-    const byEmail = await c.env.DB.prepare(
-      `SELECT id FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
-    )
-      .bind(localPart)
-      .first<{ id: string }>();
-    if (byEmail) return c.json({ status: 'success', studentId: byEmail.id });
-  }
-
-  const bySub = await c.env.DB.prepare(
-    `SELECT id FROM students WHERE auth0_user_id = ? AND deleted_at IS NULL`,
-  )
-    .bind(ident.sub)
-    .first<{ id: string }>();
-  if (bySub) return c.json({ status: 'success', studentId: bySub.id });
+  const studentId = await resolveStudentIdFromIdent(c, ident);
+  if (studentId) return c.json({ status: 'success', studentId });
 
   return c.json({ status: 'error', message: 'ไม่พบบัญชีนักเรียนที่ผูกกับผู้ใช้นี้ในระบบ กรุณาติดต่อเจ้าหน้าที่' }, 404);
 });

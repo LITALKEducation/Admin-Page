@@ -81,28 +81,55 @@ export async function verifyPortalToken(c: Context<AppBindings>): Promise<{ emai
   }
 }
 
+// Resolves which student an already-verified token identity belongs to:
+// the email-claim local part as a student id first, then the Auth0 sub
+// against students.auth0_user_id. Shared by GET /portal/whoami and
+// portalTokenMatchesStudent (below) so the two can never drift out of sync
+// with each other — see portalTokenMatchesStudent's history for what
+// happens when they do (a resolution path that worked for whoami silently
+// wasn't tried by the ownership check, and vice versa).
+export async function resolveStudentIdFromIdent(
+  c: Context<AppBindings>,
+  ident: { email: string; sub: string },
+): Promise<string | null> {
+  const localPart = ident.email.split('@')[0];
+  if (localPart) {
+    const byEmail = await c.env.DB.prepare(
+      `SELECT id FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+    )
+      .bind(localPart)
+      .first<{ id: string }>();
+    if (byEmail) return byEmail.id;
+  }
+
+  const bySub = await c.env.DB.prepare(
+    `SELECT id FROM students WHERE auth0_user_id = ? AND deleted_at IS NULL`,
+  )
+    .bind(ident.sub)
+    .first<{ id: string }>();
+  return bySub?.id ?? null;
+}
+
 // Ownership check for the student portal — returns whether the caller
 // presented a valid Auth0 token that proves they are this exact student.
 // GET /portal/:studentId (and every other portal route: self-edit, files,
-// avatar upload) rejects the request outright when this is false, so both
-// resolution paths below must be tried, same as /portal/whoami:
-//  1. email-claim local part === studentId (`<studentId>@STUDENT_EMAIL_DOMAIN`)
-//  2. Auth0 sub === the student's cached login user id (resolveStudentAuth0Id)
-// Path 2 used to run only when the token had *no* email claim at all, which
-// silently failed closed for any real student whose login email doesn't
-// follow the <studentId>@domain convention (personal signups, admin-edited
-// emails) — the email claim was present, just for a different address, so
-// the sub fallback never ran even though it would have matched. Now it
-// always runs when the email check doesn't match, not just when there's no
-// email claim to check.
+// avatar upload) rejects the request outright when this is false.
 export async function portalTokenMatchesStudent(c: Context<AppBindings>, studentId: string): Promise<boolean> {
   const ident = await verifyPortalToken(c);
   if (!ident) return false;
-  const localPart = ident.email.split('@')[0];
-  if (localPart && localPart.toLowerCase() === studentId.toLowerCase()) return true;
 
+  const resolved = await resolveStudentIdFromIdent(c, ident);
+  if (resolved && resolved.toLowerCase() === studentId.toLowerCase()) return true;
+
+  // Last resort for a student whose auth0_user_id isn't cached yet (e.g.
+  // first login ever, or an account created before that caching existed):
+  // look this exact studentId's Auth0 account up by the conventional login
+  // email via the Management API and compare its user id to the token's
+  // sub. Needs AUTH0_MGMT_CLIENT_ID/SECRET — a no-op (false) without them.
   try {
-    const row = await c.env.DB.prepare(`SELECT auth0_user_id AS auth0UserId FROM students WHERE id = ?`)
+    const row = await c.env.DB.prepare(
+      `SELECT auth0_user_id AS auth0UserId FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+    )
       .bind(studentId)
       .first<{ auth0UserId: string | null }>();
     const auth0UserId = await resolveStudentAuth0Id(c, studentId, row?.auth0UserId ?? null);
