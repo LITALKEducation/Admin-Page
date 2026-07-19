@@ -356,19 +356,12 @@
             text-align: center;
         }
 
-        /* Badge, then avatar, in normal flex flow with a real gap between
-           them — the avatar's negative-bottom-margin below pulls
-           .scan-result-body up underneath it, not the avatar up into the
-           badge. That distinction is the whole fix: the old version pulled
-           the avatar itself upward by more than the badge's own height,
-           so the photo covered the badge every time. */
         .scan-result-banner {
             position: relative;
             display: flex;
-            flex-direction: column;
             align-items: center;
-            gap: 16px;
-            padding: 26px 20px 0;
+            justify-content: center;
+            padding: 18px 20px;
             color: #fff;
             background: linear-gradient(135deg, #3a3d46, #565a66);
             transition: background 0.2s ease;
@@ -405,34 +398,41 @@
 
         .scan-result-avatar-wrap {
             position: relative;
-            width: 108px;
-            height: 108px;
+            width: 64px;
+            height: 64px;
             border-radius: 50%;
-            margin-bottom: -54px;
-            border: 4px solid var(--bg-panel);
             background: var(--bg-elevated);
             overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 36px;
+            font-size: 25px;
             font-weight: 800;
             color: var(--text-muted);
-            box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+            box-shadow: inset 0 0 0 1px var(--border);
             flex-shrink: 0;
         }
 
         .scan-result-avatar-wrap img { width: 100%; height: 100%; object-fit: cover; }
 
-        .scan-result-body { padding: 68px 24px 28px; }
+        .scan-result-body { padding: 22px 24px 26px; text-align: left; }
 
-        .scan-result-name { font-size: 21px; font-weight: 800; word-break: break-word; }
-        .scan-result-id { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
+        .scan-result-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .scan-result-text { min-width: 0; flex: 1; }
+
+        .scan-result-name { font-size: 19px; font-weight: 800; word-break: break-word; }
+        .scan-result-id { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
 
         .scan-result-time {
-            margin-top: 18px;
-            padding-top: 16px;
+            margin-top: 16px;
+            padding-top: 14px;
             border-top: 1px dashed var(--border);
+            text-align: center;
             font-size: 13px;
             color: var(--text-muted);
         }
@@ -582,11 +582,15 @@
                 <div class="scan-result-card">
                     <div class="scan-result-banner" id="scan-result-banner">
                         <span class="scan-result-badge" id="scan-result-badge"></span>
-                        <div class="scan-result-avatar-wrap" id="scan-result-avatar-wrap"></div>
                     </div>
                     <div class="scan-result-body">
-                        <div class="scan-result-name" id="scan-result-name"></div>
-                        <div class="scan-result-id" id="scan-result-id"></div>
+                        <div class="scan-result-row">
+                            <div class="scan-result-avatar-wrap" id="scan-result-avatar-wrap"></div>
+                            <div class="scan-result-text">
+                                <div class="scan-result-name" id="scan-result-name"></div>
+                                <div class="scan-result-id" id="scan-result-id"></div>
+                            </div>
+                        </div>
                         <div class="scan-result-time" id="scan-result-time"></div>
                     </div>
                 </div>
