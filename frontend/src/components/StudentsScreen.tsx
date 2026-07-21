@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useStudents } from '../hooks/useStudents';
 import { useMe } from '../hooks/useMe';
+import { useSharedStudentSelection } from '../hooks/useSharedStudentSelection';
 import { useToast } from '../ui/ToastContext';
 import { useConfirm } from '../ui/ConfirmContext';
 import Pagination from '../ui/Pagination';
 import { downloadCsv, studentInitials } from '../utils/csv';
-import { legacyLink } from '../utils/legacyLink';
+import { appLink } from '../utils/deepLink';
+import { SCREEN_ROUTES } from '../utils/screenRoutes';
 import { makeTokenGetter, deleteStudent, type Student } from '../api/client';
 
 const PAGE_SIZE = 10;
@@ -23,6 +26,14 @@ export default function StudentsScreen() {
   const { isAdmin } = useMe();
   const showToast = useToast();
   const confirmDialog = useConfirm();
+  const navigate = useNavigate();
+  const [, setSelectedStudent] = useSharedStudentSelection();
+
+  const goToStudentAndScreen = (studentId: string, screen: string) => {
+    setOpenMenuId(null);
+    setSelectedStudent(studentId);
+    navigate(SCREEN_ROUTES[screen] || '/');
+  };
 
   const [search, setSearch] = useState('');
   const [courseFilter, setCourseFilter] = useState('');
@@ -151,7 +162,7 @@ export default function StudentsScreen() {
 
   const copyStudyLogLink = async (studentId: string) => {
     setOpenMenuId(null);
-    const url = legacyLink('logs', studentId);
+    const url = appLink('logs', studentId);
     try {
       await navigator.clipboard.writeText(url);
       showToast('คัดลอกลิงก์แล้ว', undefined, 'success');
@@ -180,9 +191,9 @@ export default function StudentsScreen() {
             <i className="fas fa-file-export"></i> Export
           </button>
           {isAdmin && (
-            <a className="btn btn-primary" href={legacyLink('create')}>
+            <Link className="btn btn-primary" to="/create">
               <i className="fas fa-plus"></i> เพิ่มนักเรียน
-            </a>
+            </Link>
           )}
         </div>
       </div>
@@ -275,7 +286,8 @@ export default function StudentsScreen() {
                     key={s.id}
                     className={checked ? 'row-selected' : ''}
                     onClick={() => {
-                      window.location.href = legacyLink('check', s.id);
+                      setSelectedStudent(s.id);
+                      navigate('/check');
                     }}
                   >
                     <td onClick={(e) => e.stopPropagation()}>
@@ -321,25 +333,28 @@ export default function StudentsScreen() {
                           จัดการ <i className="fas fa-chevron-down" style={{ fontSize: 10 }}></i>
                         </button>
                         <div className="row-actions-menu" role="menu">
-                          <a className="row-actions-item" href={legacyLink('check', s.id)}>
+                          <button
+                            className="row-actions-item"
+                            onClick={() => goToStudentAndScreen(s.id, 'check')}
+                          >
                             <i className="fas fa-id-card"></i> ดูโปรไฟล์
-                          </a>
+                          </button>
                           <div className="row-actions-divider"></div>
-                          <a className="row-actions-item" href={legacyLink('logs', s.id)}>
+                          <button className="row-actions-item" onClick={() => goToStudentAndScreen(s.id, 'logs')}>
                             <i className="fas fa-pen"></i> บันทึกการเรียน
-                          </a>
-                          <a className="row-actions-item" href={legacyLink('booking', s.id)}>
+                          </button>
+                          <button className="row-actions-item" onClick={() => goToStudentAndScreen(s.id, 'booking')}>
                             <i className="fas fa-calendar-check"></i> จองเวลาเรียน
-                          </a>
-                          <a className="row-actions-item" href={legacyLink('schedule', s.id)}>
+                          </button>
+                          <button className="row-actions-item" onClick={() => goToStudentAndScreen(s.id, 'schedule')}>
                             <i className="fas fa-calendar-days"></i> ตารางเรียนรายเดือน
-                          </a>
-                          <a className="row-actions-item" href={legacyLink('payments', s.id)}>
+                          </button>
+                          <button className="row-actions-item" onClick={() => goToStudentAndScreen(s.id, 'payments')}>
                             <i className="fas fa-money-bill-wave"></i> บันทึกการชำระเงิน
-                          </a>
-                          <a className="row-actions-item" href={legacyLink('files', s.id)}>
+                          </button>
+                          <button className="row-actions-item" onClick={() => goToStudentAndScreen(s.id, 'files')}>
                             <i className="fas fa-folder-open"></i> ไฟล์นักเรียน
-                          </a>
+                          </button>
                           <div className="row-actions-divider"></div>
                           <button className="row-actions-item" onClick={() => copyStudyLogLink(s.id)}>
                             <i className="fas fa-link"></i> คัดลอกลิงก์ Study Log

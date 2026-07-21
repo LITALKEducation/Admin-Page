@@ -1,0 +1,1 @@
+function e(e,t){let n=new URLSearchParams({screen:e});return t&&n.set(`student`,t),`${window.location.origin}/app/?${n.toString()}`}export{e as t};

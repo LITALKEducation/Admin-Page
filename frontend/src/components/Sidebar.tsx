@@ -1,14 +1,13 @@
 import { NavLink } from 'react-router-dom';
 import logoBlack from '../assets/img/LITALK-Black.png';
 import logoWhite from '../assets/img/LITALK-White.png';
-import { legacyLink } from '../utils/legacyLink';
+import { SCREEN_ROUTES } from '../utils/screenRoutes';
 
 interface NavItem {
   screen: string;
   label: string;
   icon: string;
   adminOnly?: boolean;
-  route?: string; // set once the screen has been migrated to React
 }
 
 interface NavSection {
@@ -23,7 +22,7 @@ const SECTIONS: NavSection[] = [
     key: 'students',
     label: 'นักเรียน',
     items: [
-      { screen: 'students', label: 'รายชื่อนักเรียน', icon: 'fa-users', route: '/students' },
+      { screen: 'students', label: 'รายชื่อนักเรียน', icon: 'fa-users' },
       { screen: 'check', label: 'โปรไฟล์นักเรียน', icon: 'fa-id-card' },
       { screen: 'files', label: 'ไฟล์นักเรียน', icon: 'fa-folder-open' },
       { screen: 'create', label: 'สร้างบัญชีนักเรียน', icon: 'fa-user-plus', adminOnly: true },
@@ -111,27 +110,16 @@ export default function Sidebar({
               <div className="nav-items-inner">
                 {section.items
                   .filter((item) => !item.adminOnly || isAdmin)
-                  .map((item) =>
-                    item.route ? (
-                      <NavLink
-                        key={item.screen}
-                        to={item.route}
-                        className={({ isActive }) => `sidebar-nav-item${isActive ? ' active' : ''}`}
-                        title={item.label}
-                      >
-                        <i className={`fas ${item.icon}`}></i> <span className="sidebar-label">{item.label}</span>
-                      </NavLink>
-                    ) : (
-                      <a
-                        key={item.screen}
-                        className="sidebar-nav-item"
-                        href={legacyLink(item.screen)}
-                        title={item.label}
-                      >
-                        <i className={`fas ${item.icon}`}></i> <span className="sidebar-label">{item.label}</span>
-                      </a>
-                    ),
-                  )}
+                  .map((item) => (
+                    <NavLink
+                      key={item.screen}
+                      to={SCREEN_ROUTES[item.screen]}
+                      className={({ isActive }) => `sidebar-nav-item${isActive ? ' active' : ''}`}
+                      title={item.label}
+                    >
+                      <i className={`fas ${item.icon}`}></i> <span className="sidebar-label">{item.label}</span>
+                    </NavLink>
+                  ))}
               </div>
             </div>
           </div>

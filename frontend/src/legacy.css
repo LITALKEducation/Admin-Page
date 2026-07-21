@@ -6,6 +6,10 @@
             padding: 0;
         }
 
+        a {
+            text-decoration: none;
+        }
+
         /* Light theme (default) */
         :root {
             --bg-primary: #F8F9FC;
