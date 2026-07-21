@@ -28,7 +28,7 @@ export default function AiChatWidget() {
               </div>
             }
           >
-            <Ai05 />
+            <Ai05 onClose={() => setIsOpen(false)} />
           </Suspense>
         </div>
       )}

@@ -9,6 +9,7 @@ import {
   IconMessageCircle,
   IconPaperclip,
   IconRefresh,
+  IconX,
 } from '@tabler/icons-react';
 import type { ChatStatus } from 'ai';
 import { marked } from 'marked';
@@ -67,7 +68,7 @@ const RESPONSES = [
 
 const pickResponse = (index: number) => RESPONSES[index % RESPONSES.length];
 
-export default function Ai05() {
+export default function Ai05({ onClose }: { onClose?: () => void }) {
   const [messages, setMessages] = useState<DemoMessage[]>(INITIAL_MESSAGES);
   const [inputValue, setInputValue] = useState('');
   const [status, setStatus] = useState<ChatStatus>('ready');
@@ -144,6 +145,18 @@ export default function Ai05() {
             >
               <IconAdjustmentsHorizontal className="size-4" />
             </Button>
+            {onClose && (
+              <Button
+                aria-label="Close"
+                className="size-8"
+                size="icon"
+                title="Close"
+                variant="ghost"
+                onClick={onClose}
+              >
+                <IconX className="size-4" />
+              </Button>
+            )}
           </div>
         </header>
 
