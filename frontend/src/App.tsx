@@ -82,7 +82,7 @@ const TITLES: Record<string, string> = {
 function ScreenFallback() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
-      <i className="fas fa-spinner fa-spin" style={{ fontSize: 28 }}></i>
+      <div className="loader"></div>
     </div>
   );
 }
@@ -96,7 +96,7 @@ export default function App() {
   if (isLoading) {
     return (
       <div className="modal-overlay" style={{ display: 'flex' }}>
-        <i className="fas fa-spinner fa-spin" style={{ fontSize: 32 }}></i>
+        <div className="loader"></div>
       </div>
     );
   }
