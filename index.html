@@ -4222,6 +4222,23 @@
            (Website/css/student-portal.css) translated to this app's own
            token names — monochrome header, rotating QR minted every ~2min
            for front-desk scan.html check-in/out. */
+        /* ===== New-system announcement modal ===== */
+        /* Shown once after login (see initApp -> maybeShowAnnounceModal), points
+           staff at the in-progress React admin panel rewrite at /app/. */
+        .announce-modal-box.modal-box { max-width: 440px; text-align: left; padding: 0; overflow: hidden; }
+        .announce-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 0; }
+        .announce-modal-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            background-color: var(--brand-primary); color: var(--brand-btn-text);
+            font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+            padding: 4px 10px; border-radius: 999px;
+        }
+        .announce-modal-body { padding: 14px 24px 24px; }
+        .announce-modal-title { font-size: 19px; font-weight: 700; color: var(--text-primary); margin: 4px 0 10px; }
+        .announce-modal-text { font-size: 13.5px; line-height: 1.6; color: var(--text-secondary); margin: 0 0 20px; }
+        .announce-modal-actions { display: flex; gap: 10px; }
+        .announce-modal-actions .btn { flex: 1; }
+
         .idcard-modal-box.modal-box { max-width: 400px; text-align: left; padding: 0; overflow: hidden; }
         .idcard-modal-head {
             display: flex; align-items: center; justify-content: space-between;
@@ -6288,6 +6305,27 @@
         </div>
     </div>
 
+    <!-- New-system announcement (shown once, see maybeShowAnnounceModal) -->
+    <div id="announce-modal" class="modal-overlay" onclick="if(event.target===this) closeAnnounceModal()">
+        <div class="modal-box announce-modal-box">
+            <div class="announce-modal-head">
+                <span class="announce-modal-badge"><i class="fas fa-bullhorn"></i> กำลังพัฒนา</span>
+                <button type="button" class="idcard-modal-close" onclick="closeAnnounceModal()" aria-label="ปิด"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="announce-modal-body">
+                <h3 class="announce-modal-title">แอดมินเวอร์ชันใหม่มาแล้ว!</h3>
+                <p class="announce-modal-text">
+                    ตอนนี้เรากำลังพัฒนาระบบแอดมินเวอร์ชันใหม่ที่เร็วขึ้น ใช้งานง่ายขึ้น และรองรับมือถือได้ดีขึ้น
+                    ข้อมูลและสิทธิ์การใช้งานเหมือนเดิมทุกประการ — ลองใช้งานได้แล้ววันนี้
+                </p>
+                <div class="announce-modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAnnounceModal()">ไว้ก่อน</button>
+                    <a href="/app/" class="btn btn-primary" onclick="closeAnnounceModal()">ทดลองใช้งานระบบใหม่</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- QR check-in modal (booking screen) -->
     <!-- Staff/teacher digital ID card (own card only) -->
     <div id="staff-idcard-modal" class="modal-overlay" onclick="if(event.target===this) closeStaffIdCardModal()">
@@ -6485,6 +6523,7 @@
             applyRoleGating();
             applyDeepLink();
             loadNotifications();
+            maybeShowAnnounceModal();
         }
 
         function isAdminUser() {
@@ -6676,6 +6715,22 @@
             modal.classList.remove('active');
             modal.classList.add('is-closing');
             setTimeout(() => modal.classList.remove('is-closing'), closeMs);
+        }
+
+        // ===== New-system announcement (points staff at /app/) =====
+        // Shown once per browser after a successful login on this (legacy)
+        // main page — bump the key if we want it to resurface for a future
+        // milestone. Marking it seen as soon as it's shown (rather than only
+        // on explicit dismissal) avoids it reappearing if someone clicks the
+        // "try it" link and never comes back to close it in-page.
+        const ANNOUNCE_SEEN_KEY = 'litalk_admin_announce_new_app_seen';
+        function maybeShowAnnounceModal() {
+            if (localStorage.getItem(ANNOUNCE_SEEN_KEY)) return;
+            localStorage.setItem(ANNOUNCE_SEEN_KEY, '1');
+            document.getElementById('announce-modal').classList.add('active');
+        }
+        function closeAnnounceModal() {
+            document.getElementById('announce-modal').classList.remove('active');
         }
 
         // ===== Custom confirm()/prompt() replacements =====
