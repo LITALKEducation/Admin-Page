@@ -3,14 +3,7 @@
 // Install AI Elements components:
 // npx ai-elements@latest add conversation message prompt-input
 
-import {
-  IconAdjustmentsHorizontal,
-  IconBolt,
-  IconMessageCircle,
-  IconPaperclip,
-  IconRefresh,
-  IconX,
-} from '@tabler/icons-react';
+import { IconBolt, IconRefresh, IconX } from '@tabler/icons-react';
 import type { ChatStatus } from 'ai';
 import { marked } from 'marked';
 import { useEffect, useRef, useState } from 'react';
@@ -68,10 +61,17 @@ const RESPONSES = [
 
 const pickResponse = (index: number) => RESPONSES[index % RESPONSES.length];
 
+const QUICK_PROMPTS = [
+  'สรุปงานที่ต้องทำวันนี้ให้หน่อย',
+  'ช่วยร่างข้อความแจ้งผู้ปกครอง',
+  'แนะนำหัวข้อสอนสำหรับสัปดาห์นี้',
+];
+
 export default function Ai05({ onClose }: { onClose?: () => void }) {
   const [messages, setMessages] = useState<DemoMessage[]>(INITIAL_MESSAGES);
   const [inputValue, setInputValue] = useState('');
   const [status, setStatus] = useState<ChatStatus>('ready');
+  const [quickPromptIndex, setQuickPromptIndex] = useState(0);
   const replyTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -81,6 +81,18 @@ export default function Ai05({ onClose }: { onClose?: () => void }) {
       }
     };
   }, []);
+
+  const handleRestart = () => {
+    if (replyTimeoutRef.current) window.clearTimeout(replyTimeoutRef.current);
+    setMessages(INITIAL_MESSAGES);
+    setInputValue('');
+    setStatus('ready');
+  };
+
+  const handleQuickPrompt = () => {
+    setInputValue(QUICK_PROMPTS[quickPromptIndex % QUICK_PROMPTS.length]);
+    setQuickPromptIndex((i) => i + 1);
+  };
 
   const handleSend = (text: string) => {
     const trimmed = text.trim();
@@ -128,29 +140,21 @@ export default function Ai05({ onClose }: { onClose?: () => void }) {
           </div>
           <div className="flex items-center gap-1">
             <Button
-              aria-label="Refresh"
-              className="size-8"
+              aria-label="เริ่มบทสนทนาใหม่"
+              className="size-11"
               size="icon"
-              title="Refresh"
+              title="เริ่มบทสนทนาใหม่"
               variant="ghost"
+              onClick={handleRestart}
             >
               <IconRefresh className="size-4" />
             </Button>
-            <Button
-              aria-label="Settings"
-              className="size-8"
-              size="icon"
-              title="Settings"
-              variant="ghost"
-            >
-              <IconAdjustmentsHorizontal className="size-4" />
-            </Button>
             {onClose && (
               <Button
-                aria-label="Close"
-                className="size-8"
+                aria-label="ปิด"
+                className="size-11"
                 size="icon"
-                title="Close"
+                title="ปิด"
                 variant="ghost"
                 onClick={onClose}
               >
@@ -201,14 +205,13 @@ export default function Ai05({ onClose }: { onClose?: () => void }) {
             />
             <PromptInputFooter>
               <PromptInputTools>
-                <PromptInputButton aria-label="Attach">
-                  <IconPaperclip className="size-4" />
-                </PromptInputButton>
-                <PromptInputButton aria-label="Quick prompt">
+                <PromptInputButton
+                  aria-label="แทรกคำถามตัวอย่าง"
+                  className="min-h-11 min-w-11"
+                  title="แทรกคำถามตัวอย่าง"
+                  onClick={handleQuickPrompt}
+                >
                   <IconBolt className="size-4" />
-                </PromptInputButton>
-                <PromptInputButton aria-label="New chat">
-                  <IconMessageCircle className="size-4" />
                 </PromptInputButton>
               </PromptInputTools>
               <PromptInputSubmit

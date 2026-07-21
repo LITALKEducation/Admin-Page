@@ -140,6 +140,8 @@ export default function FilesScreen() {
           <FileUpload06
             accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx"
             helperText="รองรับไฟล์ PDF, รูปภาพ และเอกสารทั่วไป"
+            disabled={!selectedId}
+            disabledText="กรุณาเลือกนักเรียนจากรายชื่อด้านบนก่อนอัปโหลด"
             onUpload={handleFileUpload}
           />
         </div>

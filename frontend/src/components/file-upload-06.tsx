@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 interface UploadItem {
   id: string;
@@ -28,11 +29,15 @@ export default function FileUpload06({
   accept = '*/*',
   maxSizeMB = 10,
   helperText,
+  disabled = false,
+  disabledText,
   onUpload,
 }: {
   accept?: string;
   maxSizeMB?: number;
   helperText?: string;
+  disabled?: boolean;
+  disabledText?: string;
   onUpload: (file: File, signal: AbortSignal) => Promise<void>;
 }) {
   const [uploads, setUploads] = useState<UploadItem[]>([]);
@@ -95,6 +100,7 @@ export default function FileUpload06({
   };
 
   const openFilePicker = () => {
+    if (disabled) return;
     filePickerRef.current?.click();
   };
 
@@ -114,6 +120,7 @@ export default function FileUpload06({
 
   const onDropFiles = (event: React.DragEvent) => {
     event.preventDefault();
+    if (disabled) return;
     handleFiles(event.dataTransfer.files);
   };
 
@@ -133,7 +140,10 @@ export default function FileUpload06({
   return (
     <div className="flex w-full flex-col gap-y-6">
       <Card
-        className="group flex max-h-[200px] w-full cursor-pointer flex-col items-center justify-center gap-4 border-dashed py-8 text-sm shadow-none transition-colors hover:bg-muted/50"
+        className={cn(
+          'group flex max-h-[200px] w-full flex-col items-center justify-center gap-4 border-dashed py-8 text-sm shadow-none transition-colors',
+          disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-muted/50',
+        )}
         onClick={openFilePicker}
         onDragOver={onDragOver}
         onDrop={onDropFiles}
@@ -143,7 +153,12 @@ export default function FileUpload06({
             <Upload className="size-5" />
             <div>
               ลากไฟล์มาวางที่นี่ หรือ{' '}
-              <Button className="h-auto p-0 font-normal text-primary" onClick={openFilePicker} variant="link">
+              <Button
+                className="h-auto min-h-11 p-0 font-normal text-primary"
+                onClick={openFilePicker}
+                variant="link"
+                disabled={disabled}
+              >
                 เลือกไฟล์
               </Button>
             </div>
@@ -152,13 +167,14 @@ export default function FileUpload06({
         <input
           accept={accept}
           className="hidden"
+          disabled={disabled}
           multiple
           onChange={onFileInputChange}
           ref={filePickerRef}
           type="file"
         />
         <span className="mt-2 block text-base/6 text-muted-foreground group-disabled:opacity-50 sm:text-xs">
-          {helperText || `ขนาดไฟล์สูงสุด ${maxSizeMB} MB`}
+          {disabled ? disabledText || 'กรุณาเลือกก่อนจึงจะอัปโหลดได้' : helperText || `ขนาดไฟล์สูงสุด ${maxSizeMB} MB`}
         </span>
       </Card>
 
@@ -172,22 +188,13 @@ export default function FileUpload06({
               </h2>
               <div className="-mt-2 divide-y">
                 {activeUploads.map((file) => (
-                  <div className="group flex items-center py-4" key={file.id}>
-                    <div className="mr-3 grid size-10 shrink-0 place-content-center rounded border bg-muted">
-                      <FileText className="inline size-4 group-hover:hidden" />
-                      <Button
-                        aria-label="ยกเลิก"
-                        className="hidden size-4 h-auto p-0 group-hover:inline"
-                        onClick={() => removeUpload(file.id)}
-                        size="icon"
-                        variant="ghost"
-                      >
-                        <X className="size-4" />
-                      </Button>
+                  <div className="flex items-center gap-2 py-4" key={file.id}>
+                    <div className="mr-1 grid size-10 shrink-0 place-content-center rounded border bg-muted">
+                      <FileText className="size-4" />
                     </div>
                     <div className="mb-1 flex w-full flex-col">
                       <div className="flex justify-between gap-2">
-                        <span className="select-none text-base/6 text-foreground group-disabled:opacity-50 sm:text-sm/6">
+                        <span className="select-none text-base/6 text-foreground sm:text-sm/6">
                           {file.name}
                         </span>
                         <span className="text-muted-foreground text-sm tabular-nums">
@@ -196,6 +203,15 @@ export default function FileUpload06({
                       </div>
                       <Progress className="mt-1 h-2 min-w-64" value={file.progress} />
                     </div>
+                    <Button
+                      aria-label="ยกเลิก"
+                      className="size-11 shrink-0"
+                      onClick={() => removeUpload(file.id)}
+                      size="icon"
+                      variant="ghost"
+                    >
+                      <X className="size-4" />
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -214,25 +230,23 @@ export default function FileUpload06({
               </h2>
               <div className="-mt-2 divide-y">
                 {erroredUploads.map((file) => (
-                  <div className="group flex items-center py-4" key={file.id}>
-                    <div className="mr-3 grid size-10 shrink-0 place-content-center rounded border bg-muted">
+                  <div className="flex items-center gap-2 py-4" key={file.id}>
+                    <div className="mr-1 grid size-10 shrink-0 place-content-center rounded border bg-muted">
                       <FileText className="size-4" />
                     </div>
                     <div className="mb-1 flex w-full flex-col">
-                      <div className="flex justify-between gap-2">
-                        <span className="select-none text-base/6 text-foreground sm:text-sm/6">{file.name}</span>
-                        <Button
-                          aria-label="นำออก"
-                          className="size-4 h-auto p-0"
-                          onClick={() => removeUpload(file.id)}
-                          size="icon"
-                          variant="ghost"
-                        >
-                          <X className="size-4" />
-                        </Button>
-                      </div>
+                      <span className="select-none text-base/6 text-foreground sm:text-sm/6">{file.name}</span>
                       <span className="text-destructive text-xs">{file.error}</span>
                     </div>
+                    <Button
+                      aria-label="นำออก"
+                      className="size-11 shrink-0"
+                      onClick={() => removeUpload(file.id)}
+                      size="icon"
+                      variant="ghost"
+                    >
+                      <X className="size-4" />
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -249,28 +263,28 @@ export default function FileUpload06({
               </h2>
               <div className="-mt-2 divide-y">
                 {completedUploads.map((file) => (
-                  <div className="group flex items-center py-4" key={file.id}>
-                    <div className="mr-3 grid size-10 shrink-0 place-content-center rounded border bg-muted">
-                      <FileText className="inline size-4 group-hover:hidden" />
-                      <Button
-                        aria-label="นำออก"
-                        className="hidden size-4 h-auto p-0 group-hover:inline"
-                        onClick={() => removeUpload(file.id)}
-                        size="icon"
-                        variant="ghost"
-                      >
-                        <X className="size-4" />
-                      </Button>
+                  <div className="flex items-center gap-2 py-4" key={file.id}>
+                    <div className="mr-1 grid size-10 shrink-0 place-content-center rounded border bg-muted">
+                      <FileText className="size-4" />
                     </div>
                     <div className="mb-1 flex w-full flex-col">
                       <div className="flex justify-between gap-2">
-                        <span className="select-none text-base/6 text-foreground group-disabled:opacity-50 sm:text-sm/6">
+                        <span className="select-none text-base/6 text-foreground sm:text-sm/6">
                           {file.name}
                         </span>
                         <span className="text-muted-foreground text-sm tabular-nums">100%</span>
                       </div>
                       <Progress className="mt-1 h-2 min-w-64" value={100} />
                     </div>
+                    <Button
+                      aria-label="นำออก"
+                      className="size-11 shrink-0"
+                      onClick={() => removeUpload(file.id)}
+                      size="icon"
+                      variant="ghost"
+                    >
+                      <X className="size-4" />
+                    </Button>
                   </div>
                 ))}
               </div>
