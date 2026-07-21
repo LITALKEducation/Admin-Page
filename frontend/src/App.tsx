@@ -20,6 +20,8 @@ import AccessScreen from './components/AccessScreen';
 import CreditsScreen from './components/CreditsScreen';
 import NfcScreen from './components/NfcScreen';
 import CheckinsScreen from './components/CheckinsScreen';
+import BlogScreen from './components/BlogScreen';
+import LinksScreen from './components/LinksScreen';
 import { useTheme } from './hooks/useTheme';
 import { useMe } from './hooks/useMe';
 import { ToastProvider } from './ui/ToastContext';
@@ -76,6 +78,8 @@ const TITLES: Record<string, string> = {
   '/credits': 'แก้ไขเครดิต',
   '/nfc': 'บัตร NFC',
   '/checkins': 'บันทึกเข้า-ออก',
+  '/blog': 'บทความเว็บไซต์',
+  '/links': 'ลิงก์ย่อ',
 };
 
 export default function App() {
@@ -132,6 +136,8 @@ export default function App() {
                     {isAdmin && <Route path="/credits" element={<CreditsScreen />} />}
                     {isAdmin && <Route path="/nfc" element={<NfcScreen />} />}
                     {isAdmin && <Route path="/checkins" element={<CheckinsScreen />} />}
+                    <Route path="/blog" element={<BlogScreen />} />
+                    <Route path="/links" element={<LinksScreen />} />
                   </Routes>
                 </div>
               </main>

@@ -51,8 +51,8 @@ const SECTIONS: NavSection[] = [
     key: 'website',
     label: 'เว็บไซต์',
     items: [
-      { screen: 'blog', label: 'บทความเว็บไซต์', icon: 'fa-newspaper' },
-      { screen: 'links', label: 'ลิงก์ย่อ', icon: 'fa-link' },
+      { screen: 'blog', label: 'บทความเว็บไซต์', icon: 'fa-newspaper', route: '/blog' },
+      { screen: 'links', label: 'ลิงก์ย่อ', icon: 'fa-link', route: '/links' },
     ],
   },
   {

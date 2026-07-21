@@ -772,3 +772,131 @@ export interface CampusCheckin {
 export async function fetchCampusCheckins(getToken: GetTokenFn) {
   return apiJson<CampusCheckin[]>(getToken, '/campus-checkins');
 }
+
+export type BlogStatus = 'pending' | 'published' | 'rejected';
+
+export interface BlogPost {
+  id: number;
+  title: string;
+  titleTh?: string;
+  excerpt?: string;
+  excerptTh?: string;
+  content: string;
+  contentTh?: string;
+  category?: string;
+  slug: string;
+  status: BlogStatus;
+  authorIdentity?: string;
+  authorName?: string;
+  reviewedBy?: string;
+  createdAt?: string;
+  publishedAt?: string;
+  coverKey?: string;
+  coverMime?: string;
+}
+
+export async function fetchBlogPosts(getToken: GetTokenFn) {
+  const result = await apiJson<{ posts: BlogPost[] }>(getToken, '/blog-admin/posts');
+  return result.posts || [];
+}
+
+export interface BlogPostPayload {
+  title: string;
+  titleTh: string;
+  excerpt: string;
+  excerptTh: string;
+  content: string;
+  contentTh: string;
+  category: string;
+}
+
+export async function createBlogPost(getToken: GetTokenFn, payload: BlogPostPayload & { publish: boolean }) {
+  return apiJson<{ ok: boolean; id: number; error?: string }>(getToken, '/blog-admin/posts', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateBlogPost(getToken: GetTokenFn, id: number, payload: BlogPostPayload) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/blog-admin/posts/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function setBlogPostStatusApi(getToken: GetTokenFn, id: number, status: BlogStatus) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/blog-admin/posts/${id}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function deleteBlogPostApi(getToken: GetTokenFn, id: number) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/blog-admin/posts/${id}`, { method: 'DELETE' });
+}
+
+export async function uploadBlogImage(getToken: GetTokenFn, file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiJson<{ ok: boolean; url: string; error?: string }>(getToken, '/blog-admin/images', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export async function uploadBlogCover(getToken: GetTokenFn, postId: number, file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/blog-admin/posts/${postId}/cover`, {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export async function fetchBlogCoverBlob(getToken: GetTokenFn, postId: number) {
+  return apiFetchBlob(getToken, `/blog-admin/posts/${postId}/cover`);
+}
+
+export interface ShortLink {
+  id: number;
+  domain: 'go' | 'payment';
+  url: string;
+  targetUrl: string;
+  title?: string;
+  studentId?: string;
+  clickCount?: number;
+  createdBy?: string;
+  createdAt?: string;
+  disabledAt?: string | null;
+}
+
+export async function fetchShortLinks(getToken: GetTokenFn) {
+  return apiJson<ShortLink[]>(getToken, '/links');
+}
+
+export interface CreateShortLinkPayload {
+  domain: 'go' | 'payment';
+  target: string;
+  slug?: string;
+  studentId?: string;
+  title?: string;
+}
+
+export async function createShortLinkApi(getToken: GetTokenFn, payload: CreateShortLinkPayload) {
+  return apiJson<{ ok: boolean; url: string; error?: string }>(getToken, '/links', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function disableShortLinkApi(getToken: GetTokenFn, id: number) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/links/${id}/disable`, { method: 'POST' });
+}
+
+export async function enableShortLinkApi(getToken: GetTokenFn, id: number) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/links/${id}/enable`, { method: 'POST' });
+}
+
+export async function deleteShortLinkApi(getToken: GetTokenFn, id: number) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/links/${id}`, { method: 'DELETE' });
+}
