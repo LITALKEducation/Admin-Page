@@ -11,6 +11,11 @@ export function useTheme() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    // shadcn's Tailwind `dark:` variant matches `.dark` on an ancestor, not
+    // our data-theme attribute — keep both in sync so shadcn components
+    // (badge, button, ai-elements) follow the same toggle as the rest of
+    // the app instead of needing a second theme system.
+    document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
   const toggleTheme = useCallback(() => {
