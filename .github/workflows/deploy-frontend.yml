@@ -1,0 +1,41 @@
+name: Build React Frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend.yml"
+  workflow_dispatch: {}
+
+# GitHub Pages serves this repo's main branch straight from its root (see the
+# CNAME file), so there's no separate Pages deploy step: building frontend/
+# and committing the output into app/ is what publishes it, at /app/.
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run build
+      - name: Commit built app/ if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ../app
+          if git diff --cached --quiet; then
+            echo "No changes to app/, skipping commit."
+          else
+            git commit -m "Build frontend into app/ [skip ci]"
+            git push
+          fi
