@@ -3,6 +3,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
+import MobileNav from './components/MobileNav';
 import Topbar from './components/Topbar';
 import { useTheme } from './hooks/useTheme';
 import { useMe } from './hooks/useMe';
@@ -106,6 +107,7 @@ export default function App() {
 
   const email = user?.email || user?.nickname || user?.name || 'Admin';
   const title = TITLES[location.pathname] || 'LITALK Control';
+  const handleLogout = () => logout({ logoutParams: { returnTo: `${window.location.origin}/app/` } });
 
   return (
     <ToastProvider>
@@ -113,14 +115,16 @@ export default function App() {
         <SharedStudentProvider>
           <EditingLogProvider>
             <DeepLinkHandler />
-            <div className="admin-dashboard" style={{ display: 'flex' }}>
-              <Sidebar
-                isAdmin={isAdmin}
-                email={email}
-                theme={theme}
-                onLogout={() => logout({ logoutParams: { returnTo: `${window.location.origin}/app/` } })}
-              />
+            <div className="admin-dashboard" id="admin-panel" style={{ display: 'flex' }}>
+              <Sidebar isAdmin={isAdmin} email={email} theme={theme} onLogout={handleLogout} />
               <main className="app-main">
+                <MobileNav
+                  isAdmin={isAdmin}
+                  email={email}
+                  theme={theme}
+                  onToggleTheme={toggleTheme}
+                  onLogout={handleLogout}
+                />
                 <Topbar title={title} onToggleTheme={toggleTheme} />
                 <div className="dashboard-content">
                   <ChunkErrorBoundary>
