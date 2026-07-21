@@ -11,6 +11,7 @@ import { ConfirmProvider } from './ui/ConfirmContext';
 import { SharedStudentProvider, useSharedStudentSelection } from './hooks/useSharedStudentSelection';
 import { EditingLogProvider } from './hooks/useEditingLog';
 import { SCREEN_ROUTES } from './utils/screenRoutes';
+import ChunkErrorBoundary from './ChunkErrorBoundary';
 
 // Every screen past the dashboard is code-split — with 16+ admin screens
 // there's no reason to ship the blog editor or NFC registration UI to
@@ -122,28 +123,30 @@ export default function App() {
               <main className="app-main">
                 <Topbar title={title} onToggleTheme={toggleTheme} />
                 <div className="dashboard-content">
-                  <Suspense fallback={<ScreenFallback />}>
-                    <Routes>
-                      <Route path="/" element={<DashboardScreen />} />
-                      <Route path="/students" element={<StudentsScreen />} />
-                      <Route path="/check" element={<CheckScreen />} />
-                      <Route path="/logs" element={<LogsScreen />} />
-                      <Route path="/payments" element={<PaymentsScreen />} />
-                      {isAdmin && <Route path="/create" element={<CreateStudentScreen />} />}
-                      <Route path="/files" element={<FilesScreen />} />
-                      <Route path="/booking" element={<BookingScreen />} />
-                      <Route path="/schedule" element={<ScheduleScreen />} />
-                      <Route path="/hours" element={<HoursScreen />} />
-                      {isAdmin && <Route path="/finance" element={<FinanceScreen />} />}
-                      {isAdmin && <Route path="/staff" element={<StaffScreen />} />}
-                      {isAdmin && <Route path="/access" element={<AccessScreen />} />}
-                      {isAdmin && <Route path="/credits" element={<CreditsScreen />} />}
-                      {isAdmin && <Route path="/nfc" element={<NfcScreen />} />}
-                      {isAdmin && <Route path="/checkins" element={<CheckinsScreen />} />}
-                      <Route path="/blog" element={<BlogScreen />} />
-                      <Route path="/links" element={<LinksScreen />} />
-                    </Routes>
-                  </Suspense>
+                  <ChunkErrorBoundary>
+                    <Suspense fallback={<ScreenFallback />}>
+                      <Routes>
+                        <Route path="/" element={<DashboardScreen />} />
+                        <Route path="/students" element={<StudentsScreen />} />
+                        <Route path="/check" element={<CheckScreen />} />
+                        <Route path="/logs" element={<LogsScreen />} />
+                        <Route path="/payments" element={<PaymentsScreen />} />
+                        {isAdmin && <Route path="/create" element={<CreateStudentScreen />} />}
+                        <Route path="/files" element={<FilesScreen />} />
+                        <Route path="/booking" element={<BookingScreen />} />
+                        <Route path="/schedule" element={<ScheduleScreen />} />
+                        <Route path="/hours" element={<HoursScreen />} />
+                        {isAdmin && <Route path="/finance" element={<FinanceScreen />} />}
+                        {isAdmin && <Route path="/staff" element={<StaffScreen />} />}
+                        {isAdmin && <Route path="/access" element={<AccessScreen />} />}
+                        {isAdmin && <Route path="/credits" element={<CreditsScreen />} />}
+                        {isAdmin && <Route path="/nfc" element={<NfcScreen />} />}
+                        {isAdmin && <Route path="/checkins" element={<CheckinsScreen />} />}
+                        <Route path="/blog" element={<BlogScreen />} />
+                        <Route path="/links" element={<LinksScreen />} />
+                      </Routes>
+                    </Suspense>
+                  </ChunkErrorBoundary>
                 </div>
               </main>
             </div>
