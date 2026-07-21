@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { makeTokenGetter, fetchDashboard, type DashboardResponse, type DashboardRange } from '../api/client';
 import { formatBaht, formatClassTimeLocal, formatShortThaiDate } from '../utils/format';
 import { legacyLink } from '../utils/legacyLink';
+import { useSharedStudentSelection } from '../hooks/useSharedStudentSelection';
+
+const INTERNAL_SCREENS: Record<string, string> = {
+  logs: '/logs',
+  payments: '/payments',
+  booking: '/booking',
+  check: '/check',
+  files: '/files',
+};
 
 const TIMEFRAMES: { id: DashboardRange; label: string }[] = [
   { id: 'today', label: 'วันนี้' },
@@ -16,10 +25,24 @@ const DOW = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
 
 export default function DashboardScreen() {
   const { getAccessTokenSilently } = useAuth0();
+  const navigate = useNavigate();
+  const [, setSelectedStudent] = useSharedStudentSelection();
   const [range, setRange] = useState<DashboardRange>('today');
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+
+  // Screens still on the legacy admin panel link out with a deep link;
+  // migrated screens use the shared selection + client-side route instead.
+  const goToStudentAndScreen = (studentId: string | null, screen: string) => {
+    const route = INTERNAL_SCREENS[screen];
+    if (route) {
+      if (studentId) setSelectedStudent(studentId);
+      navigate(route);
+    } else {
+      window.location.href = legacyLink(screen, studentId);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -183,9 +206,9 @@ export default function DashboardScreen() {
                       <i className="fas fa-video"></i> Meet
                     </a>
                   )}
-                  <a href={legacyLink('logs', row.studentId)} className="class-log-btn">
+                  <button className="class-log-btn" onClick={() => goToStudentAndScreen(row.studentId, 'logs')}>
                     <i className="fas fa-pen"></i> บันทึกผล
-                  </a>
+                  </button>
                 </div>
               ))
             )}
@@ -204,18 +227,18 @@ export default function DashboardScreen() {
               </div>
             </div>
             <div className="form-body">
-              <a className="btn btn-primary" style={{ width: '100%' }} href={legacyLink('logs')}>
+              <Link className="btn btn-primary" style={{ width: '100%' }} to="/logs">
                 <i className="fas fa-book-open"></i> บันทึกการเรียน
-              </a>
+              </Link>
               <Link className="btn btn-secondary" style={{ width: '100%' }} to="/students">
                 <i className="fas fa-users"></i> รายชื่อนักเรียน
               </Link>
-              <a className="btn btn-secondary" style={{ width: '100%' }} href={legacyLink('payments')}>
+              <Link className="btn btn-secondary" style={{ width: '100%' }} to="/payments">
                 <i className="fas fa-money-bill-wave"></i> บันทึกการชำระเงิน
-              </a>
-              <a className="btn btn-secondary" style={{ width: '100%' }} href={legacyLink('booking')}>
+              </Link>
+              <Link className="btn btn-secondary" style={{ width: '100%' }} to="/booking">
                 <i className="fas fa-calendar-check"></i> จองเวลาเรียน
-              </a>
+              </Link>
             </div>
           </div>
 
@@ -239,9 +262,9 @@ export default function DashboardScreen() {
                     ></i>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="alert-text">{a.text}</div>
-                      <a className="alert-action" href={legacyLink(a.screen || 'dashboard', a.studentId)}>
+                      <button className="alert-action" onClick={() => goToStudentAndScreen(a.studentId, a.screen || 'dashboard')}>
                         {a.actionLabel} <i className="fas fa-arrow-right" style={{ fontSize: 10 }}></i>
-                      </a>
+                      </button>
                     </div>
                   </div>
                 ))}

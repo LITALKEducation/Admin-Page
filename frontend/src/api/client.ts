@@ -18,6 +18,32 @@ export function makeTokenGetter(getAccessTokenSilently: (opts: object) => Promis
   return () => getAccessTokenSilently({ authorizationParams: { audience: FILES_API_AUDIENCE } });
 }
 
+// Generic authenticated JSON call: throws with the server's error message
+// (or a bare status code) whenever the response isn't ok.
+export async function apiJson<T = unknown>(getToken: GetTokenFn, path: string, options: RequestInit = {}): Promise<T> {
+  const response = await apiFetch(getToken, path, options);
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error((result as { error?: string })?.error || `HTTP ${response.status}`);
+  return result as T;
+}
+
+export async function apiFetchBlob(getToken: GetTokenFn, path: string): Promise<Blob> {
+  const response = await apiFetch(getToken, path);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.blob();
+}
+
+export function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export interface MeResponse {
   email?: string;
   name?: string;
@@ -113,4 +139,303 @@ export async function deleteStudent(getToken: GetTokenFn, id: string): Promise<{
   const response = await apiFetch(getToken, `/students/${encodeURIComponent(id)}`, { method: 'DELETE' });
   const result = await response.json();
   return { ok: response.ok && result.ok, error: result?.error };
+}
+
+export interface StudentEditPayload {
+  name: string;
+  nickname: string;
+  email: string;
+  phone: string;
+  course: string;
+  username?: string;
+  password?: string;
+}
+
+export async function updateStudent(getToken: GetTokenFn, id: string, payload: StudentEditPayload) {
+  return apiJson<{ ok: boolean; message: string; credentials?: { password?: string } }>(
+    getToken,
+    `/students/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(payload) },
+  );
+}
+
+export interface PaymentDetail {
+  id: number;
+  amount: number;
+  method?: string;
+  date: string;
+  proof?: string;
+  source?: string;
+  stripeSessionId?: string;
+}
+
+export interface PendingLink {
+  amount: number;
+  description?: string;
+  shortUrl?: string;
+  url: string;
+}
+
+export interface UpcomingClass {
+  date: string;
+  time: string;
+  notes?: string;
+}
+
+export interface ScheduleSession {
+  date: string;
+  time: string;
+}
+
+export interface ScheduleMonth {
+  month: string;
+  status: string;
+  sessionCount: number;
+  sessions?: ScheduleSession[];
+  total: number;
+  createdBy?: string;
+  createdByName?: string;
+  paymentUrl?: string;
+  paymentShortUrl?: string;
+}
+
+export interface RecentLog {
+  id: number;
+  date: string;
+  feedback?: string;
+  video?: string;
+}
+
+export interface StudentCheckResponse {
+  student: Student;
+  month: string;
+  creditBalance?: number;
+  payment: {
+    paidThisMonth: boolean;
+    monthTotal: number;
+    last?: PaymentDetail;
+    pendingLinks?: PendingLink[];
+  };
+  upcomingClasses: UpcomingClass[];
+  schedules: ScheduleMonth[];
+  recentLogs: RecentLog[];
+}
+
+export async function fetchStudentCheck(getToken: GetTokenFn, studentId: string) {
+  return apiJson<StudentCheckResponse>(getToken, `/student-check/${encodeURIComponent(studentId)}`);
+}
+
+export async function updatePayment(getToken: GetTokenFn, paymentId: number, total: number) {
+  return apiJson<{ ok: boolean; message: string }>(getToken, `/payments/${paymentId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ total }),
+  });
+}
+
+export interface StudentFile {
+  id: number;
+  filename: string;
+  file_type: string;
+  uploaded_by?: string;
+  uploaded_at?: string;
+}
+
+export async function fetchStudentFiles(getToken: GetTokenFn, studentId: string) {
+  return apiJson<StudentFile[]>(getToken, `/students/${encodeURIComponent(studentId)}/files`);
+}
+
+export async function uploadStudentFile(getToken: GetTokenFn, studentId: string, fileType: string, file: File) {
+  const formData = new FormData();
+  formData.append('student_id', studentId);
+  formData.append('file_type', fileType);
+  formData.append('file', file);
+  return apiJson<{ ok: boolean; error?: string }>(getToken, '/upload', { method: 'POST', body: formData });
+}
+
+export async function deleteStudentFile(getToken: GetTokenFn, fileId: number) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/files/${fileId}`, { method: 'DELETE' });
+}
+
+export async function fetchPublicFileLink(getToken: GetTokenFn, fileId: number) {
+  return apiJson<{ ok: boolean; url: string }>(getToken, `/files/${fileId}/public-link`, { method: 'POST' });
+}
+
+export async function uploadStudentAvatar(getToken: GetTokenFn, studentId: string, file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiJson<{ ok: boolean; message: string; error?: string }>(
+    getToken,
+    `/students/${encodeURIComponent(studentId)}/avatar`,
+    { method: 'POST', body: formData },
+  );
+}
+
+export interface StudyLogPayload {
+  studentId: string;
+  date: string;
+  feedback: string;
+  video: string;
+}
+
+export async function createStudyLog(getToken: GetTokenFn, payload: StudyLogPayload) {
+  return apiJson<{ ok: boolean; message: string; error?: string }>(getToken, '/study-logs', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateStudyLog(getToken: GetTokenFn, logId: number, payload: StudyLogPayload) {
+  return apiJson<{ ok: boolean; message: string; error?: string }>(getToken, `/study-logs/${logId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export interface PaymentPayload {
+  studentId: string;
+  method: string;
+  total: string;
+  date: string;
+  proof: string;
+}
+
+export async function createPayment(getToken: GetTokenFn, payload: PaymentPayload) {
+  return apiJson<{ ok: boolean; message: string; error?: string }>(getToken, '/payments', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export interface EarningsRow {
+  email: string;
+  count: number;
+  total: number;
+}
+
+export interface EarningsResponse {
+  restricted?: boolean;
+  assigned?: { total: number; count: number };
+  studentCount?: number;
+  mine: { total: number; count: number };
+  total?: number;
+  count?: number;
+  stripeTotal?: number;
+  manualTotal?: number;
+  pendingLinks?: { total: number; count: number };
+  byUser?: EarningsRow[];
+}
+
+export async function fetchEarnings(getToken: GetTokenFn) {
+  return apiJson<EarningsResponse>(getToken, '/earnings');
+}
+
+export interface PromotionCode {
+  code: string;
+  description?: string;
+}
+
+export async function fetchPromotionCodes(getToken: GetTokenFn) {
+  return apiJson<PromotionCode[]>(getToken, '/payment-links/promotion-codes');
+}
+
+export interface PaymentLink {
+  id: number;
+  amount: number;
+  customerName?: string;
+  studentId?: string;
+  status: 'active' | 'paid' | 'deactivated';
+  createdAt: string;
+  createdBy?: string;
+  promoCode?: string;
+  discountAmount?: number;
+  shortUrl?: string;
+  url: string;
+}
+
+export async function fetchPaymentLinks(getToken: GetTokenFn) {
+  return apiJson<PaymentLink[]>(getToken, '/payment-links');
+}
+
+export interface CreatePaymentLinkPayload {
+  amount: number;
+  description: string;
+  customerName?: string;
+  studentId?: string;
+  promoCode?: string;
+}
+
+export async function createPaymentLinkApi(getToken: GetTokenFn, payload: CreatePaymentLinkPayload) {
+  return apiJson<{ ok: boolean; url: string; shortUrl?: string; error?: string }>(getToken, '/payment-links', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deactivatePaymentLinkApi(getToken: GetTokenFn, id: number) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/payment-links/${id}/deactivate`, { method: 'POST' });
+}
+
+export interface CreateStudentPayload {
+  name: string;
+  nickname: string;
+  email: string;
+  phone: string;
+  course: string;
+}
+
+export async function createStudent(getToken: GetTokenFn, payload: CreateStudentPayload) {
+  return apiJson<{ ok: boolean; id: string; message: string }>(getToken, '/students', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export interface BookingRow {
+  id: number;
+  date: string;
+  time: string;
+  studentId: string;
+  studentName: string;
+  course?: string;
+  meetLink?: string;
+  createdBy?: string;
+  checkedInAt?: string;
+}
+
+export interface CreateBookingPayload {
+  studentId: string;
+  studentName: string;
+  bookingDate: string;
+  bookingTime: string;
+  notes: string;
+}
+
+export async function createBooking(getToken: GetTokenFn, payload: CreateBookingPayload) {
+  return apiJson<{ ok: boolean; message: string; error?: string }>(getToken, '/bookings', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchBookings(getToken: GetTokenFn) {
+  return apiJson<BookingRow[]>(getToken, '/bookings');
+}
+
+export async function updateBookingLink(getToken: GetTokenFn, id: number, meetLink: string) {
+  return apiJson<{ ok: boolean; message?: string; error?: string }>(getToken, `/bookings/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ meetLink }),
+  });
+}
+
+export async function cancelBookingApi(getToken: GetTokenFn, id: number) {
+  return apiJson<{ ok: boolean; message?: string; error?: string }>(getToken, `/bookings/${id}`, { method: 'DELETE' });
+}
+
+export async function mintCheckinToken(getToken: GetTokenFn, bookingId: number) {
+  return apiJson<{ ok: boolean; url: string; expiresAt: string; error?: string }>(
+    getToken,
+    `/bookings/${bookingId}/checkin-token`,
+    { method: 'POST' },
+  );
 }

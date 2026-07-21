@@ -1,18 +1,62 @@
+import { useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-import { Route, Routes, useLocation } from 'react-router-dom';
+import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import DashboardScreen from './components/DashboardScreen';
 import StudentsScreen from './components/StudentsScreen';
+import CheckScreen from './components/CheckScreen';
+import LogsScreen from './components/LogsScreen';
+import PaymentsScreen from './components/PaymentsScreen';
+import CreateStudentScreen from './components/CreateStudentScreen';
+import FilesScreen from './components/FilesScreen';
+import BookingScreen from './components/BookingScreen';
 import { useTheme } from './hooks/useTheme';
 import { useMe } from './hooks/useMe';
 import { ToastProvider } from './ui/ToastContext';
 import { ConfirmProvider } from './ui/ConfirmContext';
+import { SharedStudentProvider, useSharedStudentSelection } from './hooks/useSharedStudentSelection';
+import { EditingLogProvider } from './hooks/useEditingLog';
+
+// Supports shareable links like /app/logs?student=litalk12345 (e.g. the
+// "copy study log link" buttons) by seeding the shared selection once on
+// load, then dropping the query string — mirrors the legacy applyDeepLink().
+const DEEP_LINK_ROUTES: Record<string, string> = {
+  logs: '/logs',
+  payments: '/payments',
+  check: '/check',
+  files: '/files',
+  booking: '/booking',
+};
+
+function DeepLinkHandler() {
+  const navigate = useNavigate();
+  const [, setSelectedStudent] = useSharedStudentSelection();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const student = params.get('student');
+    const screen = params.get('screen');
+    if (!student && !screen) return;
+    if (student) setSelectedStudent(student);
+    const route = screen ? DEEP_LINK_ROUTES[screen] : null;
+    navigate(route || window.location.pathname, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return null;
+}
 
 const TITLES: Record<string, string> = {
   '/': 'Dashboard',
   '/students': 'รายชื่อนักเรียน',
+  '/check': 'โปรไฟล์นักเรียน',
+  '/logs': 'บันทึกการเรียน',
+  '/payments': 'บันทึกการชำระเงิน',
+  '/create': 'สร้างบัญชีนักเรียน',
+  '/files': 'ไฟล์นักเรียน',
+  '/booking': 'จองเวลาเรียน',
 };
 
 export default function App() {
@@ -39,25 +83,34 @@ export default function App() {
   return (
     <ToastProvider>
       <ConfirmProvider>
-        <div className="admin-dashboard" style={{ display: 'flex' }}>
-          <Sidebar
-            isAdmin={isAdmin}
-            email={email}
-            theme={theme}
-            onLogout={() =>
-              logout({ logoutParams: { returnTo: `${window.location.origin}/app/` } })
-            }
-          />
-          <main className="app-main">
-            <Topbar title={title} onToggleTheme={toggleTheme} />
-            <div className="dashboard-content">
-              <Routes>
-                <Route path="/" element={<DashboardScreen />} />
-                <Route path="/students" element={<StudentsScreen />} />
-              </Routes>
+        <SharedStudentProvider>
+          <EditingLogProvider>
+            <DeepLinkHandler />
+            <div className="admin-dashboard" style={{ display: 'flex' }}>
+              <Sidebar
+                isAdmin={isAdmin}
+                email={email}
+                theme={theme}
+                onLogout={() => logout({ logoutParams: { returnTo: `${window.location.origin}/app/` } })}
+              />
+              <main className="app-main">
+                <Topbar title={title} onToggleTheme={toggleTheme} />
+                <div className="dashboard-content">
+                  <Routes>
+                    <Route path="/" element={<DashboardScreen />} />
+                    <Route path="/students" element={<StudentsScreen />} />
+                    <Route path="/check" element={<CheckScreen />} />
+                    <Route path="/logs" element={<LogsScreen />} />
+                    <Route path="/payments" element={<PaymentsScreen />} />
+                    {isAdmin && <Route path="/create" element={<CreateStudentScreen />} />}
+                    <Route path="/files" element={<FilesScreen />} />
+                    <Route path="/booking" element={<BookingScreen />} />
+                  </Routes>
+                </div>
+              </main>
             </div>
-          </main>
-        </div>
+          </EditingLogProvider>
+        </SharedStudentProvider>
       </ConfirmProvider>
     </ToastProvider>
   );

@@ -24,26 +24,26 @@ const SECTIONS: NavSection[] = [
     label: 'นักเรียน',
     items: [
       { screen: 'students', label: 'รายชื่อนักเรียน', icon: 'fa-users', route: '/students' },
-      { screen: 'check', label: 'โปรไฟล์นักเรียน', icon: 'fa-id-card' },
-      { screen: 'files', label: 'ไฟล์นักเรียน', icon: 'fa-folder-open' },
-      { screen: 'create', label: 'สร้างบัญชีนักเรียน', icon: 'fa-user-plus', adminOnly: true },
+      { screen: 'check', label: 'โปรไฟล์นักเรียน', icon: 'fa-id-card', route: '/check' },
+      { screen: 'files', label: 'ไฟล์นักเรียน', icon: 'fa-folder-open', route: '/files' },
+      { screen: 'create', label: 'สร้างบัญชีนักเรียน', icon: 'fa-user-plus', adminOnly: true, route: '/create' },
     ],
   },
   {
     key: 'teaching',
     label: 'การเรียนการสอน',
     items: [
-      { screen: 'booking', label: 'จองเวลาเรียน', icon: 'fa-calendar-check' },
+      { screen: 'booking', label: 'จองเวลาเรียน', icon: 'fa-calendar-check', route: '/booking' },
       { screen: 'schedule', label: 'ตารางเรียนรายเดือน', icon: 'fa-calendar-days' },
       { screen: 'hours', label: 'ปรับชั่วโมงเรียน', icon: 'fa-arrows-up-down' },
-      { screen: 'logs', label: 'บันทึกการเรียน', icon: 'fa-book-open' },
+      { screen: 'logs', label: 'บันทึกการเรียน', icon: 'fa-book-open', route: '/logs' },
     ],
   },
   {
     key: 'finance',
     label: 'การเงิน',
     items: [
-      { screen: 'payments', label: 'บันทึกการชำระเงิน', icon: 'fa-money-bill-wave' },
+      { screen: 'payments', label: 'บันทึกการชำระเงิน', icon: 'fa-money-bill-wave', route: '/payments' },
       { screen: 'finance', label: 'สรุปการเงิน', icon: 'fa-chart-line', adminOnly: true },
     ],
   },
