@@ -12,6 +12,8 @@ const INTERNAL_SCREENS: Record<string, string> = {
   booking: '/booking',
   check: '/check',
   files: '/files',
+  schedule: '/schedule',
+  hours: '/hours',
 };
 
 const TIMEFRAMES: { id: DashboardRange; label: string }[] = [

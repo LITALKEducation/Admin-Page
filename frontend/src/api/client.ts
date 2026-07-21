@@ -439,3 +439,196 @@ export async function mintCheckinToken(getToken: GetTokenFn, bookingId: number) 
     { method: 'POST' },
   );
 }
+
+export interface ScheduleSessionRow {
+  date: string;
+  time: string;
+}
+
+export type ScheduleStatus = 'pending' | 'approved' | 'active' | 'rejected' | 'cancelled' | 'revise';
+
+export interface ScheduleRow {
+  id: number;
+  studentId: string;
+  studentName: string;
+  course?: string;
+  month: string;
+  rate: number;
+  sessionCount: number;
+  sessions: ScheduleSessionRow[];
+  total: number;
+  note?: string;
+  status: ScheduleStatus;
+  reviseNote?: string;
+  rejectReason?: string;
+  createdBy?: string;
+  createdByName?: string;
+  approvedBy?: string;
+  creditsApplied?: number;
+  paymentUrl?: string;
+  paymentShortUrl?: string;
+}
+
+export async function fetchSchedules(getToken: GetTokenFn) {
+  return apiJson<ScheduleRow[]>(getToken, '/schedules');
+}
+
+export interface SchedulePayload {
+  studentId: string;
+  month: string;
+  ratePerSession: number;
+  note: string;
+  sessions: ScheduleSessionRow[];
+}
+
+export async function createSchedule(getToken: GetTokenFn, payload: SchedulePayload) {
+  return apiJson<{ ok: boolean; message: string; error?: string }>(getToken, '/schedules', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateSchedule(getToken: GetTokenFn, id: number, payload: SchedulePayload) {
+  return apiJson<{ ok: boolean; message: string; error?: string }>(getToken, `/schedules/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function approveScheduleApi(getToken: GetTokenFn, id: number) {
+  return apiJson<{ ok: boolean; message: string; paymentUrl?: string; error?: string }>(getToken, `/schedules/${id}/approve`, {
+    method: 'POST',
+  });
+}
+
+export async function rejectScheduleApi(getToken: GetTokenFn, id: number, reason: string) {
+  return apiJson<{ ok: boolean; message: string; error?: string }>(getToken, `/schedules/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function reviseScheduleApi(getToken: GetTokenFn, id: number, note: string) {
+  return apiJson<{ ok: boolean; message: string; error?: string }>(getToken, `/schedules/${id}/revise`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+}
+
+export async function cancelScheduleApi(getToken: GetTokenFn, id: number) {
+  return apiJson<{ ok: boolean; message: string; error?: string }>(getToken, `/schedules/${id}/cancel`, { method: 'POST' });
+}
+
+export type AmendmentStatus = 'pending' | 'awaiting_payment' | 'applied' | 'rejected' | 'cancelled';
+
+export interface AmendmentRow {
+  id: number;
+  studentName: string;
+  course?: string;
+  month: string;
+  type: 'add' | 'remove';
+  sessions: ScheduleSessionRow[];
+  note?: string;
+  status: AmendmentStatus;
+  chargeAmount: number;
+  creditsUsed?: number;
+  rejectReason?: string;
+  createdBy?: string;
+  createdByName?: string;
+  paymentUrl?: string;
+  paymentShortUrl?: string;
+}
+
+export async function fetchAmendments(getToken: GetTokenFn) {
+  return apiJson<AmendmentRow[]>(getToken, '/schedule-amendments');
+}
+
+export async function submitAmendmentApi(
+  getToken: GetTokenFn,
+  scheduleId: number,
+  payload: { type: 'add' | 'remove'; sessions: ScheduleSessionRow[]; note: string },
+) {
+  return apiJson<{ ok: boolean; message: string; paymentUrl?: string; chargeAmount?: number; creditsUsed?: number; error?: string }>(
+    getToken,
+    `/schedules/${scheduleId}/amend`,
+    { method: 'POST', body: JSON.stringify(payload) },
+  );
+}
+
+export async function approveAmendmentApi(getToken: GetTokenFn, id: number) {
+  return apiJson<{ ok: boolean; message: string; paymentUrl?: string; chargeAmount?: number; creditsUsed?: number; error?: string }>(
+    getToken,
+    `/schedule-amendments/${id}/approve`,
+    { method: 'POST' },
+  );
+}
+
+export async function rejectAmendmentApi(getToken: GetTokenFn, id: number, reason: string) {
+  return apiJson<{ ok: boolean; message: string; error?: string }>(getToken, `/schedule-amendments/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function cancelAmendmentApi(getToken: GetTokenFn, id: number) {
+  return apiJson<{ ok: boolean; message: string; error?: string }>(getToken, `/schedule-amendments/${id}/cancel`, {
+    method: 'POST',
+  });
+}
+
+export interface FinanceTeacherRow {
+  teacher: string;
+  teacherName?: string;
+  students: number;
+  count: number;
+  total: number;
+}
+
+export interface FinanceRecorderRow {
+  identity: string;
+  name?: string;
+  count: number;
+  total: number;
+}
+
+export interface FinanceTransaction {
+  date: string;
+  studentName: string;
+  method?: string;
+  source: 'manual' | 'stripe';
+  recordedBy?: string;
+  proof?: string;
+  stripeSessionId?: string;
+  amount: number;
+  discountAmount?: number;
+}
+
+export interface FinanceResponse {
+  total: number;
+  count: number;
+  manualTotal: number;
+  stripeTotal: number;
+  pendingLinks: { total: number; count: number };
+  discounts: { total: number; count: number };
+  byTeacher: FinanceTeacherRow[];
+  byRecorder: FinanceRecorderRow[];
+  transactions: FinanceTransaction[];
+}
+
+export async function fetchFinance(getToken: GetTokenFn, month: string) {
+  return apiJson<FinanceResponse>(getToken, `/finance?month=${encodeURIComponent(month)}`);
+}
+
+export interface AnalyticsResponse {
+  retention: { rate: number | null; retained: number; lastMonthActive: number };
+  months: string[];
+  revenue: number[];
+  classes: number[];
+  activeStudents: number[];
+  newStudents: number[];
+  courses: { course: string; n: number }[];
+}
+
+export async function fetchAnalytics(getToken: GetTokenFn) {
+  return apiJson<AnalyticsResponse>(getToken, '/analytics');
+}

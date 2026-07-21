@@ -12,6 +12,9 @@ import PaymentsScreen from './components/PaymentsScreen';
 import CreateStudentScreen from './components/CreateStudentScreen';
 import FilesScreen from './components/FilesScreen';
 import BookingScreen from './components/BookingScreen';
+import ScheduleScreen from './components/ScheduleScreen';
+import HoursScreen from './components/HoursScreen';
+import FinanceScreen from './components/FinanceScreen';
 import { useTheme } from './hooks/useTheme';
 import { useMe } from './hooks/useMe';
 import { ToastProvider } from './ui/ToastContext';
@@ -28,6 +31,8 @@ const DEEP_LINK_ROUTES: Record<string, string> = {
   check: '/check',
   files: '/files',
   booking: '/booking',
+  schedule: '/schedule',
+  hours: '/hours',
 };
 
 function DeepLinkHandler() {
@@ -57,6 +62,9 @@ const TITLES: Record<string, string> = {
   '/create': 'สร้างบัญชีนักเรียน',
   '/files': 'ไฟล์นักเรียน',
   '/booking': 'จองเวลาเรียน',
+  '/schedule': 'ตารางเรียนรายเดือน',
+  '/hours': 'ปรับชั่วโมงเรียน',
+  '/finance': 'สรุปการเงิน',
 };
 
 export default function App() {
@@ -105,6 +113,9 @@ export default function App() {
                     {isAdmin && <Route path="/create" element={<CreateStudentScreen />} />}
                     <Route path="/files" element={<FilesScreen />} />
                     <Route path="/booking" element={<BookingScreen />} />
+                    <Route path="/schedule" element={<ScheduleScreen />} />
+                    <Route path="/hours" element={<HoursScreen />} />
+                    {isAdmin && <Route path="/finance" element={<FinanceScreen />} />}
                   </Routes>
                 </div>
               </main>

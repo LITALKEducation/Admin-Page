@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useStudents } from '../hooks/useStudents';
 import { useMe } from '../hooks/useMe';
@@ -21,6 +21,7 @@ const INTERNAL_SCREENS: Record<string, string> = {
   payments: '/payments',
   booking: '/booking',
   files: '/files',
+  schedule: '/schedule',
 };
 
 function bangkokTodayLocal(): string {
@@ -203,9 +204,9 @@ export default function StudentsScreen() {
             <i className="fas fa-file-export"></i> Export
           </button>
           {isAdmin && (
-            <a className="btn btn-primary" href={legacyLink('create')}>
+            <Link className="btn btn-primary" to="/create">
               <i className="fas fa-plus"></i> เพิ่มนักเรียน
-            </a>
+            </Link>
           )}
         </div>
       </div>
@@ -358,9 +359,9 @@ export default function StudentsScreen() {
                           <button className="row-actions-item" onClick={() => goToStudentAndScreen(s.id, 'booking')}>
                             <i className="fas fa-calendar-check"></i> จองเวลาเรียน
                           </button>
-                          <a className="row-actions-item" href={legacyLink('schedule', s.id)}>
+                          <button className="row-actions-item" onClick={() => goToStudentAndScreen(s.id, 'schedule')}>
                             <i className="fas fa-calendar-days"></i> ตารางเรียนรายเดือน
-                          </a>
+                          </button>
                           <button className="row-actions-item" onClick={() => goToStudentAndScreen(s.id, 'payments')}>
                             <i className="fas fa-money-bill-wave"></i> บันทึกการชำระเงิน
                           </button>

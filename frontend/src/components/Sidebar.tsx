@@ -34,8 +34,8 @@ const SECTIONS: NavSection[] = [
     label: 'การเรียนการสอน',
     items: [
       { screen: 'booking', label: 'จองเวลาเรียน', icon: 'fa-calendar-check', route: '/booking' },
-      { screen: 'schedule', label: 'ตารางเรียนรายเดือน', icon: 'fa-calendar-days' },
-      { screen: 'hours', label: 'ปรับชั่วโมงเรียน', icon: 'fa-arrows-up-down' },
+      { screen: 'schedule', label: 'ตารางเรียนรายเดือน', icon: 'fa-calendar-days', route: '/schedule' },
+      { screen: 'hours', label: 'ปรับชั่วโมงเรียน', icon: 'fa-arrows-up-down', route: '/hours' },
       { screen: 'logs', label: 'บันทึกการเรียน', icon: 'fa-book-open', route: '/logs' },
     ],
   },
@@ -44,7 +44,7 @@ const SECTIONS: NavSection[] = [
     label: 'การเงิน',
     items: [
       { screen: 'payments', label: 'บันทึกการชำระเงิน', icon: 'fa-money-bill-wave', route: '/payments' },
-      { screen: 'finance', label: 'สรุปการเงิน', icon: 'fa-chart-line', adminOnly: true },
+      { screen: 'finance', label: 'สรุปการเงิน', icon: 'fa-chart-line', adminOnly: true, route: '/finance' },
     ],
   },
   {
