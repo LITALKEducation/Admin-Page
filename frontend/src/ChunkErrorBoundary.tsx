@@ -44,7 +44,7 @@ export default class ChunkErrorBoundary extends Component<{ children: ReactNode 
     if (this.state.failed) {
       return (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
-          <i className="fas fa-spinner fa-spin" style={{ fontSize: 28 }}></i>
+          <div className="loader"></div>
         </div>
       );
     }
