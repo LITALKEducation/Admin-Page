@@ -1,0 +1,29 @@
+/* ============================================================
+   LITALK — Self-hosted webfonts
+   Montserrat (Latin) + Noto Sans Thai (Thai), served locally
+   instead of from fonts.googleapis.com.
+   ============================================================ */
+
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('./assets/font/Montserrat-Variable.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Montserrat';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/font/Montserrat-Italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Noto Sans Thai';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./assets/font/NotoSansThai-Variable.woff2') format('woff2');
+}
