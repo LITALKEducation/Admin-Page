@@ -244,12 +244,18 @@ export async function fetchStudentFiles(getToken: GetTokenFn, studentId: string)
   return apiJson<StudentFile[]>(getToken, `/students/${encodeURIComponent(studentId)}/files`);
 }
 
-export async function uploadStudentFile(getToken: GetTokenFn, studentId: string, fileType: string, file: File) {
+export async function uploadStudentFile(
+  getToken: GetTokenFn,
+  studentId: string,
+  fileType: string,
+  file: File,
+  signal?: AbortSignal,
+) {
   const formData = new FormData();
   formData.append('student_id', studentId);
   formData.append('file_type', fileType);
   formData.append('file', file);
-  return apiJson<{ ok: boolean; error?: string }>(getToken, '/upload', { method: 'POST', body: formData });
+  return apiJson<{ ok: boolean; error?: string }>(getToken, '/upload', { method: 'POST', body: formData, signal });
 }
 
 export async function deleteStudentFile(getToken: GetTokenFn, fileId: number) {

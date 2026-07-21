@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useStudents } from '../hooks/useStudents';
 import { useSharedStudentSelection } from '../hooks/useSharedStudentSelection';
@@ -6,6 +6,7 @@ import { useMe } from '../hooks/useMe';
 import { useToast } from '../ui/ToastContext';
 import { useConfirm } from '../ui/ConfirmContext';
 import StudentPicker, { StudentIndicator } from '../ui/StudentPicker';
+import FileUpload06 from './file-upload-06';
 import {
   makeTokenGetter,
   fetchStudentFiles,
@@ -26,7 +27,6 @@ export default function FilesScreen() {
   const confirmDialog = useConfirm();
 
   const [docType, setDocType] = useState('Homework');
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<StudentFile[] | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -52,24 +52,13 @@ export default function FilesScreen() {
     load();
   }, [load]);
 
-  const doUpload = async () => {
-    const file = fileInputRef.current?.files?.[0];
+  const handleFileUpload = async (file: File, signal: AbortSignal) => {
     if (!selectedId) {
-      showToast('กรุณาเลือกนักเรียนจากรายชื่อด้านบน', undefined, 'error');
-      return;
+      throw new Error('กรุณาเลือกนักเรียนจากรายชื่อด้านบนก่อนอัปโหลด');
     }
-    if (!file) {
-      showToast('กรุณาเลือกไฟล์', undefined, 'error');
-      return;
-    }
-    try {
-      await uploadStudentFile(makeTokenGetter(getAccessTokenSilently), selectedId, docType, file);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      showToast('อัปโหลดสำเร็จ', 'บันทึกไฟล์เรียบร้อยแล้ว', 'success');
-      load();
-    } catch (error) {
-      showToast('อัปโหลดล้มเหลว', error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการอัปโหลดไฟล์', 'error');
-    }
+    await uploadStudentFile(makeTokenGetter(getAccessTokenSilently), selectedId, docType, file, signal);
+    showToast('อัปโหลดสำเร็จ', `บันทึกไฟล์ "${file.name}" เรียบร้อยแล้ว`, 'success');
+    load();
   };
 
   const doDownload = async (f: StudentFile) => {
@@ -132,36 +121,29 @@ export default function FilesScreen() {
         </div>
 
         <div className="form-body">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div className="form-group">
-              <label>
-                <i className="fas fa-tag"></i> ประเภทเอกสาร
-              </label>
-              <div className="select-wrapper">
-                <select value={docType} onChange={(e) => setDocType(e.target.value)}>
-                  <option value="Homework">การบ้าน (Homework)</option>
-                  <option value="Worksheet">ใบงาน (Worksheet)</option>
-                  <option value="Exam">ข้อสอบ (Exam)</option>
-                  <option value="Attendance">การเข้าเรียน (Attendance)</option>
-                  <option value="Certificate">ใบรับรอง (Certificate)</option>
-                  <option value="Portfolio">ผลงาน (Portfolio)</option>
-                  <option value="Other">อื่น ๆ (Other)</option>
-                </select>
-              </div>
-            </div>
-            <div className="form-group">
-              <label>
-                <i className="fas fa-paperclip"></i> ไฟล์
-              </label>
-              <input type="file" ref={fileInputRef} />
-              <div className="form-hint">รองรับไฟล์ PDF, รูปภาพ และเอกสารทั่วไป</div>
+          <div className="form-group">
+            <label>
+              <i className="fas fa-tag"></i> ประเภทเอกสาร
+            </label>
+            <div className="select-wrapper">
+              <select value={docType} onChange={(e) => setDocType(e.target.value)}>
+                <option value="Homework">การบ้าน (Homework)</option>
+                <option value="Worksheet">ใบงาน (Worksheet)</option>
+                <option value="Exam">ข้อสอบ (Exam)</option>
+                <option value="Attendance">การเข้าเรียน (Attendance)</option>
+                <option value="Certificate">ใบรับรอง (Certificate)</option>
+                <option value="Portfolio">ผลงาน (Portfolio)</option>
+                <option value="Other">อื่น ๆ (Other)</option>
+              </select>
             </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button className="btn btn-primary" onClick={doUpload}>
-              <i className="fas fa-upload"></i> อัปโหลดไฟล์
-            </button>
-          </div>
+          <FileUpload06
+            accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx"
+            helperText="รองรับไฟล์ PDF, รูปภาพ และเอกสารทั่วไป"
+            disabled={!selectedId}
+            disabledText="กรุณาเลือกนักเรียนจากรายชื่อด้านบนก่อนอัปโหลด"
+            onUpload={handleFileUpload}
+          />
         </div>
       </div>
 

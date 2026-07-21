@@ -4,6 +4,7 @@ import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
+import AiChatWidget from './components/AiChatWidget';
 import Topbar from './components/Topbar';
 import { useTheme } from './hooks/useTheme';
 import { useMe } from './hooks/useMe';
@@ -115,6 +116,7 @@ export default function App() {
         <SharedStudentProvider>
           <EditingLogProvider>
             <DeepLinkHandler />
+            <AiChatWidget />
             <div className="admin-dashboard" id="admin-panel" style={{ display: 'flex' }}>
               <Sidebar isAdmin={isAdmin} email={email} theme={theme} onLogout={handleLogout} />
               <main className="app-main">
