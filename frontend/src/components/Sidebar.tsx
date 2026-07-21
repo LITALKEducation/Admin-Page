@@ -60,11 +60,11 @@ const SECTIONS: NavSection[] = [
     label: 'ผู้ดูแลระบบ',
     adminOnly: true,
     items: [
-      { screen: 'staff', label: 'ครูและพนักงาน', icon: 'fa-users-gear' },
-      { screen: 'access', label: 'สิทธิ์การมองเห็น', icon: 'fa-user-shield' },
-      { screen: 'credits', label: 'แก้ไขเครดิต', icon: 'fa-coins' },
-      { screen: 'nfc', label: 'บัตร NFC', icon: 'fa-wifi' },
-      { screen: 'checkins', label: 'บันทึกเข้า-ออก', icon: 'fa-right-left' },
+      { screen: 'staff', label: 'ครูและพนักงาน', icon: 'fa-users-gear', route: '/staff' },
+      { screen: 'access', label: 'สิทธิ์การมองเห็น', icon: 'fa-user-shield', route: '/access' },
+      { screen: 'credits', label: 'แก้ไขเครดิต', icon: 'fa-coins', route: '/credits' },
+      { screen: 'nfc', label: 'บัตร NFC', icon: 'fa-wifi', route: '/nfc' },
+      { screen: 'checkins', label: 'บันทึกเข้า-ออก', icon: 'fa-right-left', route: '/checkins' },
     ],
   },
 ];

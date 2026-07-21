@@ -632,3 +632,143 @@ export interface AnalyticsResponse {
 export async function fetchAnalytics(getToken: GetTokenFn) {
   return apiJson<AnalyticsResponse>(getToken, '/analytics');
 }
+
+export type StaffRole = 'admin' | 'teacher' | 'staff';
+
+export interface StaffRow {
+  identity: string;
+  name?: string;
+  role: StaffRole;
+  isAdmin?: boolean;
+  title?: string;
+  phone?: string;
+}
+
+export async function fetchStaff(getToken: GetTokenFn) {
+  return apiJson<StaffRow[]>(getToken, '/staff');
+}
+
+export interface CreateStaffPayload {
+  name: string;
+  email: string;
+  role: StaffRole;
+  title: string;
+  phone: string;
+}
+
+export async function createStaffAccount(getToken: GetTokenFn, payload: CreateStaffPayload) {
+  return apiJson<{ ok: boolean; message: string }>(getToken, '/staff', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateStaff(getToken: GetTokenFn, identity: string, payload: { name: string; title: string; phone: string }) {
+  return apiJson<{ ok: boolean; message: string }>(getToken, `/staff/${encodeURIComponent(identity)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function uploadStaffAvatarApi(getToken: GetTokenFn, identity: string, file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiJson<{ ok: boolean; message: string; error?: string }>(getToken, `/staff/${encodeURIComponent(identity)}/avatar`, {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export async function sendStaffPasswordTicket(getToken: GetTokenFn, identity: string) {
+  return apiJson<{ ok: boolean; url: string; error?: string }>(getToken, `/staff/${encodeURIComponent(identity)}/password-ticket`, {
+    method: 'POST',
+  });
+}
+
+export async function sendStaffPasskeyTicket(getToken: GetTokenFn, identity: string) {
+  return apiJson<{ ok: boolean; url: string; error?: string }>(getToken, `/staff/${encodeURIComponent(identity)}/passkey-ticket`, {
+    method: 'POST',
+  });
+}
+
+export interface StaffIdentity {
+  identity: string;
+  name?: string;
+  isAdmin?: boolean;
+  lastSeen?: string;
+}
+
+export async function fetchStaffIdentities(getToken: GetTokenFn) {
+  return apiJson<StaffIdentity[]>(getToken, '/staff-identities');
+}
+
+export interface TeacherAssignment {
+  teacher: string;
+  teacherName?: string;
+  studentIds: string[];
+}
+
+export async function fetchTeacherAssignments(getToken: GetTokenFn) {
+  return apiJson<TeacherAssignment[]>(getToken, '/teacher-assignments');
+}
+
+export async function saveTeacherAssignments(getToken: GetTokenFn, teacher: string, studentIds: string[]) {
+  return apiJson<{ ok: boolean; message: string; error?: string }>(getToken, `/teacher-assignments/${encodeURIComponent(teacher)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ studentIds }),
+  });
+}
+
+export interface CreditEntry {
+  hours: number;
+  reason?: string;
+  createdAt: string;
+  createdBy?: string;
+  createdByName?: string;
+}
+
+export async function fetchStudentCredits(getToken: GetTokenFn, studentId: string) {
+  return apiJson<{ balance: number; entries: CreditEntry[] }>(getToken, `/students/${encodeURIComponent(studentId)}/credits`);
+}
+
+export async function adjustStudentCredit(getToken: GetTokenFn, studentId: string, hours: number, reason: string) {
+  return apiJson<{ ok: boolean; message: string; error?: string }>(getToken, `/students/${encodeURIComponent(studentId)}/credits/adjust`, {
+    method: 'POST',
+    body: JSON.stringify({ hours, reason }),
+  });
+}
+
+export interface NfcCard {
+  uid: string;
+  personType: 'student' | 'staff';
+  personId: string;
+  registeredBy?: string;
+  registeredAt: string;
+}
+
+export async function fetchNfcCards(getToken: GetTokenFn) {
+  return apiJson<NfcCard[]>(getToken, '/nfc-cards');
+}
+
+export async function registerNfcCardApi(getToken: GetTokenFn, uid: string, personType: 'student' | 'staff', personId: string) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, '/nfc-cards', {
+    method: 'POST',
+    body: JSON.stringify({ uid, personType, personId }),
+  });
+}
+
+export async function deleteNfcCardApi(getToken: GetTokenFn, uid: string) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/nfc-cards/${encodeURIComponent(uid)}`, { method: 'DELETE' });
+}
+
+export interface CampusCheckin {
+  personName: string;
+  personId: string;
+  personType: 'student' | 'staff';
+  checkedInAt?: string;
+  checkedInBy?: string;
+  checkedOutAt?: string;
+  checkedOutBy?: string;
+  scanMethod: 'qr' | 'barcode' | 'nfc';
+}
+
+export async function fetchCampusCheckins(getToken: GetTokenFn) {
+  return apiJson<CampusCheckin[]>(getToken, '/campus-checkins');
+}
