@@ -11,6 +11,7 @@ import {
   IconRefresh,
 } from '@tabler/icons-react';
 import type { ChatStatus } from 'ai';
+import { marked } from 'marked';
 import { useEffect, useRef, useState } from 'react';
 import {
   Conversation,
@@ -20,7 +21,6 @@ import {
 import {
   Message,
   MessageContent,
-  MessageResponse,
 } from '@/components/ai-elements/message';
 import {
   PromptInput,
@@ -60,7 +60,7 @@ const INITIAL_MESSAGES: DemoMessage[] = [
 ];
 
 const RESPONSES = [
-  'Here is a quick outline you can reuse:\n\n1. Swap the mock response with a real API call.\n2. Stream tokens into `MessageResponse`.\n3. Keep the layout exactly as-is for a consistent UI.',
+  'Here is a quick outline you can reuse:\n\n1. Swap the mock response with a real API call.\n2. Stream tokens into the chat as they arrive.\n3. Keep the layout exactly as-is for a consistent UI.',
   'If you want multi-model support, add a small model selector next to the status badge and pass the selection to your backend.',
   'You can also inject tools like file upload or voice input by adding buttons to the prompt footer.',
 ];
@@ -110,20 +110,18 @@ export default function Ai05() {
   };
 
   return (
-    <div className="w-full px-4">
-      <div className="mx-auto flex h-96 w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-lg sm:w-3/5">
+    <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
         <header className="flex items-center justify-between gap-4 border-border/80 border-b px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-balance font-semibold text-sm">
-                Documenso Chat
+                น้องลิลลี่
               </div>
               <div className="flex items-center gap-2 text-pretty text-muted-foreground text-xs">
                 <span className="inline-flex items-center gap-1">
                   <span className="size-1.5 rounded-full bg-emerald-500" />
-                  Live preview
+                  Demo preview — not yet connected to a real assistant
                 </span>
-                <span className="hidden sm:inline">- Powered by shadcn/ui</span>
               </div>
             </div>
           </div>
@@ -160,7 +158,12 @@ export default function Ai05() {
                   )}
                 >
                   {message.role === 'assistant' ? (
-                    <MessageResponse>{message.content}</MessageResponse>
+                    <div
+                      className="markdown-preview"
+                      dangerouslySetInnerHTML={{
+                        __html: marked.parse(message.content, { async: false }) as string,
+                      }}
+                    />
                   ) : (
                     <p className="whitespace-pre-wrap text-pretty">
                       {message.content}
@@ -180,7 +183,7 @@ export default function Ai05() {
           >
             <PromptInputTextarea
               onChange={(event) => setInputValue(event.currentTarget.value)}
-              placeholder="Ask about the block, UI patterns, or an AI workflow"
+              placeholder="พิมพ์คำถามถึงน้องลิลลี่..."
               value={inputValue}
             />
             <PromptInputFooter>
@@ -202,7 +205,6 @@ export default function Ai05() {
             </PromptInputFooter>
           </PromptInput>
         </div>
-      </div>
     </div>
   );
 }
