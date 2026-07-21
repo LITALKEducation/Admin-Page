@@ -92,3 +92,25 @@ export async function fetchDashboard(getToken: GetTokenFn, range: DashboardRange
   if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
   return result;
 }
+
+export interface Student {
+  id: string;
+  name: string;
+  nickname?: string;
+  email?: string;
+  phone?: string;
+  course?: string;
+}
+
+export async function fetchStudents(getToken: GetTokenFn): Promise<Student[]> {
+  const response = await apiFetch(getToken, '/students');
+  const result = await response.json();
+  if (!response.ok || !Array.isArray(result)) throw new Error(result?.error || `HTTP ${response.status}`);
+  return result;
+}
+
+export async function deleteStudent(getToken: GetTokenFn, id: string): Promise<{ ok: boolean; error?: string }> {
+  const response = await apiFetch(getToken, `/students/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  const result = await response.json();
+  return { ok: response.ok && result.ok, error: result?.error };
+}

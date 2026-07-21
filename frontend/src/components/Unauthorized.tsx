@@ -14,7 +14,7 @@ export default function Unauthorized() {
 
         <button
           className="btn btn-danger"
-          onClick={() => logout({ logoutParams: { returnTo: window.location.origin + window.location.pathname } })}
+          onClick={() => logout({ logoutParams: { returnTo: `${window.location.origin}/app/` } })}
         >
           <i className="fas fa-sign-out-alt"></i>
           ออกจากระบบ

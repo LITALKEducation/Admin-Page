@@ -1,11 +1,14 @@
+import { NavLink } from 'react-router-dom';
 import logoBlack from '../assets/img/LITALK-Black.png';
 import logoWhite from '../assets/img/LITALK-White.png';
+import { legacyLink } from '../utils/legacyLink';
 
 interface NavItem {
   screen: string;
   label: string;
   icon: string;
   adminOnly?: boolean;
+  route?: string; // set once the screen has been migrated to React
 }
 
 interface NavSection {
@@ -15,17 +18,12 @@ interface NavSection {
   items: NavItem[];
 }
 
-// Screens not yet migrated to React link back to the legacy admin panel at
-// its deep-link URL (?screen=...) so every menu item keeps working during
-// the incremental migration — see the phased plan discussed with the team.
-const LEGACY_BASE = 'https://admin.litalkeducation.com/';
-
 const SECTIONS: NavSection[] = [
   {
     key: 'students',
     label: 'นักเรียน',
     items: [
-      { screen: 'students', label: 'รายชื่อนักเรียน', icon: 'fa-users' },
+      { screen: 'students', label: 'รายชื่อนักเรียน', icon: 'fa-users', route: '/students' },
       { screen: 'check', label: 'โปรไฟล์นักเรียน', icon: 'fa-id-card' },
       { screen: 'files', label: 'ไฟล์นักเรียน', icon: 'fa-folder-open' },
       { screen: 'create', label: 'สร้างบัญชีนักเรียน', icon: 'fa-user-plus', adminOnly: true },
@@ -95,9 +93,14 @@ export default function Sidebar({
       </div>
 
       <nav className="sidebar-nav">
-        <button className="sidebar-nav-item active" title="Dashboard">
+        <NavLink
+          to="/"
+          end
+          className={({ isActive }) => `sidebar-nav-item${isActive ? ' active' : ''}`}
+          title="Dashboard"
+        >
           <i className="fas fa-gauge-high"></i> <span className="sidebar-label">Dashboard</span>
-        </button>
+        </NavLink>
 
         {SECTIONS.filter((section) => !section.adminOnly || isAdmin).map((section) => (
           <div className="sidebar-nav-section" key={section.key}>
@@ -108,16 +111,27 @@ export default function Sidebar({
               <div className="nav-items-inner">
                 {section.items
                   .filter((item) => !item.adminOnly || isAdmin)
-                  .map((item) => (
-                    <a
-                      key={item.screen}
-                      className="sidebar-nav-item"
-                      href={`${LEGACY_BASE}?screen=${item.screen}`}
-                      title={item.label}
-                    >
-                      <i className={`fas ${item.icon}`}></i> <span className="sidebar-label">{item.label}</span>
-                    </a>
-                  ))}
+                  .map((item) =>
+                    item.route ? (
+                      <NavLink
+                        key={item.screen}
+                        to={item.route}
+                        className={({ isActive }) => `sidebar-nav-item${isActive ? ' active' : ''}`}
+                        title={item.label}
+                      >
+                        <i className={`fas ${item.icon}`}></i> <span className="sidebar-label">{item.label}</span>
+                      </NavLink>
+                    ) : (
+                      <a
+                        key={item.screen}
+                        className="sidebar-nav-item"
+                        href={legacyLink(item.screen)}
+                        title={item.label}
+                      >
+                        <i className={`fas ${item.icon}`}></i> <span className="sidebar-label">{item.label}</span>
+                      </a>
+                    ),
+                  )}
               </div>
             </div>
           </div>

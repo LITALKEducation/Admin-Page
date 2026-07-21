@@ -1,8 +1,10 @@
 import { useAuth0 } from '@auth0/auth0-react';
+import { useLocation } from 'react-router-dom';
 import logo from '../assets/img/LITALK-Black.png';
 
 export default function Login() {
   const { loginWithRedirect } = useAuth0();
+  const location = useLocation();
 
   return (
     <div id="login-section" className="login-page" style={{ display: 'flex' }}>
@@ -48,7 +50,11 @@ export default function Login() {
               <button
                 className="btn btn-primary"
                 style={{ width: '100%', marginBottom: 12 }}
-                onClick={() => loginWithRedirect()}
+                onClick={() =>
+                  loginWithRedirect({
+                    appState: { returnTo: location.pathname + location.search },
+                  })
+                }
               >
                 <i className="fas fa-sign-in-alt"></i>
                 เข้าสู่ระบบเจ้าหน้าที่

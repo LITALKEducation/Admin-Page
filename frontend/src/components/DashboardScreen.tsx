@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { makeTokenGetter, fetchDashboard, type DashboardResponse, type DashboardRange } from '../api/client';
 import { formatBaht, formatClassTimeLocal, formatShortThaiDate } from '../utils/format';
+import { legacyLink } from '../utils/legacyLink';
 
 const TIMEFRAMES: { id: DashboardRange; label: string }[] = [
   { id: 'today', label: 'วันนี้' },
@@ -11,13 +13,6 @@ const TIMEFRAMES: { id: DashboardRange; label: string }[] = [
 ];
 
 const DOW = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
-const LEGACY_BASE = 'https://admin.litalkeducation.com/';
-
-function legacyStudentLink(studentId: string | null, screen: string) {
-  const params = new URLSearchParams({ screen });
-  if (studentId) params.set('student', studentId);
-  return `${LEGACY_BASE}?${params.toString()}`;
-}
 
 export default function DashboardScreen() {
   const { getAccessTokenSilently } = useAuth0();
@@ -188,7 +183,7 @@ export default function DashboardScreen() {
                       <i className="fas fa-video"></i> Meet
                     </a>
                   )}
-                  <a href={legacyStudentLink(row.studentId, 'logs')} className="class-log-btn">
+                  <a href={legacyLink('logs', row.studentId)} className="class-log-btn">
                     <i className="fas fa-pen"></i> บันทึกผล
                   </a>
                 </div>
@@ -209,16 +204,16 @@ export default function DashboardScreen() {
               </div>
             </div>
             <div className="form-body">
-              <a className="btn btn-primary" style={{ width: '100%' }} href={legacyStudentLink(null, 'logs')}>
+              <a className="btn btn-primary" style={{ width: '100%' }} href={legacyLink('logs')}>
                 <i className="fas fa-book-open"></i> บันทึกการเรียน
               </a>
-              <a className="btn btn-secondary" style={{ width: '100%' }} href={legacyStudentLink(null, 'students')}>
+              <Link className="btn btn-secondary" style={{ width: '100%' }} to="/students">
                 <i className="fas fa-users"></i> รายชื่อนักเรียน
-              </a>
-              <a className="btn btn-secondary" style={{ width: '100%' }} href={legacyStudentLink(null, 'payments')}>
+              </Link>
+              <a className="btn btn-secondary" style={{ width: '100%' }} href={legacyLink('payments')}>
                 <i className="fas fa-money-bill-wave"></i> บันทึกการชำระเงิน
               </a>
-              <a className="btn btn-secondary" style={{ width: '100%' }} href={legacyStudentLink(null, 'booking')}>
+              <a className="btn btn-secondary" style={{ width: '100%' }} href={legacyLink('booking')}>
                 <i className="fas fa-calendar-check"></i> จองเวลาเรียน
               </a>
             </div>
@@ -244,7 +239,7 @@ export default function DashboardScreen() {
                     ></i>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="alert-text">{a.text}</div>
-                      <a className="alert-action" href={legacyStudentLink(a.studentId, a.screen || 'dashboard')}>
+                      <a className="alert-action" href={legacyLink(a.screen || 'dashboard', a.studentId)}>
                         {a.actionLabel} <i className="fas fa-arrow-right" style={{ fontSize: 10 }}></i>
                       </a>
                     </div>
