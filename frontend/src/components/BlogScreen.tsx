@@ -226,6 +226,36 @@ export default function BlogScreen() {
     }
   };
 
+  // Insert a footnote at the cursor: a [^n] marker inline plus a matching
+  // "[^n]: " definition appended at the end of the body for the author to
+  // fill in. Numbering picks the next unused integer key so repeated clicks
+  // don't collide. The website (js/blog.js) turns [^n] / [^n]: into the
+  // superscript link + notes list once the article renders.
+  const insertFootnote = (which: 'th' | 'en') => {
+    const textarea = which === 'th' ? contentThRef.current : contentEnRef.current;
+    const field = which === 'th' ? 'contentTh' : 'contentEn';
+    const current = form[field];
+    const used = new Set<number>();
+    for (const m of current.matchAll(/\[\^(\d+)\]/g)) used.add(Number(m[1]));
+    let n = 1;
+    while (used.has(n)) n++;
+    const marker = `[^${n}]`;
+    const start = textarea?.selectionStart ?? current.length;
+    const end = textarea?.selectionEnd ?? current.length;
+    const withMarker = current.slice(0, start) + marker + current.slice(end);
+    const body = withMarker.replace(/\s+$/, '');
+    const next = `${body}\n\n[^${n}]: `;
+    setForm((f) => ({ ...f, [field]: next }));
+    // Drop the caret right after the inserted inline marker so typing
+    // continues the sentence rather than the (empty) definition.
+    requestAnimationFrame(() => {
+      if (!textarea) return;
+      textarea.focus();
+      const caret = start + marker.length;
+      textarea.setSelectionRange(caret, caret);
+    });
+  };
+
   const save = async () => {
     const payload = {
       title: form.titleEn.trim() || form.titleTh.trim(),
@@ -439,7 +469,16 @@ export default function BlogScreen() {
                   <label>
                     <i className="fab fa-markdown"></i> เนื้อหาบทความ (ภาษาไทย · Markdown)
                   </label>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 4 }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '5px 10px', fontSize: 12.5 }}
+                      onClick={() => insertFootnote('th')}
+                      title="แทรกเชิงอรรถ [^n] และหัวข้ออ้างอิงท้ายบทความ"
+                    >
+                      <i className="fas fa-superscript"></i> แทรกเชิงอรรถ
+                    </button>
                     <button
                       type="button"
                       className="btn btn-secondary"
@@ -469,7 +508,8 @@ export default function BlogScreen() {
                   />
                   <div className="form-hint">
                     ใส่เฉพาะภาษาเดียวก็ได้ (ไทยหรืออังกฤษ) · แนบลิงก์ด้วย <code>[ข้อความ](https://example.com)</code> · ตัวหนา{' '}
-                    <code>**ข้อความ**</code> · หัวข้อ <code># หัวข้อ</code>
+                    <code>**ข้อความ**</code> · หัวข้อ <code># หัวข้อ</code> · เชิงอรรถ <code>ข้อความ[^1]</code> แล้วอธิบายท้ายบทความด้วย{' '}
+                    <code>[^1]: แหล่งอ้างอิง</code>
                   </div>
                 </div>
               </div>
@@ -481,7 +521,16 @@ export default function BlogScreen() {
                   <label>
                     <i className="fab fa-markdown"></i> เนื้อหาบทความ (English · Markdown)
                   </label>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 4 }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '5px 10px', fontSize: 12.5 }}
+                      onClick={() => insertFootnote('en')}
+                      title="แทรกเชิงอรรถ [^n] และหัวข้ออ้างอิงท้ายบทความ"
+                    >
+                      <i className="fas fa-superscript"></i> แทรกเชิงอรรถ
+                    </button>
                     <button
                       type="button"
                       className="btn btn-secondary"
