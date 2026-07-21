@@ -1,48 +1,43 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
-import DashboardScreen from './components/DashboardScreen';
-import StudentsScreen from './components/StudentsScreen';
-import CheckScreen from './components/CheckScreen';
-import LogsScreen from './components/LogsScreen';
-import PaymentsScreen from './components/PaymentsScreen';
-import CreateStudentScreen from './components/CreateStudentScreen';
-import FilesScreen from './components/FilesScreen';
-import BookingScreen from './components/BookingScreen';
-import ScheduleScreen from './components/ScheduleScreen';
-import HoursScreen from './components/HoursScreen';
-import FinanceScreen from './components/FinanceScreen';
-import StaffScreen from './components/StaffScreen';
-import AccessScreen from './components/AccessScreen';
-import CreditsScreen from './components/CreditsScreen';
-import NfcScreen from './components/NfcScreen';
-import CheckinsScreen from './components/CheckinsScreen';
-import BlogScreen from './components/BlogScreen';
-import LinksScreen from './components/LinksScreen';
 import { useTheme } from './hooks/useTheme';
 import { useMe } from './hooks/useMe';
 import { ToastProvider } from './ui/ToastContext';
 import { ConfirmProvider } from './ui/ConfirmContext';
 import { SharedStudentProvider, useSharedStudentSelection } from './hooks/useSharedStudentSelection';
 import { EditingLogProvider } from './hooks/useEditingLog';
+import { SCREEN_ROUTES } from './utils/screenRoutes';
 
-// Supports shareable links like /app/logs?student=litalk12345 (e.g. the
-// "copy study log link" buttons) by seeding the shared selection once on
-// load, then dropping the query string — mirrors the legacy applyDeepLink().
-const DEEP_LINK_ROUTES: Record<string, string> = {
-  logs: '/logs',
-  payments: '/payments',
-  check: '/check',
-  files: '/files',
-  booking: '/booking',
-  schedule: '/schedule',
-  hours: '/hours',
-  credits: '/credits',
-};
+// Every screen past the dashboard is code-split — with 16+ admin screens
+// there's no reason to ship the blog editor or NFC registration UI to
+// someone who only ever opens the dashboard.
+const DashboardScreen = lazy(() => import('./components/DashboardScreen'));
+const StudentsScreen = lazy(() => import('./components/StudentsScreen'));
+const CheckScreen = lazy(() => import('./components/CheckScreen'));
+const LogsScreen = lazy(() => import('./components/LogsScreen'));
+const PaymentsScreen = lazy(() => import('./components/PaymentsScreen'));
+const CreateStudentScreen = lazy(() => import('./components/CreateStudentScreen'));
+const FilesScreen = lazy(() => import('./components/FilesScreen'));
+const BookingScreen = lazy(() => import('./components/BookingScreen'));
+const ScheduleScreen = lazy(() => import('./components/ScheduleScreen'));
+const HoursScreen = lazy(() => import('./components/HoursScreen'));
+const FinanceScreen = lazy(() => import('./components/FinanceScreen'));
+const StaffScreen = lazy(() => import('./components/StaffScreen'));
+const AccessScreen = lazy(() => import('./components/AccessScreen'));
+const CreditsScreen = lazy(() => import('./components/CreditsScreen'));
+const NfcScreen = lazy(() => import('./components/NfcScreen'));
+const CheckinsScreen = lazy(() => import('./components/CheckinsScreen'));
+const BlogScreen = lazy(() => import('./components/BlogScreen'));
+const LinksScreen = lazy(() => import('./components/LinksScreen'));
 
+// Supports shareable links like /app/?screen=logs&student=litalk12345
+// (e.g. the "copy study log link" buttons) by seeding the shared
+// selection once on load, then dropping the query string — mirrors the
+// legacy applyDeepLink().
 function DeepLinkHandler() {
   const navigate = useNavigate();
   const [, setSelectedStudent] = useSharedStudentSelection();
@@ -53,7 +48,7 @@ function DeepLinkHandler() {
     const screen = params.get('screen');
     if (!student && !screen) return;
     if (student) setSelectedStudent(student);
-    const route = screen ? DEEP_LINK_ROUTES[screen] : null;
+    const route = screen ? SCREEN_ROUTES[screen] : null;
     navigate(route || window.location.pathname, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -81,6 +76,14 @@ const TITLES: Record<string, string> = {
   '/blog': 'บทความเว็บไซต์',
   '/links': 'ลิงก์ย่อ',
 };
+
+function ScreenFallback() {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
+      <i className="fas fa-spinner fa-spin" style={{ fontSize: 28 }}></i>
+    </div>
+  );
+}
 
 export default function App() {
   const { isLoading, isAuthenticated, user, logout } = useAuth0();
@@ -119,26 +122,28 @@ export default function App() {
               <main className="app-main">
                 <Topbar title={title} onToggleTheme={toggleTheme} />
                 <div className="dashboard-content">
-                  <Routes>
-                    <Route path="/" element={<DashboardScreen />} />
-                    <Route path="/students" element={<StudentsScreen />} />
-                    <Route path="/check" element={<CheckScreen />} />
-                    <Route path="/logs" element={<LogsScreen />} />
-                    <Route path="/payments" element={<PaymentsScreen />} />
-                    {isAdmin && <Route path="/create" element={<CreateStudentScreen />} />}
-                    <Route path="/files" element={<FilesScreen />} />
-                    <Route path="/booking" element={<BookingScreen />} />
-                    <Route path="/schedule" element={<ScheduleScreen />} />
-                    <Route path="/hours" element={<HoursScreen />} />
-                    {isAdmin && <Route path="/finance" element={<FinanceScreen />} />}
-                    {isAdmin && <Route path="/staff" element={<StaffScreen />} />}
-                    {isAdmin && <Route path="/access" element={<AccessScreen />} />}
-                    {isAdmin && <Route path="/credits" element={<CreditsScreen />} />}
-                    {isAdmin && <Route path="/nfc" element={<NfcScreen />} />}
-                    {isAdmin && <Route path="/checkins" element={<CheckinsScreen />} />}
-                    <Route path="/blog" element={<BlogScreen />} />
-                    <Route path="/links" element={<LinksScreen />} />
-                  </Routes>
+                  <Suspense fallback={<ScreenFallback />}>
+                    <Routes>
+                      <Route path="/" element={<DashboardScreen />} />
+                      <Route path="/students" element={<StudentsScreen />} />
+                      <Route path="/check" element={<CheckScreen />} />
+                      <Route path="/logs" element={<LogsScreen />} />
+                      <Route path="/payments" element={<PaymentsScreen />} />
+                      {isAdmin && <Route path="/create" element={<CreateStudentScreen />} />}
+                      <Route path="/files" element={<FilesScreen />} />
+                      <Route path="/booking" element={<BookingScreen />} />
+                      <Route path="/schedule" element={<ScheduleScreen />} />
+                      <Route path="/hours" element={<HoursScreen />} />
+                      {isAdmin && <Route path="/finance" element={<FinanceScreen />} />}
+                      {isAdmin && <Route path="/staff" element={<StaffScreen />} />}
+                      {isAdmin && <Route path="/access" element={<AccessScreen />} />}
+                      {isAdmin && <Route path="/credits" element={<CreditsScreen />} />}
+                      {isAdmin && <Route path="/nfc" element={<NfcScreen />} />}
+                      {isAdmin && <Route path="/checkins" element={<CheckinsScreen />} />}
+                      <Route path="/blog" element={<BlogScreen />} />
+                      <Route path="/links" element={<LinksScreen />} />
+                    </Routes>
+                  </Suspense>
                 </div>
               </main>
             </div>

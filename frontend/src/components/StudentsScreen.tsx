@@ -8,21 +8,13 @@ import { useToast } from '../ui/ToastContext';
 import { useConfirm } from '../ui/ConfirmContext';
 import Pagination from '../ui/Pagination';
 import { downloadCsv, studentInitials } from '../utils/csv';
-import { legacyLink, appLink } from '../utils/legacyLink';
+import { appLink } from '../utils/deepLink';
+import { SCREEN_ROUTES } from '../utils/screenRoutes';
 import { makeTokenGetter, deleteStudent, type Student } from '../api/client';
 
 const PAGE_SIZE = 10;
 
 type SortKey = 'name' | 'course' | null;
-
-const INTERNAL_SCREENS: Record<string, string> = {
-  check: '/check',
-  logs: '/logs',
-  payments: '/payments',
-  booking: '/booking',
-  files: '/files',
-  schedule: '/schedule',
-};
 
 function bangkokTodayLocal(): string {
   return new Date().toISOString().slice(0, 10);
@@ -39,13 +31,8 @@ export default function StudentsScreen() {
 
   const goToStudentAndScreen = (studentId: string, screen: string) => {
     setOpenMenuId(null);
-    const route = INTERNAL_SCREENS[screen];
-    if (route) {
-      setSelectedStudent(studentId);
-      navigate(route);
-    } else {
-      window.location.href = legacyLink(screen, studentId);
-    }
+    setSelectedStudent(studentId);
+    navigate(SCREEN_ROUTES[screen] || '/');
   };
 
   const [search, setSearch] = useState('');

@@ -10,7 +10,7 @@ import { useConfirm, usePrompt } from '../ui/ConfirmContext';
 import StudentPicker from '../ui/StudentPicker';
 import AvatarImage from '../ui/AvatarImage';
 import { formatBaht, formatClassTimeLocal, formatShortThaiDate } from '../utils/format';
-import { appLink } from '../utils/legacyLink';
+import { appLink } from '../utils/deepLink';
 import { COURSES } from '../utils/courses';
 import {
   makeTokenGetter,

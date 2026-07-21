@@ -3,18 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { makeTokenGetter, fetchDashboard, type DashboardResponse, type DashboardRange } from '../api/client';
 import { formatBaht, formatClassTimeLocal, formatShortThaiDate } from '../utils/format';
-import { legacyLink } from '../utils/legacyLink';
+import { SCREEN_ROUTES } from '../utils/screenRoutes';
 import { useSharedStudentSelection } from '../hooks/useSharedStudentSelection';
-
-const INTERNAL_SCREENS: Record<string, string> = {
-  logs: '/logs',
-  payments: '/payments',
-  booking: '/booking',
-  check: '/check',
-  files: '/files',
-  schedule: '/schedule',
-  hours: '/hours',
-};
 
 const TIMEFRAMES: { id: DashboardRange; label: string }[] = [
   { id: 'today', label: 'วันนี้' },
@@ -34,16 +24,9 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
-  // Screens still on the legacy admin panel link out with a deep link;
-  // migrated screens use the shared selection + client-side route instead.
   const goToStudentAndScreen = (studentId: string | null, screen: string) => {
-    const route = INTERNAL_SCREENS[screen];
-    if (route) {
-      if (studentId) setSelectedStudent(studentId);
-      navigate(route);
-    } else {
-      window.location.href = legacyLink(screen, studentId);
-    }
+    if (studentId) setSelectedStudent(studentId);
+    navigate(SCREEN_ROUTES[screen] || '/');
   };
 
   const load = useCallback(async () => {
