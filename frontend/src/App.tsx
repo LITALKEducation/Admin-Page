@@ -1,13 +1,15 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
 import AiChatWidget from './components/AiChatWidget';
+import TeacherEmptyState from './components/TeacherEmptyState';
 import Topbar from './components/Topbar';
 import { useTheme } from './hooks/useTheme';
 import { useMe } from './hooks/useMe';
+import { useStudents } from './hooks/useStudents';
 import { ToastProvider } from './ui/ToastContext';
 import { ConfirmProvider } from './ui/ConfirmContext';
 import { SharedStudentProvider, useSharedStudentSelection } from './hooks/useSharedStudentSelection';
@@ -36,6 +38,10 @@ const NfcScreen = lazy(() => import('./components/NfcScreen'));
 const CheckinsScreen = lazy(() => import('./components/CheckinsScreen'));
 const BlogScreen = lazy(() => import('./components/BlogScreen'));
 const LinksScreen = lazy(() => import('./components/LinksScreen'));
+
+// Code-split the palette: it drags in cmdk + the dialog primitive, and the
+// Ctrl+K listener lives in App so nothing loads until the first open.
+const CommandPalette = lazy(() => import('./components/CommandPalette'));
 
 // Supports shareable links like /app/?screen=logs&student=litalk12345
 // (e.g. the "copy study log link" buttons) by seeding the shared
@@ -91,8 +97,31 @@ function ScreenFallback() {
 export default function App() {
   const { isLoading, isAuthenticated, user, logout } = useAuth0();
   const { theme, toggleTheme } = useTheme();
-  const { isAdmin } = useMe();
+  const { me, isAdmin, loading: meLoading } = useMe();
+  const { students, loading: studentsLoading, failed: studentsFailed } = useStudents();
   const location = useLocation();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  // Defer mounting the (lazy) palette until it's first needed so its cmdk +
+  // dialog code stays out of the initial bundle.
+  const [paletteMounted, setPaletteMounted] = useState(false);
+  const openPalette = () => {
+    setPaletteMounted(true);
+    setPaletteOpen(true);
+  };
+
+  // Ctrl/Cmd+K lives here (not in the lazy palette) so the shortcut works
+  // before the palette chunk has ever loaded.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteMounted(true);
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   if (isLoading) {
     return (
@@ -107,6 +136,19 @@ export default function App() {
   }
 
   const email = user?.email || user?.nickname || user?.name || 'Admin';
+
+  // A non-admin teacher with no assigned students gets no menus — just a
+  // notice to contact staff (legacy applyRoleGating). Wait for both the
+  // permission and student loads before deciding, so we never flash the
+  // gate at an admin or a teacher whose students are still loading. A
+  // failed student load is treated as "not gated" so a transient API
+  // error doesn't lock a legitimate user out.
+  if (!meLoading && !studentsLoading) {
+    const gated = !isAdmin && !studentsFailed && students.length === 0;
+    if (gated) {
+      return <TeacherEmptyState identity={me?.email || user?.email || user?.name} />;
+    }
+  }
   const title = TITLES[location.pathname] || 'LITALK Control';
   const handleLogout = () => logout({ logoutParams: { returnTo: `${window.location.origin}/app/` } });
 
@@ -117,6 +159,16 @@ export default function App() {
           <EditingLogProvider>
             <DeepLinkHandler />
             <AiChatWidget />
+            {paletteMounted && (
+              <Suspense fallback={null}>
+                <CommandPalette
+                  isAdmin={isAdmin}
+                  students={students}
+                  open={paletteOpen}
+                  onOpenChange={setPaletteOpen}
+                />
+              </Suspense>
+            )}
             <div className="admin-dashboard" id="admin-panel" style={{ display: 'flex' }}>
               <Sidebar isAdmin={isAdmin} email={email} theme={theme} onLogout={handleLogout} />
               <main className="app-main">
@@ -126,8 +178,9 @@ export default function App() {
                   theme={theme}
                   onToggleTheme={toggleTheme}
                   onLogout={handleLogout}
+                  onOpenSearch={openPalette}
                 />
-                <Topbar title={title} onToggleTheme={toggleTheme} />
+                <Topbar title={title} onToggleTheme={toggleTheme} onOpenSearch={openPalette} />
                 <div className="dashboard-content">
                   <ChunkErrorBoundary>
                     <Suspense fallback={<ScreenFallback />}>
