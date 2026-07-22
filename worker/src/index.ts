@@ -26,7 +26,8 @@ import chat, {
   studentChatContext,
 } from './chat';
 import { chatReply, ChatNotConfiguredError } from './gemini';
-import { verifyStripeSignature } from './stripe';
+import { verifyStripeSignature, retrievePaymentReceiptUrl, deactivateStripePaymentLink } from './stripe';
+import type { Env } from './types';
 import blog, { blogPublic } from './blog';
 import shortLinks, { shortLinkRedirect } from './shortlinks';
 
@@ -51,6 +52,98 @@ app.use('*', async (c, next) => cors({
 // Published blog posts for the public website (litalkeducation.com/blog).
 app.route('/', blogPublic);
 
+// A Stripe Checkout Session, as it appears on checkout.session.* events.
+interface StripeCheckoutSession {
+  id: string;
+  payment_link?: string | null;
+  payment_status?: string;
+  amount_total?: number | null;
+  payment_intent?: string | null;
+  total_details?: { amount_discount?: number | null } | null;
+  metadata?: Record<string, string>;
+}
+
+// A Stripe Charge, as it appears on charge.* events.
+interface StripeCharge {
+  id: string;
+  payment_intent?: string | null;
+  amount_refunded?: number | null;
+  metadata?: Record<string, string>;
+}
+
+// Records a paid Checkout Session and activates whatever it paid for. Shared
+// by checkout.session.completed (cards and other instant methods) and
+// checkout.session.async_payment_succeeded (PromptPay, bank debits and other
+// methods that only settle after the session first "completes" unpaid — the
+// completed event skips them here because payment_status isn't 'paid' yet, and
+// the later async event drives them through). Idempotent:
+// UNIQUE(stripe_session_id) turns a redelivered event into a no-op insert, and
+// schedule activation is itself idempotent.
+async function recordCheckoutPayment(env: Env, session: StripeCheckoutSession): Promise<void> {
+  if (session.payment_status !== 'paid' || !session.amount_total) return;
+  const meta = session.metadata ?? {};
+  const discountAmount = session.total_details?.amount_discount ? session.total_details.amount_discount / 100 : null;
+  const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+
+  // Best-effort hosted receipt URL, stored as the finance "proof" link. A
+  // receipt-lookup hiccup must never block recording the actual payment.
+  let receiptUrl: string | null = null;
+  if (paymentIntentId && env.STRIPE_SECRET_KEY) {
+    receiptUrl = await retrievePaymentReceiptUrl(env.STRIPE_SECRET_KEY, paymentIntentId).catch(() => null);
+  }
+
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO payments
+       (student_id, amount, method, paid_date, proof_url, source, stripe_payment_link_id, stripe_session_id, stripe_payment_intent_id, recorded_by)
+     VALUES (?, ?, 'Stripe', ?, ?, 'stripe', ?, ?, ?, ?)`,
+  )
+    .bind(
+      meta.student_id || null,
+      session.amount_total / 100,
+      bangkokToday(),
+      receiptUrl,
+      session.payment_link ?? null,
+      session.id,
+      paymentIntentId,
+      meta.created_by || null,
+    )
+    .run();
+  if (session.payment_link) {
+    await env.DB.prepare(`UPDATE payment_links SET status = 'paid', discount_amount = ? WHERE stripe_payment_link_id = ?`)
+      .bind(discountAmount, session.payment_link)
+      .run();
+  }
+  // A successful payment starts the approved schedule (or amendment) right away.
+  const scheduleId = Number(meta.schedule_id);
+  const amendmentId = Number(meta.amendment_id);
+  if (Number.isFinite(amendmentId) && amendmentId > 0) {
+    await activateAmendment(env.DB, env, amendmentId);
+  } else if (Number.isFinite(scheduleId) && scheduleId > 0) {
+    await activateSchedule(env.DB, env, scheduleId);
+  } else if (meta.student_id) {
+    await activateApprovedSchedulesForStudent(env.DB, env, meta.student_id);
+    await activateAwaitingAmendmentsForStudent(env.DB, env, meta.student_id);
+  }
+  await logAudit(env.DB, null, 'STRIPE_PAYMENT', meta.student_id || null, session.id, true);
+}
+
+// Marks the matching payment refunded from a charge.refunded event. Stripe's
+// amount_refunded is cumulative, so it's stored as-is (correct for partial and
+// repeated refunds). Matched via the PaymentIntent id captured when the payment
+// was recorded; pre-migration rows without one simply aren't matched.
+async function recordChargeRefund(env: Env, charge: StripeCharge): Promise<void> {
+  const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
+  if (!paymentIntentId) return;
+  const row = await env.DB.prepare(`SELECT id, student_id AS studentId FROM payments WHERE stripe_payment_intent_id = ?`)
+    .bind(paymentIntentId)
+    .first<{ id: number; studentId: string | null }>();
+  if (!row) return;
+  await env.DB.prepare(`UPDATE payments SET refunded_amount = ?, refunded_at = CURRENT_TIMESTAMP WHERE id = ?`)
+    .bind((charge.amount_refunded ?? 0) / 100, row.id)
+    .run();
+  await logAudit(env.DB, null, 'STRIPE_REFUND', row.studentId, paymentIntentId, true);
+}
+
 // Stripe calls this with a signature header, not a Bearer token.
 app.post('/stripe/webhook', async (c) => {
   if (!c.env.STRIPE_WEBHOOK_SECRET) return c.json({ error: 'Webhook not configured' }, 503);
@@ -59,19 +152,7 @@ app.post('/stripe/webhook', async (c) => {
   const valid = await verifyStripeSignature(payload, c.req.header('Stripe-Signature'), c.env.STRIPE_WEBHOOK_SECRET);
   if (!valid) return c.json({ error: 'Invalid signature' }, 400);
 
-  let event: {
-    type: string;
-    data: {
-      object: {
-        id: string;
-        payment_link?: string | null;
-        payment_status?: string;
-        amount_total?: number | null;
-        total_details?: { amount_discount?: number | null } | null;
-        metadata?: Record<string, string>;
-      };
-    };
-  };
+  let event: { type: string; data: { object: StripeCheckoutSession & StripeCharge } };
   try {
     event = JSON.parse(payload);
   } catch (err) {
@@ -80,45 +161,25 @@ app.post('/stripe/webhook', async (c) => {
   }
 
   try {
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
-      if (session.payment_status === 'paid' && session.amount_total) {
-        const meta = session.metadata ?? {};
-        const discountAmount = session.total_details?.amount_discount ? session.total_details.amount_discount / 100 : null;
-        // UNIQUE(stripe_session_id) makes redelivered webhooks a no-op.
-        await c.env.DB.prepare(
-          `INSERT OR IGNORE INTO payments
-             (student_id, amount, method, paid_date, source, stripe_payment_link_id, stripe_session_id, recorded_by)
-           VALUES (?, ?, 'Stripe', ?, 'stripe', ?, ?, ?)`,
-        )
-          .bind(
-            meta.student_id || null,
-            session.amount_total / 100,
-            bangkokToday(),
-            session.payment_link ?? null,
-            session.id,
-            meta.created_by || null,
-          )
-          .run();
-        if (session.payment_link) {
-          await c.env.DB.prepare(`UPDATE payment_links SET status = 'paid', discount_amount = ? WHERE stripe_payment_link_id = ?`)
-            .bind(discountAmount, session.payment_link)
-            .run();
-        }
-        // A successful payment starts the approved schedule (or amendment)
-        // right away.
-        const scheduleId = Number(meta.schedule_id);
-        const amendmentId = Number(meta.amendment_id);
-        if (Number.isFinite(amendmentId) && amendmentId > 0) {
-          await activateAmendment(c.env.DB, c.env, amendmentId);
-        } else if (Number.isFinite(scheduleId) && scheduleId > 0) {
-          await activateSchedule(c.env.DB, c.env, scheduleId);
-        } else if (meta.student_id) {
-          await activateApprovedSchedulesForStudent(c.env.DB, c.env, meta.student_id);
-          await activateAwaitingAmendmentsForStudent(c.env.DB, c.env, meta.student_id);
-        }
-        await logAudit(c.env.DB, null, 'STRIPE_PAYMENT', meta.student_id || null, session.id, true);
-      }
+    switch (event.type) {
+      case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded':
+        await recordCheckoutPayment(c.env, event.data.object);
+        break;
+      // A delayed payment (PromptPay/bank) that ultimately failed. Nothing to
+      // record — logged so a chased-up payment that never lands is visible.
+      case 'checkout.session.async_payment_failed':
+        await logAudit(c.env.DB, null, 'STRIPE_PAYMENT_FAILED', event.data.object.metadata?.student_id || null, event.data.object.id, false);
+        break;
+      case 'charge.refunded':
+        await recordChargeRefund(c.env, event.data.object);
+        break;
+      // checkout.session.expired (an abandoned checkout attempt) is
+      // intentionally ignored: a Payment Link spawns a fresh session per
+      // attempt, so one expiring says nothing about the link itself. Link
+      // expiry is enforced by the daily `scheduled` sweep instead.
+      default:
+        break;
     }
   } catch (err) {
     // Surface a 500 so Stripe retries the delivery instead of silently
@@ -126,8 +187,8 @@ app.post('/stripe/webhook', async (c) => {
     // in `wrangler tail` / the Cloudflare dashboard instead of vanishing
     // as an opaque "other error" on Stripe's side.
     console.error(`stripe webhook: failed to process event ${event.type} (${event.data?.object?.id})`, err);
-    const session = event.data?.object;
-    await logAudit(c.env.DB, null, 'STRIPE_PAYMENT', session?.metadata?.student_id || null, session?.id || null, false).catch(() => {});
+    const obj = event.data?.object;
+    await logAudit(c.env.DB, null, 'STRIPE_PAYMENT', obj?.metadata?.student_id || null, obj?.id || null, false).catch(() => {});
     return c.json({ error: 'Internal error' }, 500);
   }
 
@@ -249,7 +310,9 @@ app.get('/portal/:studentId', async (c) => {
     // Payment links the system is waiting on this student to pay (schedule
     // approvals / hour top-ups that still need a Stripe checkout).
     c.env.DB.prepare(
-      `SELECT url, short_url AS shortUrl, amount, description FROM payment_links WHERE student_id = ? AND status = 'active' ORDER BY id DESC LIMIT 5`,
+      `SELECT url, short_url AS shortUrl, amount, description FROM payment_links
+       WHERE student_id = ? AND status = 'active' AND (expires_at IS NULL OR expires_at > datetime('now'))
+       ORDER BY id DESC LIMIT 5`,
     ).bind(student.id),
     // Whoever the admin assigned this student to (teacher_students — the
     // same "visibility" mapping the admin panel's access screen manages),
@@ -1125,4 +1188,33 @@ app.delete('/files/:fileId', requirePermission('files:delete'), async (c) => {
   return c.json({ ok: true });
 });
 
-export default app;
+// Deactivates any still-active payment link past its expires_at, both on
+// Stripe (so the hosted checkout page stops accepting money) and in our DB
+// (status → 'expired'). Run daily by the cron trigger below. Bounded per run
+// so a large backlog can't blow the Worker's time/subrequest budget — the
+// next run picks up the rest.
+async function expireStalePaymentLinks(env: Env): Promise<void> {
+  if (!env.STRIPE_SECRET_KEY) return;
+  const { results } = await env.DB.prepare(
+    `SELECT id, stripe_payment_link_id AS plId FROM payment_links
+     WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at < datetime('now')
+     LIMIT 100`,
+  ).all<{ id: number; plId: string }>();
+  for (const row of results ?? []) {
+    try {
+      await deactivateStripePaymentLink(env.STRIPE_SECRET_KEY, row.plId);
+    } catch (err) {
+      // Already-deactivated / deleted links throw; expire our record anyway so
+      // the sweep doesn't get stuck retrying the same rows every night.
+      console.error(`expire payment link ${row.plId}: Stripe deactivation failed`, err);
+    }
+    await env.DB.prepare(`UPDATE payment_links SET status = 'expired' WHERE id = ?`).bind(row.id).run();
+  }
+}
+
+export default {
+  fetch: app.fetch,
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(expireStalePaymentLinks(env));
+  },
+};

@@ -29,6 +29,14 @@ compatibility_date = "2024-11-01"
 #   go.litalkeducation.com
 #   payment.litalkeducation.com
 
+# Daily payment-link expiry sweep (src/index.ts `scheduled` →
+# expireStalePaymentLinks): deactivates links past their expires_at on Stripe
+# and marks them 'expired'. 17:00 UTC = 00:00 Asia/Bangkok. Cron triggers are
+# account-level Worker settings, so the CI deploy token's account-level Workers
+# permission is enough — no zone scope needed (unlike the routes noted above).
+[triggers]
+crons = ["0 17 * * *"]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "litalk"

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { AppBindings } from './types';
 import { requirePermission, requireAdmin, isAdmin } from './auth';
 import { logAudit } from './db';
-import { createStripePaymentLink, deactivateStripePaymentLink, listActivePromotionCodes, StripeError, withPolicyNote, withPrefilledPromoCode } from './stripe';
+import { createStripePaymentLink, deactivateStripePaymentLink, listActivePromotionCodes, StripeError, withPolicyNote, withPrefilledPromoCode, PAYMENT_LINK_TTL_MODIFIER } from './stripe';
 import { createStudentAuth0User } from './auth0mgmt';
 import { bangkokToday, bangkokMonth, daysAgo, isYmd } from './dates';
 import { visibleStudentIds, canSeeStudent, activateApprovedSchedulesForStudent, activateAwaitingAmendmentsForStudent } from './manage';
@@ -680,10 +680,10 @@ core.post('/payment-links', requireAdmin, async (c) => {
   const shortUrl = await mintPaymentShortLink(c.env.DB, c.env, { target: url, studentId: body.studentId, createdBy: user.email });
 
   const result = await c.env.DB.prepare(
-    `INSERT INTO payment_links (stripe_payment_link_id, url, short_url, student_id, customer_name, description, amount, currency, promo_code, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'thb', ?, ?)`,
+    `INSERT INTO payment_links (stripe_payment_link_id, url, short_url, student_id, customer_name, description, amount, currency, promo_code, created_by, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'thb', ?, ?, datetime('now', ?))`,
   )
-    .bind(link.id, url, shortUrl, body.studentId ?? null, customerName, description, amount, promoCode, user.email)
+    .bind(link.id, url, shortUrl, body.studentId ?? null, customerName, description, amount, promoCode, user.email, PAYMENT_LINK_TTL_MODIFIER)
     .run();
   await logAudit(c.env.DB, user, 'CREATE_PAYMENT_LINK', body.studentId ?? null, link.id, true);
 
@@ -694,7 +694,7 @@ core.get('/payment-links', requirePermission('data:read'), async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT pl.id, pl.url, pl.short_url AS shortUrl, pl.student_id AS studentId, pl.customer_name AS customerName, pl.description,
             pl.amount, pl.status, pl.promo_code AS promoCode, pl.discount_amount AS discountAmount,
-            pl.created_by AS createdBy, pl.created_at AS createdAt
+            pl.created_by AS createdBy, pl.created_at AS createdAt, pl.expires_at AS expiresAt
      FROM payment_links pl ORDER BY pl.id DESC LIMIT 30`,
   ).all();
   return c.json(results);
