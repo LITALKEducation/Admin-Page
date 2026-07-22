@@ -40,6 +40,13 @@ export interface CreatedPaymentLink {
   url: string;
 }
 
+// How long a freshly-created payment link stays payable. Past this, the daily
+// scheduled sweep (worker/src/index.ts `expireStalePaymentLinks`) deactivates
+// it on Stripe and marks the row 'expired'. It's a SQLite datetime() modifier
+// so the DB computes the absolute expires_at at insert time
+// (`datetime('now', ?)`), keeping it comparable to CURRENT_TIMESTAMP.
+export const PAYMENT_LINK_TTL_MODIFIER = '+7 days';
+
 // Shown on every Stripe checkout page this system creates — paying is
 // treated as accepting this policy, so it's appended rather than optional.
 export const STRIPE_POLICY_NOTE = 'หากชำระเงินแล้วแสดงว่ายอมรับนโยบายของเรา และไม่มีการเรียกขอเงินคืน';
@@ -94,6 +101,22 @@ export async function createStripePaymentLink(
 
 export async function deactivateStripePaymentLink(secretKey: string, paymentLinkId: string): Promise<void> {
   await stripeRequest(secretKey, 'POST', `/v1/payment_links/${paymentLinkId}`, { active: 'false' });
+}
+
+// The hosted Stripe receipt URL for a completed payment, used as the "proof"
+// link in the finance ledger. Checkout Sessions don't carry it directly — it
+// lives on the underlying charge — so expand the PaymentIntent's latest charge
+// to read it. Returns null if the charge has no receipt yet (or the lookup
+// fails), which callers treat as "no proof link" rather than an error.
+export async function retrievePaymentReceiptUrl(secretKey: string, paymentIntentId: string): Promise<string | null> {
+  const pi = await stripeRequest<{ latest_charge?: { receipt_url?: string | null } | string | null }>(
+    secretKey,
+    'GET',
+    `/v1/payment_intents/${paymentIntentId}`,
+    { 'expand[]': 'latest_charge' },
+  );
+  const charge = pi.latest_charge;
+  return charge && typeof charge === 'object' ? charge.receipt_url ?? null : null;
 }
 
 export interface PromotionCodeSummary {

@@ -349,13 +349,14 @@ export interface PaymentLink {
   amount: number;
   customerName?: string;
   studentId?: string;
-  status: 'active' | 'paid' | 'deactivated';
+  status: 'active' | 'paid' | 'deactivated' | 'expired';
   createdAt: string;
   createdBy?: string;
   promoCode?: string;
   discountAmount?: number;
   shortUrl?: string;
   url: string;
+  expiresAt?: string | null;
 }
 
 export async function fetchPaymentLinks(getToken: GetTokenFn) {
@@ -607,11 +608,13 @@ export interface FinanceTransaction {
   stripeSessionId?: string;
   amount: number;
   discountAmount?: number;
+  refundedAmount?: number;
 }
 
 export interface FinanceResponse {
   total: number;
   count: number;
+  refunds: { total: number; count: number };
   manualTotal: number;
   stripeTotal: number;
   pendingLinks: { total: number; count: number };

@@ -7,7 +7,7 @@ import type { AppBindings, AuthUser, Env } from './types';
 import { requirePermission, requireAdmin, isAdmin } from './auth';
 import { logAudit } from './db';
 import { bangkokToday, bangkokMonth, isYm, isYmd, isHm, formatSessionsThai } from './dates';
-import { createStripePaymentLink, deactivateStripePaymentLink, StripeError, withPolicyNote } from './stripe';
+import { createStripePaymentLink, deactivateStripePaymentLink, StripeError, withPolicyNote, PAYMENT_LINK_TTL_MODIFIER } from './stripe';
 import { createMeetEvent, deleteMeetEvent } from './googlemeet';
 import { mintPaymentShortLink } from './shortlinks';
 
@@ -667,10 +667,10 @@ manage.post('/schedules/:id/approve', requireAdmin, async (c) => {
       });
       const shortUrl = await mintPaymentShortLink(c.env.DB, c.env, { target: link.url, studentId: sched.studentId, createdBy: user.email });
       const linkRow = await c.env.DB.prepare(
-        `INSERT INTO payment_links (stripe_payment_link_id, url, short_url, student_id, customer_name, description, amount, currency, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'thb', ?)`,
+        `INSERT INTO payment_links (stripe_payment_link_id, url, short_url, student_id, customer_name, description, amount, currency, created_by, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'thb', ?, datetime('now', ?))`,
       )
-        .bind(link.id, link.url, shortUrl, sched.studentId, sched.studentName, productName, sched.total, user.email)
+        .bind(link.id, link.url, shortUrl, sched.studentId, sched.studentName, productName, sched.total, user.email, PAYMENT_LINK_TTL_MODIFIER)
         .run();
       await c.env.DB.prepare(`UPDATE monthly_schedules SET payment_link_id = ? WHERE id = ?`)
         .bind(Number(linkRow.meta.last_row_id), id)
@@ -916,10 +916,10 @@ async function decideAmendment(
       const shortUrl = await mintPaymentShortLink(db, c.env, { target: link.url, studentId: amendment.studentId, createdBy: user.email });
       const linkRow = await db
         .prepare(
-          `INSERT INTO payment_links (stripe_payment_link_id, url, short_url, student_id, customer_name, description, amount, currency, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'thb', ?)`,
+          `INSERT INTO payment_links (stripe_payment_link_id, url, short_url, student_id, customer_name, description, amount, currency, created_by, expires_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'thb', ?, datetime('now', ?))`,
         )
-        .bind(link.id, link.url, shortUrl, amendment.studentId, studentName, productName, chargeAmount, user.email)
+        .bind(link.id, link.url, shortUrl, amendment.studentId, studentName, productName, chargeAmount, user.email, PAYMENT_LINK_TTL_MODIFIER)
         .run();
       paymentLinkId = Number(linkRow.meta.last_row_id);
       paymentUrl = shortUrl ?? link.url;
@@ -1343,7 +1343,12 @@ manage.get('/finance', requireAdmin, async (c) => {
   const month = isYm(c.req.query('month')) ? c.req.query('month')! : bangkokMonth();
 
   const [totals, bySource, byRecorder, transactions, links, discounts] = await c.env.DB.batch([
-    c.env.DB.prepare(`SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM payments WHERE paid_date LIKE ? || '%'`).bind(month),
+    c.env.DB.prepare(
+      `SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count,
+              COALESCE(SUM(refunded_amount), 0) AS refunded,
+              COUNT(CASE WHEN refunded_amount > 0 THEN 1 END) AS refundCount
+       FROM payments WHERE paid_date LIKE ? || '%'`,
+    ).bind(month),
     c.env.DB.prepare(`SELECT source, COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM payments WHERE paid_date LIKE ? || '%' GROUP BY source`).bind(month),
     c.env.DB.prepare(
       `SELECT COALESCE(p.recorded_by, '-') AS identity, COALESCE(st.name, p.recorded_by, '-') AS name,
@@ -1354,6 +1359,7 @@ manage.get('/finance', requireAdmin, async (c) => {
     c.env.DB.prepare(
       `SELECT p.id, p.paid_date AS date, p.amount, p.method, p.source,
               p.proof_url AS proof, p.stripe_session_id AS stripeSessionId,
+              p.refunded_amount AS refundedAmount,
               COALESCE(s.name, pl.customer_name, p.student_id, 'ลูกค้า') AS studentName, p.student_id AS studentId,
               COALESCE(st.name, p.recorded_by, '-') AS recordedBy, pl.discount_amount AS discountAmount
        FROM payments p
@@ -1389,6 +1395,10 @@ manage.get('/finance', requireAdmin, async (c) => {
     month,
     total: (totals.results?.[0] as { total: number }).total,
     count: (totals.results?.[0] as { count: number }).count,
+    refunds: {
+      total: (totals.results?.[0] as { refunded: number }).refunded,
+      count: (totals.results?.[0] as { refundCount: number }).refundCount,
+    },
     manualTotal: sourceRows.find((r) => r.source === 'manual')?.total ?? 0,
     stripeTotal: sourceRows.find((r) => r.source === 'stripe')?.total ?? 0,
     pendingLinks: links.results?.[0] ?? { total: 0, count: 0 },

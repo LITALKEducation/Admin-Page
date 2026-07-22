@@ -20,7 +20,7 @@ import {
   type PaymentLink,
 } from '../api/client';
 
-const LINK_STATUS_LABEL: Record<string, string> = { active: 'รอชำระ', paid: 'ชำระแล้ว', deactivated: 'ยกเลิกแล้ว' };
+const LINK_STATUS_LABEL: Record<string, string> = { active: 'รอชำระ', paid: 'ชำระแล้ว', deactivated: 'ยกเลิกแล้ว', expired: 'หมดอายุ' };
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -396,6 +396,7 @@ export default function PaymentsScreen() {
                         <div className="meta">
                           {LINK_STATUS_LABEL[l.status] || l.status} · {formatShortThaiDate((l.createdAt || '').slice(0, 10))} ·{' '}
                           {l.createdBy || ''}
+                          {l.status === 'active' && l.expiresAt ? ` · หมดอายุ ${formatShortThaiDate(l.expiresAt.slice(0, 10))}` : ''}
                           {l.promoCode ? ` · โค้ด: ${l.promoCode}` : ''}
                           {l.discountAmount ? ` · ลดราคา ${formatBaht(l.discountAmount)}` : ''}
                         </div>

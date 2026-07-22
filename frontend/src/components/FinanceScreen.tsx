@@ -67,10 +67,16 @@ export default function FinanceScreen() {
           <div className="form-hint">โหลดข้อมูลการเงินไม่สำเร็จ (เฉพาะแอดมิน)</div>
         ) : (
           [
-            { label: 'รายรับรวม', icon: 'fas fa-coins', value: formatBaht(finance.total), sub: `${finance.count} รายการ` },
+            {
+              label: 'รายรับสุทธิ',
+              icon: 'fas fa-coins',
+              value: formatBaht(finance.total - (finance.refunds?.total ?? 0)),
+              sub: finance.refunds?.total ? `${finance.count} รายการ · หักคืนแล้ว` : `${finance.count} รายการ`,
+            },
             { label: 'บันทึกเอง', icon: 'fas fa-money-bill', value: formatBaht(finance.manualTotal), sub: 'เงินสด/โอน' },
             { label: 'ผ่าน Stripe', icon: 'fab fa-stripe-s', value: formatBaht(finance.stripeTotal), sub: 'ออนไลน์' },
             { label: 'ลิงก์รอชำระ', icon: 'fas fa-hourglass-half', value: formatBaht(finance.pendingLinks.total), sub: `${finance.pendingLinks.count} ลิงก์` },
+            { label: 'คืนเงิน', icon: 'fas fa-rotate-left', value: formatBaht(finance.refunds?.total ?? 0), sub: `${finance.refunds?.count ?? 0} รายการ` },
             { label: 'ส่วนลดที่ให้ไป', icon: 'fas fa-tag', value: formatBaht(finance.discounts.total), sub: `${finance.discounts.count} รายการ` },
           ].map((c) => (
             <div className="stat-card" key={c.label}>
@@ -174,16 +180,12 @@ export default function FinanceScreen() {
                     <td>{t.method || FINANCE_SOURCE_LABEL[t.source] || t.source}</td>
                     <td>{t.recordedBy || '-'}</td>
                     <td>
-                      {t.source === 'stripe' ? (
-                        t.stripeSessionId ? (
-                          <span title="Payment ID">{t.stripeSessionId.slice(0, 18)}…</span>
-                        ) : (
-                          '-'
-                        )
-                      ) : t.proof ? (
+                      {t.proof ? (
                         <a href={t.proof} target="_blank" rel="noopener">
-                          ดูหลักฐาน
+                          {t.source === 'stripe' ? 'ดูใบเสร็จ' : 'ดูหลักฐาน'}
                         </a>
+                      ) : t.source === 'stripe' && t.stripeSessionId ? (
+                        <span title="Payment ID">{t.stripeSessionId.slice(0, 18)}…</span>
                       ) : (
                         '-'
                       )}
@@ -191,6 +193,11 @@ export default function FinanceScreen() {
                     <td style={{ textAlign: 'right' }}>
                       {formatBaht(t.amount)}
                       {!!t.discountAmount && <div className="form-hint" style={{ margin: 0 }}>ลด {formatBaht(t.discountAmount)}</div>}
+                      {!!t.refundedAmount && (
+                        <div className="form-hint" style={{ margin: 0, color: 'var(--danger, #c0392b)' }}>
+                          คืน {formatBaht(t.refundedAmount)}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

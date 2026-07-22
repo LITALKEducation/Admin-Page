@@ -153,7 +153,14 @@ tickets for it will fail.
    ```
 2. Create a webhook endpoint (**Developers → Webhooks → Add endpoint**):
    - URL: `https://api.litalkeducation.com/stripe/webhook`
-   - Event: `checkout.session.completed`
+   - Events (all four — the last three are required for delayed payments and
+     refunds to record, not just card payments):
+     - `checkout.session.completed` — card and other instant methods
+     - `checkout.session.async_payment_succeeded` — PromptPay / bank debits
+       that settle after the session first completes unpaid
+     - `checkout.session.async_payment_failed` — a delayed payment that never
+       landed (logged to the audit trail, nothing recorded)
+     - `charge.refunded` — records the refund against the original payment
    Then store its signing secret:
    ```sh
    npx wrangler secret put STRIPE_WEBHOOK_SECRET
@@ -161,8 +168,19 @@ tickets for it will fail.
 
 Payment links are single-use (one completed payment each) and carry the
 student id + creator email as metadata; when Stripe reports the session as
-paid, the webhook records a `payments` row automatically (source `stripe`)
-and marks the link `paid`. Amounts are THB.
+paid, the webhook records a `payments` row automatically (source `stripe`),
+stores the hosted Stripe receipt URL as the payment's proof link, and marks
+the link `paid`. Amounts are THB. Refunds issued in the Stripe Dashboard flow
+back via `charge.refunded` and set the payment's `refunded_amount`, which the
+finance summary nets out of revenue.
+
+**Link expiry.** New payment links expire 7 days after creation
+(`PAYMENT_LINK_TTL_MODIFIER` in `src/stripe.ts`). A daily Cron Trigger
+(`crons` in `wrangler.toml`, 00:00 Asia/Bangkok) runs the Worker's
+`scheduled` handler, which deactivates any still-active expired link on
+Stripe and marks it `expired`, so a stale link can't be paid weeks later.
+The cron deploys with the Worker — no extra dashboard setup and no zone
+permissions needed.
 
 Every payment link allows promotion codes, so the checkout page shows an
 "Add promotion code" field. To create a discount, add a **Coupon** and a
