@@ -637,14 +637,22 @@
             z-index: 1;
         }
 
+        /* Floating rounded card (sidebar-03 variant="floating"): detached
+           from the edges with a gap + shadow, rather than a flush rail with
+           a hard right border. Scrolls internally at a fixed viewport height. */
         .sidebar {
             width: 240px;
             flex-shrink: 0;
             background-color: var(--bg-secondary);
-            border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.2s ease;
+            margin: 10px;
+            height: calc(100vh - 20px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            box-shadow: var(--shadow-pop);
+            overflow: hidden;
+            transition: width 0.2s ease;
         }
 
         /* Icon-only collapsed rail (sidebar-03 collapsible="icon" pattern) */
@@ -3121,6 +3129,46 @@
         .topbar-icon-btn:hover {
             color: var(--text-primary);
             border-color: var(--text-muted);
+        }
+
+        /* Command-palette trigger (Ctrl/Cmd+K) — a search-box-styled button
+           in the topbar so the palette is discoverable, not keyboard-only. */
+        .topbar-search-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            height: 36px;
+            padding: 0 10px 0 12px;
+            margin-right: 8px;
+            min-width: 200px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background-color: var(--bg-secondary);
+            color: var(--text-muted);
+            font-family: inherit;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all var(--dur-base) var(--ease-btn);
+        }
+
+        .topbar-search-btn:hover {
+            border-color: var(--text-muted);
+            color: var(--text-secondary);
+        }
+
+        .topbar-search-label {
+            flex: 1;
+            text-align: left;
+        }
+
+        .topbar-search-kbd {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 1px 5px;
+            background-color: var(--bg-tertiary);
         }
 
         @media (max-width: 900px) {

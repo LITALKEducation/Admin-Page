@@ -22,12 +22,14 @@ export default function MobileNav({
   theme,
   onToggleTheme,
   onLogout,
+  onOpenSearch,
 }: {
   isAdmin: boolean;
   email: string;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
   onLogout: () => void;
+  onOpenSearch: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
@@ -51,9 +53,14 @@ export default function MobileNav({
           />
           <span className="admin-badge-text">ADMIN</span>
         </div>
-        <button className="hamburger-btn" onClick={() => setIsOpen(true)} aria-label="Open Menu">
-          <i className="fas fa-bars"></i>
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="hamburger-btn" onClick={onOpenSearch} aria-label="ค้นหา">
+            <i className="fas fa-magnifying-glass"></i>
+          </button>
+          <button className="hamburger-btn" onClick={() => setIsOpen(true)} aria-label="Open Menu">
+            <i className="fas fa-bars"></i>
+          </button>
+        </div>
       </div>
 
       <div
