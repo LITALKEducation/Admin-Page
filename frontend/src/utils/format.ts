@@ -2,6 +2,18 @@ export function formatBaht(n: number | undefined | null): string {
   return '฿' + Number(n || 0).toLocaleString('en-US');
 }
 
+// Local calendar date as YYYY-MM-DD, read from the device's own timezone.
+// Using toISOString() here instead would render UTC, which lands on the
+// previous day for GMT+ zones (e.g. Thailand, +07:00) — so a class on the
+// 20th shows under the 19th, or a form defaults to yesterday before 07:00.
+export function toYMD(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export function todayYMD(): string {
+  return toYMD(new Date());
+}
+
 // Class dates/times are stored as Bangkok (GMT+7) wall-clock strings — plain
 // "YYYY-MM-DD"/"HH:MM" with no timezone info. Anchoring them explicitly to
 // +07:00 here means the resulting Date is the correct absolute instant, so

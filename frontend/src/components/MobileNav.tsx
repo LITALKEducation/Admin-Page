@@ -51,7 +51,6 @@ export default function MobileNav({
             className="logo-img theme-logo"
             style={{ height: 20 }}
           />
-          <span className="admin-badge-text">ADMIN</span>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button className="hamburger-btn" onClick={onOpenSearch} aria-label="ค้นหา">

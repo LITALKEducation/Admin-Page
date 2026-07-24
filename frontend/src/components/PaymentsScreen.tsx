@@ -6,7 +6,7 @@ import { useMe } from '../hooks/useMe';
 import { useToast } from '../ui/ToastContext';
 import { useConfirm } from '../ui/ConfirmContext';
 import StudentPicker, { StudentIndicator } from '../ui/StudentPicker';
-import { formatBaht, formatShortThaiDate } from '../utils/format';
+import { formatBaht, formatShortThaiDate, todayYMD } from '../utils/format';
 import {
   makeTokenGetter,
   createPayment,
@@ -23,7 +23,7 @@ import {
 const LINK_STATUS_LABEL: Record<string, string> = { active: 'รอชำระ', paid: 'ชำระแล้ว', deactivated: 'ยกเลิกแล้ว', expired: 'หมดอายุ' };
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayYMD();
 }
 
 export default function PaymentsScreen() {

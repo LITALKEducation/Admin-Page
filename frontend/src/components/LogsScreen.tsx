@@ -6,10 +6,11 @@ import { useEditingLog } from '../hooks/useEditingLog';
 import { useToast } from '../ui/ToastContext';
 import StudentPicker, { StudentIndicator } from '../ui/StudentPicker';
 import MarkdownField from '../ui/MarkdownField';
+import { todayYMD } from '../utils/format';
 import { makeTokenGetter, createStudyLog, updateStudyLog } from '../api/client';
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayYMD();
 }
 
 export default function LogsScreen() {

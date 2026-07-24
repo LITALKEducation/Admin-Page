@@ -8,6 +8,7 @@ import { useToast } from '../ui/ToastContext';
 import { useConfirm } from '../ui/ConfirmContext';
 import Pagination from '../ui/Pagination';
 import { downloadCsv, studentInitials } from '../utils/csv';
+import { todayYMD } from '../utils/format';
 import { appLink } from '../utils/deepLink';
 import { SCREEN_ROUTES } from '../utils/screenRoutes';
 import { makeTokenGetter, deleteStudent, type Student } from '../api/client';
@@ -17,7 +18,7 @@ const PAGE_SIZE = 10;
 type SortKey = 'name' | 'course' | null;
 
 function bangkokTodayLocal(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayYMD();
 }
 
 export default function StudentsScreen() {
