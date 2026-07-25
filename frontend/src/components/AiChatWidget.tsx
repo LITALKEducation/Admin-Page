@@ -8,9 +8,12 @@ const Ai05 = lazy(() => import('./ai-05'));
 // Reuses the legacy admin panel's .ai-chat-fab styling (brand-colored
 // floating button, already themed and already hidden on mobile via the
 // existing <=900px rule in legacy.css — chat there was meant to live in
-// the bottom nav instead), but anchored to the right instead of the left:
-// the desktop sidebar's footer (email + logout button) sits bottom-left,
-// so the legacy left:24/bottom:24 position would float right on top of it.
+// the bottom nav instead), but repositioned: the legacy left:24/bottom:24
+// spot now sits under the floating sidebar, and bottom-right is taken by
+// the quick-create FAB, so this stacks directly above that FAB (which is
+// 52px tall at bottom:24) with the panel opening above them both.
+const FAB_BOTTOM = 88;
+const PANEL_BOTTOM = FAB_BOTTOM + 64;
 export default function AiChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -18,8 +21,8 @@ export default function AiChatWidget() {
     <>
       {isOpen && (
         <div
-          className="fixed bottom-[88px] right-6 z-[501] h-[560px] w-[400px] max-w-[calc(100vw-32px)]"
-          style={{ maxHeight: 'calc(100vh - 140px)' }}
+          className="fixed right-6 z-[501] h-[560px] w-[400px] max-w-[calc(100vw-32px)]"
+          style={{ bottom: PANEL_BOTTOM, maxHeight: `calc(100vh - ${PANEL_BOTTOM + 40}px)` }}
         >
           <Suspense
             fallback={
@@ -34,7 +37,7 @@ export default function AiChatWidget() {
       )}
       <button
         className="ai-chat-fab"
-        style={{ left: 'auto', right: 24 }}
+        style={{ left: 'auto', right: 24, bottom: FAB_BOTTOM }}
         onClick={() => setIsOpen((open) => !open)}
         aria-label="น้องลิลลี่"
         title="น้องลิลลี่"

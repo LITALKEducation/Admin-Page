@@ -3,14 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LITALK - Admin Control (React Preview)</title>
-    <meta name="description" content="LITALK Education Admin Portal - ระบบจัดการข้อมูลนักเรียน (React migration in progress)" />
+    <title>LITALK - Admin Control</title>
+    <meta name="description" content="LITALK Education Admin Portal - ระบบจัดการข้อมูลนักเรียน" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
     <link rel="icon" href="https://litalkeducation.com/img/LITALK-Icon.png" type="image/png" />
     <meta name="theme-color" content="#121212" />
-    <script type="module" crossorigin src="/app/assets/index-1A9HeVVN.js"></script>
+
+    <!-- Installable to the home screen, scoped to /app/ so it opens the
+         React panel rather than the legacy one at the site root. The
+         service worker that already covers this path is the site-wide
+         /sw.js (scope "/"): it serves HTML network-first, so a deploy is
+         picked up immediately, and hashed assets cache-first, which is
+         safe because a rebuild changes their filenames. A second worker
+         scoped to /app/ would only duplicate that. -->
+    <link rel="manifest" href="/app/manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="LITALK Admin" />
+    <link rel="apple-touch-icon" href="/app/img/icon-192.png" />
+    <script type="module" crossorigin src="/app/assets/index-Bf-SVoJF.js"></script>
     <link rel="modulepreload" crossorigin href="/app/assets/jsx-runtime-bzQ4Vb5N.js">
-    <link rel="stylesheet" crossorigin href="/app/assets/index-BnwMRJt3.css">
+    <link rel="stylesheet" crossorigin href="/app/assets/index-PQsTEQbI.css">
   </head>
   <body>
     <div id="root"></div>
