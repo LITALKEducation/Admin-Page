@@ -652,7 +652,7 @@
             border-radius: 16px;
             box-shadow: var(--shadow-pop);
             overflow: hidden;
-            transition: width 0.2s ease;
+            transition: width 250ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
         /* Icon-only collapsed rail (sidebar-03 collapsible="icon" pattern) */
@@ -699,7 +699,8 @@
         }
 
         .sidebar-collapse-btn:hover { color: var(--text-primary); background-color: var(--bg-tertiary); }
-        .sidebar-collapse-btn i { transition: transform 0.2s ease; }
+        /* Same 250ms as the rail it accompanies, so icon and width land together. */
+        .sidebar-collapse-btn i { transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1); }
 
         .sidebar-nav {
             flex: 1;
@@ -743,14 +744,16 @@
         }
 
         .sidebar-nav-heading:hover { color: var(--text-secondary); }
-        .sidebar-nav-heading .section-chevron { font-size: 9px; transition: transform 0.2s ease; }
+        .sidebar-nav-heading .section-chevron { font-size: 9px; transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1); }
 
         /* CSS grid accordion trick: animate 1fr -> 0fr instead of measuring
            height in JS. Requires the inner wrapper for overflow clipping. */
         .sidebar-nav-section-items {
             display: grid;
             grid-template-rows: 1fr;
-            transition: grid-template-rows 0.2s ease;
+            /* Accordion is a symmetric motion — same duration/easing both
+               ways, no open/close split. */
+            transition: grid-template-rows 250ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
         .sidebar-nav-section-items .nav-items-inner {
@@ -1425,7 +1428,7 @@
 
         .tab-content {
             display: none;
-            animation: fadeIn 0.3s ease;
+            animation: fadeIn 250ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
         .tab-content.active {
@@ -1557,7 +1560,9 @@
 
         .arrow-icon {
             font-size: 10px;
-            transition: transform 0.2s ease;
+            /* Match the panel this chevron belongs to, so the two finish
+               together instead of the icon landing 50ms early. */
+            transition: transform var(--dropdown-open-dur) var(--dropdown-ease);
         }
 
         .custom-dropdown.active .arrow-icon {
@@ -2532,7 +2537,11 @@
             position: absolute;
             border-radius: 50px;
             box-shadow: 0 0 0 3px inset var(--text-primary);
-            animation: l4 2.5s infinite;
+            /* linear, not the default ease: a continuous loop that eases in
+               and out re-accelerates at every iteration boundary, so the
+               orbit visibly stutters once per cycle instead of spinning
+               steadily. */
+            animation: l4 2.5s linear infinite;
         }
         .loader:after {
             animation-delay: -1.25s;
@@ -3889,7 +3898,7 @@
         }
 
         [data-profile-panel] { display: none; }
-        [data-profile-panel].active { display: block; animation: fadeIn 0.2s ease; }
+        [data-profile-panel].active { display: block; animation: fadeIn 250ms cubic-bezier(0.22, 1, 0.36, 1); }
 
         /* ===== Skeleton loading ===== */
         .skeleton {
@@ -3905,7 +3914,9 @@
             inset: 0;
             transform: translateX(-100%);
             background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text-muted) 12%, transparent), transparent);
-            animation: skeleton-sweep 1.4s infinite;
+            /* linear so the shimmer sweeps at a constant rate — the default
+               ease makes each pass slow at both ends and read as a pulse. */
+            animation: skeleton-sweep 1.4s linear infinite;
         }
 
         @keyframes skeleton-sweep { 100% { transform: translateX(100%); } }
@@ -4044,13 +4055,29 @@
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow-pop);
             padding: 14px 16px;
-            transform: translateX(120%);
+            /* transitions.dev toast scale: a short 16px travel rather than a
+               full off-screen 120% (~430px) fling, which reads as sluggish
+               for something this small, plus a slight pre-scale/blur so it
+               resolves into place instead of just sliding. */
+            transform: translateX(16px) scale(0.97);
+            filter: blur(2px);
             opacity: 0;
-            transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s;
+            transition:
+                transform 350ms cubic-bezier(0.22, 1, 0.36, 1),
+                filter 350ms cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 350ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
-        .toast.show { transform: translateX(0); opacity: 1; }
-        .toast.hide { transform: translateX(120%); opacity: 0; }
+        .toast.show { transform: translateX(0) scale(1); filter: blur(0); opacity: 1; }
+
+        /* Dismissal gets out of the way faster than the entrance invites —
+           open 350ms / close 250ms. */
+        .toast.hide {
+            transform: translateX(16px) scale(0.97);
+            filter: blur(2px);
+            opacity: 0;
+            transition-duration: 250ms;
+        }
 
         .toast-icon {
             flex-shrink: 0;
@@ -4100,7 +4127,10 @@
         .toast-close:hover { color: var(--text-primary); background-color: var(--bg-tertiary); }
 
         @media (prefers-reduced-motion: reduce) {
-            .toast { transition: opacity 0.15s; }
+            /* Fade only — transform/filter still land, just instantly. The
+               .hide duration is restated because .toast.hide outranks
+               .toast and would otherwise drag its 250ms in here. */
+            .toast, .toast.hide { transition: opacity 0.15s; }
         }
 
         @media (max-width: 700px) {
