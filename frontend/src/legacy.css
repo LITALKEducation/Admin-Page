@@ -199,7 +199,16 @@
             font-weight: 500;
             font-family: inherit;
             cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            /* Explicit list rather than `all`: transform and opacity are the
+               only non-paint properties any .btn variant animates on hover
+               (see .btn-primary:hover), and `all` would also transition
+               layout properties on any future change. */
+            transition:
+                color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             border: 1px solid transparent;
             text-decoration: none;
             letter-spacing: -0.01em;
@@ -265,7 +274,7 @@
             align-items: center;
             justify-content: center;
             font-size: 16px;
-            transition: all 0.2s;
+            transition: color 0.2s, background-color 0.2s, border-color 0.2s;
             flex-shrink: 0;
         }
 
@@ -340,7 +349,7 @@
             align-items: center;
             justify-content: center;
             font-size: 14px;
-            transition: all 0.2s;
+            transition: color 0.2s, background-color 0.2s, border-color 0.2s;
         }
 
         .mobile-menu-close:hover {
@@ -361,7 +370,7 @@
             font-weight: 500;
             padding: 12px 16px;
             border-radius: 6px;
-            transition: all 0.2s;
+            transition: color 0.2s, background-color 0.2s, border-color 0.2s;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -695,7 +704,7 @@
             color: var(--text-muted);
             cursor: pointer;
             font-size: 11px;
-            transition: all 0.15s ease;
+            transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
         }
 
         .sidebar-collapse-btn:hover { color: var(--text-primary); background-color: var(--bg-tertiary); }
@@ -786,7 +795,10 @@
             color: var(--text-secondary);
             background-color: transparent;
             border: 1px solid transparent;
-            transition: all var(--dur-base) var(--ease-btn);
+            transition:
+                color var(--dur-base) var(--ease-btn),
+                background-color var(--dur-base) var(--ease-btn),
+                border-color var(--dur-base) var(--ease-btn);
         }
 
         .sidebar-nav-item i {
@@ -1018,7 +1030,10 @@
             font-family: inherit;
             font-weight: var(--weight-medium);
             cursor: pointer;
-            transition: all var(--dur-base) var(--ease-btn);
+            transition:
+                color var(--dur-base) var(--ease-btn),
+                background-color var(--dur-base) var(--ease-btn),
+                border-color var(--dur-base) var(--ease-btn);
         }
 
         .class-log-btn:hover {
@@ -1188,7 +1203,10 @@
             font-size: var(--text-sm);
             font-family: inherit;
             cursor: pointer;
-            transition: all var(--dur-base) var(--ease-btn);
+            transition:
+                color var(--dur-base) var(--ease-btn),
+                background-color var(--dur-base) var(--ease-btn),
+                border-color var(--dur-base) var(--ease-btn);
         }
 
         .icon-btn:hover {
@@ -1240,7 +1258,10 @@
             background-color: var(--bg-tertiary);
             color: var(--text-muted);
             border: 1px solid var(--border-color);
-            transition: all var(--dur-base) var(--ease-btn);
+            transition:
+                color var(--dur-base) var(--ease-btn),
+                background-color var(--dur-base) var(--ease-btn),
+                border-color var(--dur-base) var(--ease-btn);
         }
 
         .step-circle.active,
@@ -1285,7 +1306,10 @@
             border: 1px solid var(--border-color);
             background-color: var(--bg-tertiary);
             color: var(--text-primary);
-            transition: all var(--dur-base) var(--ease-btn);
+            transition:
+                color var(--dur-base) var(--ease-btn),
+                background-color var(--dur-base) var(--ease-btn),
+                border-color var(--dur-base) var(--ease-btn);
         }
 
         .slot-btn.booked {
@@ -1435,6 +1459,14 @@
             display: block;
         }
 
+        /* Screen/panel reveals translate as well as fade, so they need an
+           escape hatch — this fires on every screen change and every profile
+           tab, which is the most frequent motion in the app. */
+        @media (prefers-reduced-motion: reduce) {
+            .tab-content,
+            [data-profile-panel].active { animation: none !important; }
+        }
+
         /* Transitions.dev — Tabs sliding (small pill toggle, e.g. add/withdraw
            hours). Colors reuse this app's theme tokens instead of the
            snippet's hardcoded light-mode values so dark mode still works. */
@@ -1533,7 +1565,7 @@
             cursor: pointer;
             font-size: 13px;
             color: var(--text-primary);
-            transition: all 0.15s ease;
+            transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
         }
 
         .dropdown-trigger:hover {
@@ -1651,7 +1683,7 @@
             padding: 10px 14px;
             font-size: 13px;
             cursor: pointer;
-            transition: all 0.15s;
+            transition: color 0.15s, background-color 0.15s, border-color 0.15s;
             color: var(--text-secondary);
             display: flex;
             align-items: center;
@@ -1749,7 +1781,7 @@
             margin-bottom: 20px;
             font-size: 13px;
             font-weight: 500;
-            transition: all 0.2s;
+            transition: color 0.2s, background-color 0.2s, border-color 0.2s;
         }
 
         .student-indicator.empty {
@@ -1887,7 +1919,11 @@
             line-height: 1.4;
             background-color: var(--bg-tertiary);
             color: var(--text-primary);
-            transition: all 0.15s ease;
+            transition:
+                color 0.15s ease,
+                background-color 0.15s ease,
+                border-color 0.15s ease,
+                box-shadow 0.15s ease;
         }
 
         /* Reset native chrome only on text-like fields — checkbox/radio/file
@@ -2012,11 +2048,20 @@
             --revert-dur: 280ms;
         }
 
+        /* Restates the full property list from the base field rule above,
+           not just border-color: this selector has equal specificity and
+           comes later, so a lone `transition: border-color` here replaced
+           the whole declaration and made :focus snap its background and
+           focus ring instead of easing them in. */
         .form-group input,
         .form-group select,
         .form-group textarea,
         .form-group .dropdown-trigger {
-            transition: border-color 150ms ease-out;
+            transition:
+                color 150ms ease-out,
+                background-color 150ms ease-out,
+                border-color 150ms ease-out,
+                box-shadow 150ms ease-out;
             will-change: transform;
         }
 
@@ -3098,7 +3143,10 @@
             font-size: var(--text-base-sm);
             font-family: inherit;
             cursor: pointer;
-            transition: all var(--dur-base) var(--ease-btn);
+            transition:
+                color var(--dur-base) var(--ease-btn),
+                background-color var(--dur-base) var(--ease-btn),
+                border-color var(--dur-base) var(--ease-btn);
         }
 
         .search-trigger:hover {
@@ -3132,7 +3180,10 @@
             color: var(--text-secondary);
             font-size: 14px;
             cursor: pointer;
-            transition: all var(--dur-base) var(--ease-btn);
+            transition:
+                color var(--dur-base) var(--ease-btn),
+                background-color var(--dur-base) var(--ease-btn),
+                border-color var(--dur-base) var(--ease-btn);
         }
 
         .topbar-icon-btn:hover {
@@ -3157,7 +3208,10 @@
             font-family: inherit;
             font-size: 13px;
             cursor: pointer;
-            transition: all var(--dur-base) var(--ease-btn);
+            transition:
+                color var(--dur-base) var(--ease-btn),
+                background-color var(--dur-base) var(--ease-btn),
+                border-color var(--dur-base) var(--ease-btn);
         }
 
         .topbar-search-btn:hover {
@@ -3504,7 +3558,7 @@
             color: var(--text-secondary);
             cursor: pointer;
             text-align: left;
-            transition: all 0.12s ease;
+            transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
         }
 
         .fab-menu-item i { width: 18px; text-align: center; font-size: 13px; color: var(--text-muted); }
@@ -3697,7 +3751,7 @@
             font-family: inherit;
             font-size: var(--text-base-sm);
             cursor: pointer;
-            transition: all 0.12s ease;
+            transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
         }
 
         .page-btn:hover:not(:disabled) { background-color: var(--bg-tertiary); color: var(--text-primary); }
@@ -3782,7 +3836,10 @@
             font-family: inherit;
             font-weight: var(--weight-medium);
             cursor: pointer;
-            transition: all var(--dur-base) var(--ease-btn);
+            transition:
+                color var(--dur-base) var(--ease-btn),
+                background-color var(--dur-base) var(--ease-btn),
+                border-color var(--dur-base) var(--ease-btn);
         }
 
         .row-actions-btn:hover {
@@ -3849,7 +3906,7 @@
             color: var(--text-secondary);
             cursor: pointer;
             text-align: left;
-            transition: all 0.12s ease;
+            transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
         }
 
         .row-actions-item i { width: 16px; text-align: center; font-size: 12px; color: var(--text-muted); }
