@@ -66,6 +66,8 @@ export default function BlogScreen() {
   const confirmDialog = useConfirm();
 
   const [posts, setPosts] = useState<BlogPost[] | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [step, setStep] = useState(1);
@@ -98,6 +100,20 @@ export default function BlogScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Matches on everything visible in a row, so searching for whatever you can
+  // see on screen works — including the author, since "find the post so-and-so
+  // wrote" is the other way staff look for one besides the title.
+  const visiblePosts = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return (posts || []).filter((p) => {
+      if (statusFilter && p.status !== statusFilter) return false;
+      if (!query) return true;
+      return [p.title, p.titleTh, p.category, p.authorName, p.authorIdentity, p.slug].some((field) =>
+        String(field || '').toLowerCase().includes(query),
+      );
+    });
+  }, [posts, search, statusFilter]);
 
   const editingPost = editingId ? posts?.find((p) => p.id === editingId) || null : null;
 
@@ -756,13 +772,47 @@ export default function BlogScreen() {
             <p>บทความที่สถานะ "เผยแพร่แล้ว" จะแสดงบนเว็บไซต์</p>
           </div>
         </div>
+
+        {!!posts?.length && (
+          <div className="table-toolbar">
+            <div className="search-box">
+              <i className="fas fa-magnifying-glass"></i>
+              <input
+                type="text"
+                placeholder="ค้นหาชื่อบทความ หมวดหมู่ ผู้เขียน หรือ slug..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="กรองตามสถานะ">
+              <option value="">ทุกสถานะ</option>
+              {Object.entries(BLOG_STATUS_LABEL).map(([value, label]) => (
+                <option value={value} key={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <span className="form-hint" style={{ marginLeft: 'auto' }}>
+              {visiblePosts.length === posts.length
+                ? `${posts.length} บทความ`
+                : `พบ ${visiblePosts.length} จาก ${posts.length} บทความ`}
+            </span>
+          </div>
+        )}
+
         <div className="row-list">
           {posts === null ? (
             <div className="form-hint">โหลดรายการบทความไม่สำเร็จ กรุณาลองใหม่อีกครั้ง</div>
           ) : !posts.length ? (
             <div className="form-hint">ยังไม่มีบทความ — กดปุ่ม "เขียนบทความใหม่" เพื่อเริ่มต้น</div>
+          ) : !visiblePosts.length ? (
+            <div className="empty-state">
+              <i className="fas fa-magnifying-glass"></i>
+              <div className="empty-title">ไม่พบบทความที่ค้นหา</div>
+              <div className="empty-sub">ลองปรับคำค้นหาหรือตัวกรองสถานะ</div>
+            </div>
           ) : (
-            posts.map((p) => {
+            visiblePosts.map((p) => {
               const color = p.status === 'published' ? 'var(--accent-success)' : p.status === 'rejected' ? 'var(--accent-danger)' : 'var(--text-muted)';
               const mine = (p.authorIdentity || '').toLowerCase() === (me?.email || '').toLowerCase();
               const isVideoCover = !!p.coverMime?.startsWith('video/');

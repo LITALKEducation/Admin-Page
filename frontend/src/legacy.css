@@ -613,17 +613,28 @@
             line-height: 1.6;
         }
 
-        /* Logo (sidebar header + login screens) */
+        /* Logo (sidebar header + login screens).
+           One asset for both themes, recolored to white in dark mode rather
+           than swapped for a second file. The two exports we used to swap
+           between were cropped differently — the black one carried padding
+           around the wordmark while the white one was trimmed to the glyphs
+           — so at a fixed height the dark mode wordmark rendered about 40%
+           larger. Deriving both from one file makes the two sizes identical
+           by construction, and leaves one asset to keep up to date.
+           brightness(0) flattens the artwork to black and invert(1) lifts
+           it to white; alpha is untouched, so the antialiased edges survive. */
         .logo-img {
             height: 24px;
             width: auto;
             transition: filter 0.3s;
         }
 
-        @media (prefers-color-scheme: dark) {
-            .logo-img {
-                filter: brightness(0) invert(1);
-            }
+        /* Keyed on the app's own theme, not prefers-color-scheme: the two
+           disagree whenever someone overrides the theme with the toggle,
+           and the OS-keyed version whitened the logo against the light
+           panel background. */
+        [data-theme="dark"] .logo-img {
+            filter: brightness(0) invert(1);
         }
 
         .admin-badge-text {
@@ -4428,3 +4439,201 @@
         @keyframes idcard-qr-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.75); } }
         .idcard-qr-hint { font-size: 12px; color: var(--text-muted); text-align: center; }
         @media (prefers-reduced-motion: reduce) { .idcard-qr-countdown::before { animation: none; } }
+
+        /* ---------------------------------------------------------------
+           AI chat settings screen
+           --------------------------------------------------------------- */
+
+        /* Status strip under each surface's card title: the two facts you
+           want before reading any of the controls — is it on, and how many
+           messages does each person get. */
+        .ai-status-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .ai-status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 11px;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .ai-status-pill i { font-size: 10px; }
+        .ai-status-pill.is-on { color: var(--accent-success); border-color: color-mix(in srgb, var(--accent-success) 35%, var(--border-color)); }
+        .ai-status-pill.is-off { color: var(--accent-danger); border-color: color-mix(in srgb, var(--accent-danger) 35%, var(--border-color)); }
+
+        /* Two columns of dropdowns instead of one tall stack — four selects
+           in a single column pushed the toggles and the summary below the
+           fold on a laptop. Pinned to exactly two rather than auto-fit,
+           which packs three across on a wide screen and leaves one select
+           stranded alone on the second row. */
+        .ai-option-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 4px 20px;
+        }
+
+        @media (min-width: 720px) {
+            .ai-option-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        /* Each boolean option is a full card rather than a bare checkbox:
+           the whole row is the <label>, which gives the switch a target far
+           bigger than the 44px minimum on touch. */
+        .ai-toggle-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background-color: var(--bg-secondary);
+            cursor: pointer;
+            transition: border-color 150ms ease-out, background-color 150ms ease-out;
+        }
+
+        .ai-toggle-row:hover { border-color: var(--text-muted); }
+        .ai-toggle-row:last-child { margin-bottom: 0; }
+        .ai-toggle-text { flex: 1; min-width: 0; }
+        .ai-toggle-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+        .ai-toggle-hint { font-size: 12px; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
+
+        /* Switch built on a real checkbox: the input stays in the accessibility
+           tree and keeps keyboard behaviour, and is only visually replaced. */
+        .ai-switch {
+            position: relative;
+            flex-shrink: 0;
+            width: 42px;
+            height: 24px;
+            margin-top: 1px;
+        }
+
+        .ai-switch input {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .ai-switch-track {
+            position: absolute;
+            inset: 0;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+            pointer-events: none;
+            transition: background-color 150ms ease-out, border-color 150ms ease-out, box-shadow 150ms ease-out;
+        }
+
+        .ai-switch-track::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: var(--text-muted);
+            transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1), background-color 150ms ease-out;
+        }
+
+        .ai-switch input:checked + .ai-switch-track {
+            background-color: var(--brand-primary);
+            border-color: var(--brand-primary);
+        }
+
+        .ai-switch input:checked + .ai-switch-track::after {
+            transform: translateX(18px);
+            background-color: var(--brand-btn-text);
+        }
+
+        .ai-switch input:focus-visible + .ai-switch-track { box-shadow: 0 0 0 3px var(--focus-ring); }
+
+        /* Plain-language readback of the options, so an admin can confirm the
+           settings say what they meant before saving. */
+        .ai-preview-list { list-style: none; margin: 0; padding: 0; }
+
+        .ai-preview-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 9px 0;
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .ai-preview-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+        .ai-preview-list li i { color: var(--accent-success); font-size: 11px; margin-top: 5px; flex-shrink: 0; }
+
+        /* Accordion header for "การตั้งค่าขั้นสูง". Resets the button chrome
+           so it can wrap the existing .card-title-bar layout. */
+        .ai-advanced-toggle {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            background: none;
+            border: 0;
+            padding: 0;
+            font: inherit;
+            color: inherit;
+            text-align: inherit;
+            cursor: pointer;
+        }
+
+        .ai-advanced-toggle .ai-advanced-chevron {
+            margin-left: auto;
+            flex-shrink: 0;
+            color: var(--text-muted);
+            transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .ai-advanced-toggle[aria-expanded="true"] .ai-advanced-chevron { transform: rotate(180deg); }
+
+        /* The unsaved-changes bar tracks the bottom of the viewport so the
+           save button stays reachable however far down the form you are. */
+        .ai-save-bar {
+            position: sticky;
+            bottom: 0;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 14px 16px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background-color: var(--bg-secondary);
+            box-shadow: var(--shadow-pop);
+        }
+
+        .ai-dirty-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            margin-left: 6px;
+            border-radius: 50%;
+            background-color: var(--accent-warning, var(--accent-danger));
+            vertical-align: middle;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .ai-switch-track::after,
+            .ai-advanced-toggle .ai-advanced-chevron { transition: none; }
+        }

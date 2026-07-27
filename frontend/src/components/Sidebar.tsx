@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import logoBlack from '../assets/img/LITALK-Black.png';
-import logoWhite from '../assets/img/LITALK-White.png';
+import logo from '../assets/img/LITALK-Black.png';
 import { SCREEN_ROUTES } from '../utils/screenRoutes';
 import { NAV_SECTIONS as SECTIONS } from '../utils/navSections';
 
@@ -15,12 +14,10 @@ const COLLAPSE_KEY = 'litalk_sidebar_collapsed';
 export default function Sidebar({
   isAdmin,
   email,
-  theme,
   onLogout,
 }: {
   isAdmin: boolean;
   email: string;
-  theme: 'dark' | 'light';
   onLogout: () => void;
 }) {
   const [iconCollapsed, setIconCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1');
@@ -46,12 +43,7 @@ export default function Sidebar({
   return (
     <aside className={`sidebar${iconCollapsed ? ' icon-collapsed' : ''}`} id="app-sidebar">
       <div className="sidebar-header">
-        <img
-          src={theme === 'dark' ? logoWhite : logoBlack}
-          alt="LITALK Logo"
-          className="logo-img theme-logo sidebar-wordmark"
-          style={{ height: 22 }}
-        />
+        <img src={logo} alt="LITALK Logo" className="logo-img theme-logo sidebar-wordmark" style={{ height: 22 }} />
         <button
           className="sidebar-collapse-btn"
           onClick={toggleCollapsed}
