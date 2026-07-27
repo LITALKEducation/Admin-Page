@@ -52,7 +52,6 @@ export default function Sidebar({
           className="logo-img theme-logo sidebar-wordmark"
           style={{ height: 22 }}
         />
-        <span className="admin-badge-text sidebar-label">ADMIN</span>
         <button
           className="sidebar-collapse-btn"
           onClick={toggleCollapsed}

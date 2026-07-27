@@ -32,6 +32,12 @@ Twenty-one portable CSS transitions, each namespaced under `t-*` selectors with 
 | **Card hover tilt** | Tilt a card in 3D toward the pointer with a cursor-tracked glare. | [19-card-tilt.md](./19-card-tilt.md) |
 | **Plus to menu morph** | Morph a circular trigger into the menu / panel it opens. | [20-plus-menu-morph.md](./20-plus-menu-morph.md) |
 | **Accordion expand** | Grow / shrink a panel via grid-rows with a chevron flip. | [21-accordion.md](./21-accordion.md) |
+| **Toast open / close** | Rise a toast from below with fade + cross-blur, slower in than out. | [22-toast.md](./22-toast.md) |
+| **Like button** | Fill a heart with a pop + particle burst on like. | [23-like-button.md](./23-like-button.md) |
+| **Learn more hover** | Slide the chevron and spread its arms into an arrow on hover. | [24-learn-more-hover.md](./24-learn-more-hover.md) |
+| **Checkbox check** | Fill the box, then stroke-draw the checkmark. | [25-checkbox-check.md](./25-checkbox-check.md) |
+| **Spinning counter** | Spin slot-machine digit reels with vertical motion blur. | [26-spinning-counter.md](./26-spinning-counter.md) |
+| **Toggle** | Travel the switch thumb with a double-bounce overshoot. | [27-toggle.md](./27-toggle.md) |
 
 ## Decision rules
 
@@ -222,4 +228,10 @@ Keep the diff small: only edit the files needed to introduce the transition. Don
 - [19-card-tilt.md](./19-card-tilt.md) — Card hover tilt
 - [20-plus-menu-morph.md](./20-plus-menu-morph.md) — Plus to menu morph
 - [21-accordion.md](./21-accordion.md) — Accordion expand
+- [22-toast.md](./22-toast.md) — Toast open / close
+- [23-like-button.md](./23-like-button.md) — Like button
+- [24-learn-more-hover.md](./24-learn-more-hover.md) — Learn more hover
+- [25-checkbox-check.md](./25-checkbox-check.md) — Checkbox check
+- [26-spinning-counter.md](./26-spinning-counter.md) — Spinning counter
+- [27-toggle.md](./27-toggle.md) — Toggle
 - [_root.css](./_root.css) — the universal install block on its own, ready to import directly.

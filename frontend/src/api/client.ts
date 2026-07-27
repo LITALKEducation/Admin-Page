@@ -47,7 +47,47 @@ export function downloadBlob(blob: Blob, filename: string) {
 export interface MeResponse {
   email?: string;
   name?: string;
+  title?: string | null;
+  phone?: string | null;
+  hasAvatar?: boolean;
   permissions: string[];
+}
+
+// Aggregated "needs attention" feed for the notification bell. Stateless by
+// design on the server: every item links to the screen where it gets
+// resolved, and resolving it drops it from the feed — no read/unread state.
+export interface NotificationItem {
+  type: string;
+  text: string;
+  screen: string;
+  studentId: string | null;
+}
+
+export async function fetchNotifications(getToken: GetTokenFn) {
+  return apiJson<{ items: NotificationItem[] }>(getToken, '/notifications');
+}
+
+// Rotating token behind the staff ID card's QR — the server gives it a short
+// TTL, so the card re-mints well before expiry (see StaffIdCard).
+export async function mintStaffIdCardToken(getToken: GetTokenFn) {
+  return apiJson<{ status: string; token: string; expiresAt: string; message?: string }>(
+    getToken,
+    '/staff/id-card-token',
+    { method: 'POST' },
+  );
+}
+
+// Lets the card holder's own device react the instant the front desk scans
+// it, rather than only the scanning device showing feedback.
+export async function fetchStaffCheckinStatus(getToken: GetTokenFn, since: string) {
+  return apiJson<{ status: string; event: { at: string } | null }>(
+    getToken,
+    `/staff/checkin-status?since=${encodeURIComponent(since)}`,
+  );
+}
+
+export function staffAvatarUrl(email: string): string {
+  return `${FILES_API_URL}/staff/${encodeURIComponent(email)}/avatar?v=${Date.now()}`;
 }
 
 export interface DashboardStats {

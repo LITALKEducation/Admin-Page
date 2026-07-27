@@ -23,6 +23,7 @@ export default function MobileNav({
   onToggleTheme,
   onLogout,
   onOpenSearch,
+  onOpenIdCard,
 }: {
   isAdmin: boolean;
   email: string;
@@ -30,6 +31,7 @@ export default function MobileNav({
   onToggleTheme: () => void;
   onLogout: () => void;
   onOpenSearch: () => void;
+  onOpenIdCard: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
@@ -51,11 +53,13 @@ export default function MobileNav({
             className="logo-img theme-logo"
             style={{ height: 20 }}
           />
-          <span className="admin-badge-text">ADMIN</span>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button className="hamburger-btn" onClick={onOpenSearch} aria-label="ค้นหา">
             <i className="fas fa-magnifying-glass"></i>
+          </button>
+          <button className="hamburger-btn" onClick={onOpenIdCard} aria-label="บัตรประจำตัวดิจิทัล" title="บัตรประจำตัวดิจิทัล">
+            <i className="fas fa-id-card"></i>
           </button>
           <button className="hamburger-btn" onClick={() => setIsOpen(true)} aria-label="Open Menu">
             <i className="fas fa-bars"></i>

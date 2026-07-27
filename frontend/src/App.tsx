@@ -5,6 +5,7 @@ import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
 import AiChatWidget from './components/AiChatWidget';
+import QuickCreateFab from './components/QuickCreateFab';
 import TeacherEmptyState from './components/TeacherEmptyState';
 import Topbar from './components/Topbar';
 import { useTheme } from './hooks/useTheme';
@@ -42,12 +43,15 @@ const LinksScreen = lazy(() => import('./components/LinksScreen'));
 // Code-split the palette: it drags in cmdk + the dialog primitive, and the
 // Ctrl+K listener lives in App so nothing loads until the first open.
 const CommandPalette = lazy(() => import('./components/CommandPalette'));
+// Likewise the ID card, which pulls in the QR encoder.
+const StaffIdCard = lazy(() => import('./components/StaffIdCard'));
 
 // Supports shareable links like /app/?screen=logs&student=litalk12345
 // (e.g. the "copy study log link" buttons) by seeding the shared
 // selection once on load, then dropping the query string — mirrors the
-// legacy applyDeepLink().
-function DeepLinkHandler() {
+// legacy applyDeepLink(). ?card=1 opens the digital ID card straight away,
+// for a phone Shortcut / Action Button pinned to check-in.
+function DeepLinkHandler({ onOpenIdCard }: { onOpenIdCard: () => void }) {
   const navigate = useNavigate();
   const [, setSelectedStudent] = useSharedStudentSelection();
 
@@ -55,8 +59,10 @@ function DeepLinkHandler() {
     const params = new URLSearchParams(window.location.search);
     const student = params.get('student');
     const screen = params.get('screen');
-    if (!student && !screen) return;
+    const card = params.get('card');
+    if (!student && !screen && !card) return;
     if (student) setSelectedStudent(student);
+    if (card === '1') onOpenIdCard();
     const route = screen ? SCREEN_ROUTES[screen] : null;
     navigate(route || window.location.pathname, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -108,6 +114,7 @@ export default function App() {
     setPaletteMounted(true);
     setPaletteOpen(true);
   };
+  const [idCardOpen, setIdCardOpen] = useState(false);
 
   // Ctrl/Cmd+K lives here (not in the lazy palette) so the shortcut works
   // before the palette chunk has ever loaded.
@@ -157,8 +164,9 @@ export default function App() {
       <ConfirmProvider>
         <SharedStudentProvider>
           <EditingLogProvider>
-            <DeepLinkHandler />
+            <DeepLinkHandler onOpenIdCard={() => setIdCardOpen(true)} />
             <AiChatWidget />
+            <QuickCreateFab isAdmin={isAdmin} />
             {paletteMounted && (
               <Suspense fallback={null}>
                 <CommandPalette
@@ -167,6 +175,11 @@ export default function App() {
                   open={paletteOpen}
                   onOpenChange={setPaletteOpen}
                 />
+              </Suspense>
+            )}
+            {idCardOpen && (
+              <Suspense fallback={null}>
+                <StaffIdCard me={me} isAdmin={isAdmin} onClose={() => setIdCardOpen(false)} />
               </Suspense>
             )}
             <div className="admin-dashboard" id="admin-panel" style={{ display: 'flex' }}>
@@ -179,8 +192,14 @@ export default function App() {
                   onToggleTheme={toggleTheme}
                   onLogout={handleLogout}
                   onOpenSearch={openPalette}
+                  onOpenIdCard={() => setIdCardOpen(true)}
                 />
-                <Topbar title={title} onToggleTheme={toggleTheme} onOpenSearch={openPalette} />
+                <Topbar
+                  title={title}
+                  onToggleTheme={toggleTheme}
+                  onOpenSearch={openPalette}
+                  onOpenIdCard={() => setIdCardOpen(true)}
+                />
                 <div className="dashboard-content">
                   <ChunkErrorBoundary>
                     <Suspense fallback={<ScreenFallback />}>

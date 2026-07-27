@@ -6,7 +6,7 @@ import { useMe } from '../hooks/useMe';
 import { useToast } from '../ui/ToastContext';
 import { useConfirm, usePrompt } from '../ui/ConfirmContext';
 import StudentPicker from '../ui/StudentPicker';
-import { formatClassTimeLocal } from '../utils/format';
+import { formatClassTimeLocal, toYMD } from '../utils/format';
 import {
   makeTokenGetter,
   createBooking,
@@ -46,7 +46,7 @@ export default function BookingScreen() {
   const [qr, setQr] = useState<{ url: string; dataUrl: string; expiresAt: string } | null>(null);
 
   const student = students.find((s) => s.id === studentId) || null;
-  const minDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const minDate = toYMD(new Date(Date.now() + 86400000));
 
   const loadBookings = useCallback(async () => {
     try {

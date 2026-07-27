@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { makeTokenGetter, fetchDashboard, type DashboardResponse, type DashboardRange } from '../api/client';
-import { formatBaht, formatClassTimeLocal, formatShortThaiDate } from '../utils/format';
+import { formatBaht, formatClassTimeLocal, formatShortThaiDate, toYMD } from '../utils/format';
 import { SCREEN_ROUTES } from '../utils/screenRoutes';
 import { useSharedStudentSelection } from '../hooks/useSharedStudentSelection';
 
@@ -69,7 +69,7 @@ export default function DashboardScreen() {
   const weekBase = weekStart ? new Date(weekStart + 'T00:00:00') : new Date();
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekBase.getTime() + i * 86400000);
-    const ymd = d.toISOString().slice(0, 10);
+    const ymd = toYMD(d);
     const items = week.filter((w) => w.date === ymd).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
     return { label: DOW[i], date: d, items };
   });
