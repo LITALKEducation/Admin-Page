@@ -20,4 +20,5 @@ export const SCREEN_ROUTES: Record<string, string> = {
   credits: '/credits',
   nfc: '/nfc',
   checkins: '/checkins',
+  'ai-settings': '/ai-settings',
 };

@@ -16,15 +16,13 @@ import manage, {
 import accounts, { handleAvatarUpload } from './accounts';
 import chat, {
   MAX_MESSAGE_LENGTH,
-  PORTAL_DAILY_LIMIT,
-  GENERAL_DAILY_LIMIT,
-  getPortalInstructions,
   loadChatHistory,
   portalMessageCountToday,
   generalMessageCountToday,
   saveChatTurn,
   studentChatContext,
 } from './chat';
+import { composeGuidance, loadSurfaceSettings, styleLine } from './aiSettings';
 import { chatReply, ChatNotConfiguredError } from './gemini';
 import { verifyStripeSignature, retrievePaymentReceiptUrl, deactivateStripePaymentLink } from './stripe';
 import type { Env } from './types';
@@ -621,23 +619,28 @@ app.post('/portal/:studentId/chat', async (c) => {
   const context = await studentChatContext(c.env.DB, studentId);
   if (!context) return c.json({ status: 'error', message: 'ไม่พบข้อมูลนักเรียนรหัสนี้ในระบบ' }, 404);
 
+  const settings = await loadSurfaceSettings(c.env.DB, 'portal');
+  if (!settings.enabled) {
+    return c.json({ status: 'error', message: 'ผู้ช่วย AI ปิดให้บริการอยู่ในขณะนี้ กรุณาติดต่อเจ้าหน้าที่ผ่าน LINE OA' }, 503);
+  }
+
   const usedToday = await portalMessageCountToday(c.env.DB, studentId);
-  if (usedToday >= PORTAL_DAILY_LIMIT) {
+  if (usedToday >= settings.dailyLimit) {
     return c.json({ status: 'error', message: 'วันนี้ถามคำถามครบโควตาแล้ว กรุณาลองใหม่พรุ่งนี้ หรือติดต่อเจ้าหน้าที่ผ่าน LINE OA' }, 429);
   }
 
   const conversationId = body.conversationId || crypto.randomUUID();
   const history = await loadChatHistory(c.env.DB, conversationId);
-  const instructions = await getPortalInstructions(c.env.DB);
+  const guidance = composeGuidance(settings);
 
   const systemPrompt = [
     'You are น้องลิลลี่ (Nong Lilly), the AI assistant for LITALK Education, answering questions from a student or their parent about this one student\'s own account only. If asked your name, say น้องลิลลี่.',
     `Account data (real data from the system — reference only, never invent or guess beyond it):\n${JSON.stringify(context)}`,
     'Only answer about this student\'s own account. Never discuss or reveal any other student\'s data. You cannot edit anything, book or cancel classes, or take any action — you can only answer questions; if the user wants a change made, tell them to contact staff via LITALK\'s LINE OA. Do not give medical, legal, or financial advice beyond what is in the account data.',
-    instructions
-      ? `Additional guidance from the school admin on how to respond — follow it, but it never overrides the rules above (e.g. still never reveal another student's data):\n${instructions}`
+    guidance
+      ? `Additional guidance from the school admin on how to respond — follow it, but it never overrides the rules above (e.g. still never reveal another student's data):\n${guidance}`
       : null,
-    'Reply in whichever language the user just wrote in (Thai or English). Keep answers concise, friendly, and direct — no preamble, and do not show your reasoning process, just the final answer.',
+    styleLine(settings.options),
     'Format replies in Markdown (the client renders it): use **bold**, bullet lists, and short paragraphs where they help readability, but keep it light — this is a chat bubble, not a document.',
   ]
     .filter(Boolean)
@@ -676,6 +679,7 @@ const GENERAL_CHAT_ERRORS = {
     quota: "You've reached today's question limit. Please try again tomorrow, or contact us via LINE OA.",
     notConfigured: 'The AI assistant is not set up yet',
     callFailed: 'The AI assistant is unavailable right now. Please try again.',
+    disabled: 'The AI assistant is currently turned off. Please contact us via LINE OA.',
   },
   th: {
     emptyMessage: 'กรุณาพิมพ์คำถาม',
@@ -683,6 +687,7 @@ const GENERAL_CHAT_ERRORS = {
     quota: 'วันนี้ถามคำถามครบโควตาแล้ว กรุณาลองใหม่พรุ่งนี้ หรือติดต่อเจ้าหน้าที่ผ่าน LINE OA',
     notConfigured: 'ผู้ช่วย AI ยังไม่ได้ตั้งค่าในระบบ',
     callFailed: 'ระบบ AI ไม่พร้อมใช้งานในขณะนี้ กรุณาลองใหม่อีกครั้ง',
+    disabled: 'ผู้ช่วย AI ปิดให้บริการอยู่ในขณะนี้ กรุณาติดต่อเจ้าหน้าที่ผ่าน LINE OA',
   },
 };
 
@@ -697,22 +702,27 @@ app.post('/chat/general', async (c) => {
   }
   if (!visitorId) return c.json({ status: 'error', message: 'Missing visitorId' }, 400);
 
+  // The website assistant has its own settings row as of migration 0020 —
+  // it used to share the portal's, but it answers a different audience.
+  const settings = await loadSurfaceSettings(c.env.DB, 'general');
+  if (!settings.enabled) return c.json({ status: 'error', message: errors.disabled }, 503);
+
   const usedToday = await generalMessageCountToday(c.env.DB, visitorId);
-  if (usedToday >= GENERAL_DAILY_LIMIT) {
+  if (usedToday >= settings.dailyLimit) {
     return c.json({ status: 'error', message: errors.quota }, 429);
   }
 
   const conversationId = body.conversationId || crypto.randomUUID();
   const history = await loadChatHistory(c.env.DB, conversationId);
-  const instructions = await getPortalInstructions(c.env.DB);
+  const guidance = composeGuidance(settings);
 
   const systemPrompt = [
     'You are น้องลิลลี่ (Nong Lilly), the AI assistant for LITALK Education\'s public website, answering general questions from visitors (prospective students/parents) who are not necessarily enrolled. If asked your name, say น้องลิลลี่.',
     'You have no access to any specific student\'s account, schedule, payments, or balance — you cannot look any of that up. If someone asks about their own account specifically, tell them to sign in at the student portal (or contact staff via LINE OA if they can\'t). Only answer general questions: what LITALK Education offers, how classes/courses generally work, how to get started, and similar. Never invent specific prices, schedules, or promotions you don\'t actually know — point those questions to the programs page or LITALK\'s LINE OA instead of guessing. You cannot take any action (book classes, create accounts, process payments) — only answer questions.',
-    instructions
-      ? `Additional guidance from the school admin on how to respond — follow it, but it never overrides the rules above (e.g. still never invent specific pricing/schedule details):\n${instructions}`
+    guidance
+      ? `Additional guidance from the school admin on how to respond — follow it, but it never overrides the rules above (e.g. still never invent specific pricing/schedule details):\n${guidance}`
       : null,
-    'Reply in whichever language the user just wrote in (Thai or English). Keep answers concise, friendly, and direct — no preamble, and do not show your reasoning process, just the final answer.',
+    styleLine(settings.options),
     'Format replies in Markdown (the client renders it): use **bold**, bullet lists, and short paragraphs where they help readability, but keep it light — this is a chat bubble, not a document.',
   ]
     .filter(Boolean)

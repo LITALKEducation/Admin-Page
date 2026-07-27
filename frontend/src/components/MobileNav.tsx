@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import logoBlack from '../assets/img/LITALK-Black.png';
-import logoWhite from '../assets/img/LITALK-White.png';
+import logo from '../assets/img/LITALK-Black.png';
 import { SCREEN_ROUTES } from '../utils/screenRoutes';
 import { DASHBOARD_ITEM, NAV_SECTIONS } from '../utils/navSections';
 
@@ -19,7 +18,6 @@ const BOTTOM_NAV_ITEMS = [
 export default function MobileNav({
   isAdmin,
   email,
-  theme,
   onToggleTheme,
   onLogout,
   onOpenSearch,
@@ -27,7 +25,6 @@ export default function MobileNav({
 }: {
   isAdmin: boolean;
   email: string;
-  theme: 'dark' | 'light';
   onToggleTheme: () => void;
   onLogout: () => void;
   onOpenSearch: () => void;
@@ -47,12 +44,7 @@ export default function MobileNav({
     <>
       <div className="mobile-topbar">
         <div className="sidebar-header">
-          <img
-            src={theme === 'dark' ? logoWhite : logoBlack}
-            alt="LITALK Logo"
-            className="logo-img theme-logo"
-            style={{ height: 20 }}
-          />
+          <img src={logo} alt="LITALK Logo" className="logo-img theme-logo" style={{ height: 20 }} />
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button className="hamburger-btn" onClick={onOpenSearch} aria-label="ค้นหา">

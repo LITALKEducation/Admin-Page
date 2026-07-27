@@ -4,7 +4,6 @@ import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
-import AiChatWidget from './components/AiChatWidget';
 import QuickCreateFab from './components/QuickCreateFab';
 import TeacherEmptyState from './components/TeacherEmptyState';
 import Topbar from './components/Topbar';
@@ -39,6 +38,7 @@ const NfcScreen = lazy(() => import('./components/NfcScreen'));
 const CheckinsScreen = lazy(() => import('./components/CheckinsScreen'));
 const BlogScreen = lazy(() => import('./components/BlogScreen'));
 const LinksScreen = lazy(() => import('./components/LinksScreen'));
+const AiSettingsScreen = lazy(() => import('./components/AiSettingsScreen'));
 
 // Code-split the palette: it drags in cmdk + the dialog primitive, and the
 // Ctrl+K listener lives in App so nothing loads until the first open.
@@ -90,6 +90,7 @@ const TITLES: Record<string, string> = {
   '/checkins': 'บันทึกเข้า-ออก',
   '/blog': 'บทความเว็บไซต์',
   '/links': 'ลิงก์ย่อ',
+  '/ai-settings': 'ตั้งค่า AI Chat',
 };
 
 function ScreenFallback() {
@@ -102,7 +103,9 @@ function ScreenFallback() {
 
 export default function App() {
   const { isLoading, isAuthenticated, user, logout } = useAuth0();
-  const { theme, toggleTheme } = useTheme();
+  // Still called for its effect (it stamps data-theme / .dark on <html>);
+  // the value itself is no longer read now that the logo recolors in CSS.
+  const { toggleTheme } = useTheme();
   const { me, isAdmin, loading: meLoading } = useMe();
   const { students, loading: studentsLoading, failed: studentsFailed } = useStudents();
   const location = useLocation();
@@ -165,7 +168,6 @@ export default function App() {
         <SharedStudentProvider>
           <EditingLogProvider>
             <DeepLinkHandler onOpenIdCard={() => setIdCardOpen(true)} />
-            <AiChatWidget />
             <QuickCreateFab isAdmin={isAdmin} />
             {paletteMounted && (
               <Suspense fallback={null}>
@@ -183,12 +185,11 @@ export default function App() {
               </Suspense>
             )}
             <div className="admin-dashboard" id="admin-panel" style={{ display: 'flex' }}>
-              <Sidebar isAdmin={isAdmin} email={email} theme={theme} onLogout={handleLogout} />
+              <Sidebar isAdmin={isAdmin} email={email} onLogout={handleLogout} />
               <main className="app-main">
                 <MobileNav
                   isAdmin={isAdmin}
                   email={email}
-                  theme={theme}
                   onToggleTheme={toggleTheme}
                   onLogout={handleLogout}
                   onOpenSearch={openPalette}
@@ -222,6 +223,7 @@ export default function App() {
                         {isAdmin && <Route path="/checkins" element={<CheckinsScreen />} />}
                         <Route path="/blog" element={<BlogScreen />} />
                         <Route path="/links" element={<LinksScreen />} />
+                        {isAdmin && <Route path="/ai-settings" element={<AiSettingsScreen />} />}
                       </Routes>
                     </Suspense>
                   </ChunkErrorBoundary>

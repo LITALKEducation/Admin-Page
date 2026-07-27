@@ -949,3 +949,43 @@ export async function enableShortLinkApi(getToken: GetTokenFn, id: number) {
 export async function deleteShortLinkApi(getToken: GetTokenFn, id: number) {
   return apiJson<{ ok: boolean; error?: string }>(getToken, `/links/${id}`, { method: 'DELETE' });
 }
+
+// ---------------------------------------------------------------------------
+// AI chat settings ("ตั้งค่า AI Chat" screen)
+// ---------------------------------------------------------------------------
+
+// Each surface น้องลิลลี่ answers on. They share one settings row server-side
+// but are configured independently — see worker/src/aiSettings.ts.
+export type AiSurface = 'portal' | 'general' | 'staff';
+
+export interface AiChatOptions {
+  tone?: 'friendly' | 'formal' | 'concise';
+  length?: 'short' | 'medium' | 'detailed';
+  emoji?: boolean;
+  language?: 'auto' | 'th' | 'en';
+  unknown?: 'admit' | 'referStaff';
+  referContact?: boolean;
+  noPricing?: boolean;
+}
+
+export interface AiSurfaceSettings {
+  enabled: boolean;
+  dailyLimit: number;
+  options: AiChatOptions;
+  instructions: string;
+}
+
+export type AiChatSettings = Record<AiSurface, AiSurfaceSettings>;
+
+export async function fetchAiChatSettings(getToken: GetTokenFn) {
+  return apiJson<AiChatSettings>(getToken, '/settings/ai-chat');
+}
+
+// Partial by design: the settings screen saves the tab you edited, and the
+// server read-modify-writes so the untouched surfaces keep their values.
+export async function saveAiChatSettings(getToken: GetTokenFn, patch: Partial<AiChatSettings>) {
+  return apiJson<AiChatSettings>(getToken, '/settings/ai-chat', {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  });
+}
