@@ -21,6 +21,30 @@ import {
 export const MAX_MESSAGE_LENGTH = 2000;
 const HISTORY_MESSAGES = 16; // ~8 turns of context sent back to the model
 
+// Bump when the chat terms change: visitors whose stored consent predates
+// the current version are re-prompted rather than silently carried over.
+// Keep in sync with CHAT_TERMS_VERSION in the website's js/main.js.
+export const CHAT_TERMS_VERSION = '2026-07-27';
+
+export async function hasChatConsent(db: D1Database, visitorId: string): Promise<boolean> {
+  const row = await db
+    .prepare(`SELECT version FROM ai_chat_consents WHERE visitor_id = ?`)
+    .bind(visitorId)
+    .first<{ version: string }>();
+  return row?.version === CHAT_TERMS_VERSION;
+}
+
+export async function recordChatConsent(db: D1Database, visitorId: string, lang: string | null): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO ai_chat_consents (visitor_id, scope, version, lang, accepted_at)
+       VALUES (?, 'general', ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(visitor_id) DO UPDATE SET version = excluded.version, lang = excluded.lang, accepted_at = CURRENT_TIMESTAMP`,
+    )
+    .bind(visitorId, CHAT_TERMS_VERSION, lang)
+    .run();
+}
+
 // Admin-editable steering text, appended below the fixed safety/scope rules
 // in each system prompt so it can't override them. Staff (admin panel) and
 // portal (student/parent portal + the general marketing-site assistant,
@@ -221,6 +245,57 @@ chat.put('/settings/ai-chat', requireAdmin, async (c) => {
   }
   await saveAiChatSettings(c.env.DB, next, c.get('user').email);
   return c.json(next);
+});
+
+// Admin-only: conversation log for one surface. Returns one row per
+// conversation — turn count, timestamps and the opening question — rather
+// than every message, so the list stays readable and cheap; the transcript
+// endpoint below fetches a single conversation in full on demand.
+chat.get('/settings/ai-chat/logs', requireAdmin, async (c) => {
+  const scope = c.req.query('scope') || 'general';
+  if (!AI_SURFACES.includes(scope as never)) return c.json({ error: 'Unknown scope' }, 400);
+  const limit = Math.min(Math.max(Number(c.req.query('limit')) || 50, 1), 200);
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT m.conversation_id AS conversationId,
+            COUNT(*) AS messages,
+            MIN(m.created_at) AS startedAt,
+            MAX(m.created_at) AS lastAt,
+            MAX(m.actor) AS actor,
+            MAX(m.student_id) AS studentId,
+            (SELECT content FROM ai_chat_messages
+              WHERE conversation_id = m.conversation_id AND role = 'user'
+              ORDER BY id LIMIT 1) AS firstMessage
+       FROM ai_chat_messages m
+      WHERE m.scope = ?
+      GROUP BY m.conversation_id
+      ORDER BY MAX(m.id) DESC
+      LIMIT ?`,
+  )
+    .bind(scope, limit)
+    .all();
+
+  // Consent is only collected on the public website surface, so the count
+  // is reported alongside the general log and omitted elsewhere.
+  let consents: number | null = null;
+  if (scope === 'general') {
+    const row = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM ai_chat_consents WHERE version = ?`)
+      .bind(CHAT_TERMS_VERSION)
+      .first<{ n: number }>();
+    consents = row?.n ?? 0;
+  }
+
+  return c.json({ conversations: results ?? [], consents, termsVersion: CHAT_TERMS_VERSION });
+});
+
+chat.get('/settings/ai-chat/logs/:conversationId', requireAdmin, async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT role, content, created_at AS createdAt FROM ai_chat_messages
+      WHERE conversation_id = ? ORDER BY id`,
+  )
+    .bind(c.req.param('conversationId'))
+    .all();
+  return c.json({ messages: results ?? [] });
 });
 
 // Legacy: the free-form steering text for the staff and portal surfaces.

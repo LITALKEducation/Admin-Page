@@ -989,3 +989,35 @@ export async function saveAiChatSettings(getToken: GetTokenFn, patch: Partial<Ai
     body: JSON.stringify(patch),
   });
 }
+
+// One row per conversation for the settings screen's log list — the full
+// transcript is fetched separately, only for the one you open.
+export interface AiChatLogRow {
+  conversationId: string;
+  messages: number;
+  startedAt: string;
+  lastAt: string;
+  actor: string | null;
+  studentId: string | null;
+  firstMessage: string | null;
+}
+
+export interface AiChatTranscriptRow {
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+}
+
+export async function fetchAiChatLogs(getToken: GetTokenFn, scope: AiSurface) {
+  return apiJson<{ conversations: AiChatLogRow[]; consents: number | null; termsVersion: string }>(
+    getToken,
+    `/settings/ai-chat/logs?scope=${encodeURIComponent(scope)}`,
+  );
+}
+
+export async function fetchAiChatTranscript(getToken: GetTokenFn, conversationId: string) {
+  return apiJson<{ messages: AiChatTranscriptRow[] }>(
+    getToken,
+    `/settings/ai-chat/logs/${encodeURIComponent(conversationId)}`,
+  );
+}

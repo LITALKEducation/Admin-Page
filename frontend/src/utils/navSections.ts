@@ -63,7 +63,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { screen: 'credits', label: 'แก้ไขเครดิต', icon: 'fa-coins' },
       { screen: 'nfc', label: 'บัตร NFC', icon: 'fa-wifi' },
       { screen: 'checkins', label: 'บันทึกเข้า-ออก', icon: 'fa-right-left' },
-      { screen: 'ai-settings', label: 'ตั้งค่า AI Chat', icon: 'fa-robot' },
+      { screen: 'ai-settings', label: 'ตั้งค่า AI Chat', icon: 'fa-message' },
     ],
   },
 ];

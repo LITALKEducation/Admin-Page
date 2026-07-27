@@ -16,6 +16,9 @@ import manage, {
 import accounts, { handleAvatarUpload } from './accounts';
 import chat, {
   MAX_MESSAGE_LENGTH,
+  CHAT_TERMS_VERSION,
+  hasChatConsent,
+  recordChatConsent,
   loadChatHistory,
   portalMessageCountToday,
   generalMessageCountToday,
@@ -680,6 +683,7 @@ const GENERAL_CHAT_ERRORS = {
     notConfigured: 'The AI assistant is not set up yet',
     callFailed: 'The AI assistant is unavailable right now. Please try again.',
     disabled: 'The AI assistant is currently turned off. Please contact us via LINE OA.',
+    consent: 'Please accept the chat terms of use before sending a message.',
   },
   th: {
     emptyMessage: 'กรุณาพิมพ์คำถาม',
@@ -688,11 +692,26 @@ const GENERAL_CHAT_ERRORS = {
     notConfigured: 'ผู้ช่วย AI ยังไม่ได้ตั้งค่าในระบบ',
     callFailed: 'ระบบ AI ไม่พร้อมใช้งานในขณะนี้ กรุณาลองใหม่อีกครั้ง',
     disabled: 'ผู้ช่วย AI ปิดให้บริการอยู่ในขณะนี้ กรุณาติดต่อเจ้าหน้าที่ผ่าน LINE OA',
+    consent: 'กรุณายอมรับเงื่อนไขการใช้งานแชทก่อนส่งข้อความ',
   },
 };
 
+// Records that a website visitor accepted the chat terms. Called the moment
+// they press the accept button, so the acceptance is on record even if they
+// then close the panel without ever sending a message — localStorage on
+// their own device is not a record the school holds.
+app.post('/chat/consent', async (c) => {
+  const body = await c.req.json<{ visitorId?: string; lang?: string }>().catch(() => ({}) as never);
+  const visitorId = (body.visitorId ?? '').trim();
+  if (!visitorId) return c.json({ status: 'error', message: 'Missing visitorId' }, 400);
+  await recordChatConsent(c.env.DB, visitorId, body.lang === 'th' ? 'th' : 'en');
+  return c.json({ status: 'success', version: CHAT_TERMS_VERSION });
+});
+
 app.post('/chat/general', async (c) => {
-  const body = await c.req.json<{ conversationId?: string; message?: string; visitorId?: string; lang?: string }>().catch(() => ({}) as never);
+  const body = await c.req
+    .json<{ conversationId?: string; message?: string; visitorId?: string; lang?: string; termsVersion?: string }>()
+    .catch(() => ({}) as never);
   const message = (body.message ?? '').trim();
   const visitorId = (body.visitorId ?? '').trim();
   const errors = GENERAL_CHAT_ERRORS[body.lang === 'th' ? 'th' : 'en'];
@@ -701,6 +720,18 @@ app.post('/chat/general', async (c) => {
     return c.json({ status: 'error', message: errors.tooLong(MAX_MESSAGE_LENGTH) }, 400);
   }
   if (!visitorId) return c.json({ status: 'error', message: 'Missing visitorId' }, 400);
+
+  // Terms gate. The widget sends termsVersion once the visitor has accepted,
+  // which doubles as the consent record for anyone whose acceptance predates
+  // this check or who cleared the separate /chat/consent call — so a genuine
+  // acceptance is never lost, while a client that skips the dialog entirely
+  // still cannot chat.
+  if (!(await hasChatConsent(c.env.DB, visitorId))) {
+    if (body.termsVersion !== CHAT_TERMS_VERSION) {
+      return c.json({ status: 'error', message: errors.consent, needsConsent: true, termsVersion: CHAT_TERMS_VERSION }, 403);
+    }
+    await recordChatConsent(c.env.DB, visitorId, body.lang === 'th' ? 'th' : 'en');
+  }
 
   // The website assistant has its own settings row as of migration 0020 —
   // it used to share the portal's, but it answers a different audience.

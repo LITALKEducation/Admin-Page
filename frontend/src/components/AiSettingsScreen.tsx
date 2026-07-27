@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useToast } from '../ui/ToastContext';
+import AiChatLogs from './AiChatLogs';
 import {
   makeTokenGetter,
   fetchAiChatSettings,
@@ -100,6 +101,13 @@ const CHOICES: Array<{
     ],
   },
 ];
+
+// Short form of the language choice for the at-a-glance status strip.
+const LANGUAGE_PILL: Record<string, string> = {
+  auto: 'ตอบตามภาษาผู้ใช้',
+  th: 'ตอบไทยเสมอ',
+  en: 'ตอบอังกฤษเสมอ',
+};
 
 const SWITCHES: Array<{
   key: Extract<OptionKey, 'emoji' | 'referContact' | 'noPricing'>;
@@ -233,7 +241,7 @@ export default function AiSettingsScreen() {
           >
             <i className={`fas ${s.icon}`}></i>
             {s.label}
-            {dirty.has(s.id) && <span title="มีการแก้ไขที่ยังไม่บันทึก"> •</span>}
+            {dirty.has(s.id) && <span className="ai-dirty-dot" title="มีการแก้ไขที่ยังไม่บันทึก"></span>}
           </button>
         ))}
       </div>
@@ -273,6 +281,21 @@ export default function AiSettingsScreen() {
               </div>
             </div>
 
+            <div className="ai-status-strip">
+              <span className={`ai-status-pill ${current.enabled ? 'is-on' : 'is-off'}`}>
+                <i className={`fas ${current.enabled ? 'fa-circle-check' : 'fa-circle-pause'}`}></i>
+                {current.enabled ? 'เปิดใช้งานอยู่' : 'ปิดอยู่'}
+              </span>
+              <span className="ai-status-pill">
+                <i className="fas fa-gauge-high"></i>
+                {current.dailyLimit} ข้อความ/วัน
+              </span>
+              <span className="ai-status-pill">
+                <i className="fas fa-language"></i>
+                {LANGUAGE_PILL[current.options.language ?? 'auto']}
+              </span>
+            </div>
+
             {!current.enabled && (
               <div className="info-notice">
                 <i className="fas fa-circle-pause"></i>
@@ -283,40 +306,46 @@ export default function AiSettingsScreen() {
             )}
 
             <div className="form-body">
-              {CHOICES.map((choice) => (
-                <div className="form-group" key={choice.key}>
-                  <label htmlFor={`ai-${choice.key}`}>
-                    <i className={`fas ${choice.icon}`}></i> {choice.label}
-                  </label>
-                  <select
-                    id={`ai-${choice.key}`}
-                    value={current.options[choice.key] ?? choice.fallback}
-                    onChange={(e) => patchOption({ [choice.key]: e.target.value } as AiChatOptions)}
-                  >
-                    {choice.options.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="form-hint">{choice.hint}</div>
-                </div>
-              ))}
+              <div className="ai-option-grid">
+                {CHOICES.map((choice) => (
+                  <div className="form-group" key={choice.key}>
+                    <label htmlFor={`ai-${choice.key}`}>
+                      <i className={`fas ${choice.icon}`}></i> {choice.label}
+                    </label>
+                    <select
+                      id={`ai-${choice.key}`}
+                      value={current.options[choice.key] ?? choice.fallback}
+                      onChange={(e) => patchOption({ [choice.key]: e.target.value } as AiChatOptions)}
+                    >
+                      {choice.options.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="form-hint">{choice.hint}</div>
+                  </div>
+                ))}
+              </div>
 
-              {SWITCHES.filter((s) => !s.publicOnly || isPublic).map((toggle) => (
-                <div className="form-group" key={toggle.key}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      style={{ width: 'auto' }}
-                      checked={current.options[toggle.key] === true}
-                      onChange={(e) => patchOption({ [toggle.key]: e.target.checked } as AiChatOptions)}
-                    />
-                    {toggle.label}
+              <div style={{ marginTop: 4 }}>
+                {SWITCHES.filter((s) => !s.publicOnly || isPublic).map((toggle) => (
+                  <label className="ai-toggle-row" key={toggle.key}>
+                    <span className="ai-switch">
+                      <input
+                        type="checkbox"
+                        checked={current.options[toggle.key] === true}
+                        onChange={(e) => patchOption({ [toggle.key]: e.target.checked } as AiChatOptions)}
+                      />
+                      <span className="ai-switch-track"></span>
+                    </span>
+                    <span className="ai-toggle-text">
+                      <span className="ai-toggle-title">{toggle.label}</span>
+                      <span className="ai-toggle-hint">{toggle.hint}</span>
+                    </span>
                   </label>
-                  <div className="form-hint">{toggle.hint}</div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
 
@@ -330,10 +359,11 @@ export default function AiSettingsScreen() {
                 <p>สรุปจากตัวเลือกด้านบน เพื่อตรวจก่อนบันทึก</p>
               </div>
             </div>
-            <ul className="summary-list" style={{ margin: 0, paddingLeft: 20 }}>
+            <ul className="ai-preview-list">
               {previewLines(current).map((line, i) => (
-                <li key={i} style={{ marginBottom: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
-                  {line}
+                <li key={i}>
+                  <i className="fas fa-check"></i>
+                  <span>{line}</span>
                 </li>
               ))}
             </ul>
@@ -342,19 +372,9 @@ export default function AiSettingsScreen() {
           <div className="admin-card">
             <button
               type="button"
-              className="card-title-bar"
+              className="ai-advanced-toggle card-title-bar"
               onClick={() => setAdvancedOpen((open) => !open)}
               aria-expanded={advancedOpen}
-              style={{
-                width: '100%',
-                background: 'none',
-                border: 0,
-                padding: 0,
-                cursor: 'pointer',
-                textAlign: 'inherit',
-                font: 'inherit',
-                color: 'inherit',
-              }}
             >
               <span className="card-icon">
                 <i className="fas fa-sliders"></i>
@@ -363,28 +383,23 @@ export default function AiSettingsScreen() {
                 <h3>การตั้งค่าขั้นสูง</h3>
                 <p>เปิด/ปิดช่องทาง จำกัดจำนวนข้อความต่อวัน และเขียนคำสั่งเพิ่มเติมเอง</p>
               </div>
-              <i
-                className="fas fa-chevron-down arrow-icon"
-                style={{ marginLeft: 'auto', transform: advancedOpen ? 'rotate(180deg)' : undefined }}
-              ></i>
+              <i className="fas fa-chevron-down ai-advanced-chevron"></i>
             </button>
 
             {advancedOpen && (
               <div className="form-body">
-                <div className="form-group">
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      style={{ width: 'auto' }}
-                      checked={current.enabled}
-                      onChange={(e) => patch({ enabled: e.target.checked })}
-                    />
-                    เปิดใช้งานผู้ช่วย AI ในช่องทางนี้
-                  </label>
-                  <div className="form-hint">
-                    ปิดแล้วผู้ใช้จะยังเห็นกล่องแชท แต่ได้รับข้อความว่าผู้ช่วยปิดให้บริการ แทนที่จะเงียบไปเฉย ๆ
-                  </div>
-                </div>
+                <label className="ai-toggle-row">
+                  <span className="ai-switch">
+                    <input type="checkbox" checked={current.enabled} onChange={(e) => patch({ enabled: e.target.checked })} />
+                    <span className="ai-switch-track"></span>
+                  </span>
+                  <span className="ai-toggle-text">
+                    <span className="ai-toggle-title">เปิดใช้งานผู้ช่วย AI ในช่องทางนี้</span>
+                    <span className="ai-toggle-hint">
+                      ปิดแล้วผู้ใช้จะยังเห็นกล่องแชท แต่ได้รับข้อความว่าผู้ช่วยปิดให้บริการ แทนที่จะเงียบไปเฉย ๆ
+                    </span>
+                  </span>
+                </label>
 
                 <div className="form-group">
                   <label htmlFor="ai-daily-limit">
@@ -426,15 +441,17 @@ export default function AiSettingsScreen() {
             )}
           </div>
 
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 24 }}>
+          <AiChatLogs surface={surface} />
+
+          <div className="ai-save-bar">
             <button className="btn btn-primary" onClick={save} disabled={saving || !dirty.size}>
               <i className="fas fa-floppy-disk"></i> {saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
             </button>
-            {!!dirty.size && (
-              <span className="form-hint">
-                ยังไม่บันทึก: {[...dirty].map((id) => SURFACES.find((s) => s.id === id)?.label).join(', ')}
-              </span>
-            )}
+            <span className="form-hint">
+              {dirty.size
+                ? `ยังไม่บันทึก: ${[...dirty].map((id) => SURFACES.find((s) => s.id === id)?.label).join(', ')}`
+                : 'บันทึกไว้ทั้งหมดแล้ว'}
+            </span>
           </div>
         </>
       )}
