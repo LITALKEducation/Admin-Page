@@ -616,11 +616,11 @@
         /* Logo (sidebar header + login screens).
            One asset for both themes, recolored to white in dark mode rather
            than swapped for a second file. The two exports we used to swap
-           between were cropped differently — LITALK-Black.png carries
-           padding around the wordmark (866x224) while LITALK-White.png is
-           trimmed to the glyphs (2127x350) — so at a fixed height the dark
-           mode wordmark rendered about 40% larger. Deriving both from one
-           file makes the two sizes identical by construction.
+           between were cropped differently — the black one carried padding
+           around the wordmark while the white one was trimmed to the glyphs
+           — so at a fixed height the dark mode wordmark rendered about 40%
+           larger. Deriving both from one file makes the two sizes identical
+           by construction, and leaves one asset to keep up to date.
            brightness(0) flattens the artwork to black and invert(1) lifts
            it to white; alpha is untouched, so the antialiased edges survive. */
         .logo-img {
