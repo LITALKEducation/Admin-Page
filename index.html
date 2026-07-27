@@ -621,6 +621,57 @@
             line-height: 1.6;
         }
 
+
+        /* Per-screen pointer at the new panel. Deliberately quieter than a
+           .info-notice: it is advisory, not something the reader has to act
+           on to finish what they came here to do. */
+        .new-panel-notice {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 20px;
+            padding: 16px 18px;
+            border: 1px solid var(--border-color);
+            border-left: 3px solid var(--brand-primary);
+            border-radius: var(--radius-sm);
+            background-color: var(--bg-secondary);
+        }
+
+        .new-panel-notice__icon {
+            flex-shrink: 0;
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .new-panel-notice__body { flex: 1; min-width: 0; }
+        .new-panel-notice__title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+
+        .new-panel-notice__list {
+            margin: 0 0 12px;
+            padding-left: 18px;
+            list-style: disc;
+        }
+
+        .new-panel-notice__list li {
+            font-size: 13px;
+            line-height: 1.65;
+            color: var(--text-secondary);
+            margin-bottom: 3px;
+        }
+
+        .new-panel-notice__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .new-panel-notice__actions .btn { padding: 7px 13px; font-size: 13px; }
+
+        @media (max-width: 640px) {
+            .new-panel-notice { flex-direction: column; gap: 10px; padding: 14px; }
+        }
+
         /* Logo (sidebar header + login screens) */
         /* One asset for both themes, recoloured in CSS rather than swapped
            for a second file — same as the React panel and the website. The
@@ -7057,6 +7108,121 @@
             }
         }
 
+
+        // ===== Per-screen "the new panel does this differently" notice =====
+        //
+        // Only screens that genuinely behave differently are listed. A banner
+        // on every screen saying "there is a new version" is noise people
+        // learn to skip; one that names the actual difference is worth
+        // reading. Anything not in this map shows nothing.
+        //
+        // Keep in step with the React panel: when a screen reaches parity,
+        // remove its entry rather than leaving a claim that is no longer true.
+        const NEW_PANEL_DIFFS = {
+            dashboard: {
+                route: '/',
+                points: [
+                    'แดชบอร์ดออกแบบใหม่ พร้อมกระดิ่งแจ้งเตือนและปุ่มสร้างด่วน',
+                    'บัตรประจำตัวดิจิทัลพร้อม QR สำหรับเช็คอิน',
+                    'ค้นหาได้ทุกอย่างด้วย Ctrl+K',
+                    'ตารางสัปดาห์แสดงวันถูกต้องตามเวลาไทย (หน้านี้คลาดเคลื่อนก่อน 07:00 น.)',
+                ],
+            },
+            logs: {
+                route: '/logs',
+                points: [
+                    'วันที่ตั้งต้นในฟอร์มถูกต้องตามเวลาไทย — หน้านี้จะเติมเป็นวันก่อนหน้าให้ ถ้าบันทึกก่อน 07:00 น.',
+                ],
+            },
+            payments: {
+                route: '/payments',
+                points: [
+                    'วันที่ตั้งต้นในฟอร์มถูกต้องตามเวลาไทย — หน้านี้จะเติมเป็นวันก่อนหน้าให้ ถ้าบันทึกก่อน 07:00 น.',
+                ],
+            },
+            blog: {
+                route: '/blog',
+                points: [
+                    'ค้นหาบทความได้จากชื่อ หมวดหมู่ ผู้เขียน หรือ slug',
+                    'กรองตามสถานะ และเห็นจำนวนผลลัพธ์',
+                ],
+            },
+            students: {
+                route: '/students',
+                points: ['ชื่อไฟล์ CSV ที่ส่งออกใช้วันที่ตามเวลาไทย'],
+            },
+        };
+
+        const DIFF_DISMISS_KEY = 'litalk_admin_new_panel_diff_seen';
+
+        function diffDismissed(screen) {
+            try {
+                return (JSON.parse(localStorage.getItem(DIFF_DISMISS_KEY) || '[]')).includes(screen);
+            } catch (err) {
+                return false;
+            }
+        }
+
+        function dismissDiff(screen) {
+            try {
+                const all = JSON.parse(localStorage.getItem(DIFF_DISMISS_KEY) || '[]');
+                all.push(screen);
+                localStorage.setItem(DIFF_DISMISS_KEY, JSON.stringify([...new Set(all)]));
+            } catch (err) {
+                /* it will simply show again next time */
+            }
+            const el = document.querySelector('.new-panel-notice');
+            if (el) el.remove();
+        }
+
+        function renderNewPanelNotice(screen) {
+            document.querySelectorAll('.new-panel-notice').forEach(el => el.remove());
+
+            const diff = NEW_PANEL_DIFFS[screen];
+            if (!diff || diffDismissed(screen)) return;
+
+            const panel = document.getElementById('screen-' + screen);
+            if (!panel) return;
+
+            const box = document.createElement('div');
+            box.className = 'new-panel-notice';
+            box.setAttribute('role', 'status');
+            box.innerHTML = `
+                <div class="new-panel-notice__icon"><i class="fas fa-wand-magic-sparkles"></i></div>
+                <div class="new-panel-notice__body">
+                    <div class="new-panel-notice__title">หน้านี้ทำงานต่างจากแดชบอร์ดใหม่</div>
+                    <ul class="new-panel-notice__list"></ul>
+                    <div class="new-panel-notice__actions">
+                        <a class="btn btn-primary" href="/app/#${diff.route}">
+                            <i class="fas fa-arrow-right"></i> ลองหน้านี้ในแดชบอร์ดใหม่
+                        </a>
+                        <button type="button" class="btn btn-secondary" data-dismiss>ไม่ต้องแสดงอีก</button>
+                    </div>
+                </div>`;
+
+            const list = box.querySelector('.new-panel-notice__list');
+            diff.points.forEach(point => {
+                const li = document.createElement('li');
+                li.textContent = point;
+                list.appendChild(li);
+            });
+            box.querySelector('[data-dismiss]').addEventListener('click', () => dismissDiff(screen));
+
+            // Below the screen heading rather than above it, so the banner
+            // never pushes the page title out of view on a phone.
+            //
+            // The heading is wrapped in a layout row on some screens (the
+            // dashboard puts it beside the timeframe tabs), so walk up to
+            // whichever element is the panel's own child before inserting —
+            // inserting next to the heading itself would either throw or drop
+            // the banner inside that row.
+            const header = panel.querySelector('.screen-header');
+            let anchor = header;
+            while (anchor && anchor.parentNode !== panel) anchor = anchor.parentNode;
+            if (anchor) panel.insertBefore(box, anchor.nextSibling);
+            else panel.insertBefore(box, panel.firstChild);
+        }
+
         function goScreen(screen) {
             currentScreen = screen;
             updateTopbar(screen);
@@ -7076,6 +7242,8 @@
             document.querySelectorAll('.admin-bottom-nav button[data-screen]').forEach(btn => {
                 btn.classList.toggle('active', btn.getAttribute('data-screen') === screen);
             });
+
+            renderNewPanelNotice(screen);
 
             const main = document.querySelector('[data-main]');
             if (main) main.scrollTop = 0;
