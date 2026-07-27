@@ -92,6 +92,12 @@ export default function AiChatLogs({ surface }: { surface: AiSurface }) {
                 <i className="fas fa-comments"></i>
                 {rows?.length ?? 0} บทสนทนาล่าสุด
               </span>
+              {/* Stated here because "the conversation I wanted is missing"
+                  otherwise looks like a bug rather than the published policy. */}
+              <span className="ai-status-pill">
+                <i className="fas fa-clock-rotate-left"></i>
+                เก็บย้อนหลัง 6 เดือน
+              </span>
             </div>
           )}
 

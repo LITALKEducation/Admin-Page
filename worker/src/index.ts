@@ -1322,9 +1322,53 @@ async function expireStalePaymentLinks(env: Env): Promise<void> {
   }
 }
 
+// Enforces the retention period published in the AI Chat Privacy Notice:
+// chat messages are deleted six months after they were sent. Without this
+// the notice would be claiming something the system never actually did.
+//
+// Bounded per run for the same reason as the sweep above, and deletes by id
+// (rather than a bare WHERE on created_at) because SQLite only supports
+// LIMIT on DELETE when built with SQLITE_ENABLE_UPDATE_DELETE_LIMIT, which
+// D1 is not.
+const CHAT_RETENTION_MONTHS = 6;
+const CHAT_PURGE_BATCH = 2000;
+
+async function purgeExpiredChatData(env: Env): Promise<void> {
+  const cutoff = `-${CHAT_RETENTION_MONTHS} months`;
+
+  const messages = await env.DB.prepare(
+    `DELETE FROM ai_chat_messages
+      WHERE id IN (
+        SELECT id FROM ai_chat_messages
+         WHERE created_at < datetime('now', ?)
+         LIMIT ?
+      )`,
+  )
+    .bind(cutoff, CHAT_PURGE_BATCH)
+    .run();
+
+  // Consent rows for the *current* terms version are the live record of an
+  // authorisation we are still relying on, so they stay. Once a version is
+  // superseded its rows are only history, and they go on the same six-month
+  // clock as the messages.
+  const consents = await env.DB.prepare(
+    `DELETE FROM ai_chat_consents
+      WHERE version <> ? AND accepted_at < datetime('now', ?)`,
+  )
+    .bind(CHAT_TERMS_VERSION, cutoff)
+    .run();
+
+  const removedMessages = messages.meta?.changes ?? 0;
+  const removedConsents = consents.meta?.changes ?? 0;
+  if (removedMessages || removedConsents) {
+    console.log(`chat retention sweep: removed ${removedMessages} messages, ${removedConsents} superseded consents`);
+  }
+}
+
 export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(expireStalePaymentLinks(env));
+    ctx.waitUntil(purgeExpiredChatData(env));
   },
 };
