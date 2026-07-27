@@ -612,6 +612,15 @@ app.get('/portal/:studentId/files/:fileId', async (c) => {
 // exposes other students, matching the rest of the /portal/* routes.
 app.post('/portal/:studentId/chat', async (c) => {
   const studentId = c.req.param('studentId');
+  // Every other /portal route proves the caller is this exact student before
+  // returning anything. This one did not, so knowing (or guessing) a student
+  // id was enough to ask the assistant about that student's schedule, credit
+  // balance and payments — studentChatContext puts all of it in the prompt.
+  // Same hole the ?id= shortcut had, closed the same way.
+  if (!(await portalTokenMatchesStudent(c, studentId))) {
+    return c.json({ status: 'error', message: 'Unauthorized' }, 401);
+  }
+
   const body = await c.req.json<{ conversationId?: string; message?: string }>().catch(() => ({}) as never);
   const message = (body.message ?? '').trim();
   if (!message) return c.json({ status: 'error', message: 'กรุณาพิมพ์คำถาม' }, 400);
@@ -661,6 +670,84 @@ app.post('/portal/:studentId/chat', async (c) => {
   await saveChatTurn(c.env.DB, conversationId, 'portal', studentId, null, message, reply);
 
   return c.json({ status: 'success', conversationId, reply });
+});
+
+// A signed-in student's own past conversations, newest first. Covers both the
+// portal assistant and the /ask vocabulary tutor: /ask records student_id
+// whenever the asker was signed in, so the two share one history.
+//
+// The turns were always stored — this is the first way for the student who
+// sent them to read them back. Bounded by the six-month retention sweep, so
+// this never returns more than the notice says we keep.
+app.get('/portal/:studentId/chats', async (c) => {
+  const studentId = c.req.param('studentId');
+  if (!(await portalTokenMatchesStudent(c, studentId))) {
+    return c.json({ status: 'error', message: 'Unauthorized' }, 401);
+  }
+
+  const scope = c.req.query('scope');
+  const limit = Math.min(Math.max(Number(c.req.query('limit')) || 30, 1), 100);
+
+  // One row per conversation rather than every message: the list only needs
+  // enough to choose one, and the transcript route fetches the rest.
+  const { results } = await c.env.DB.prepare(
+    `SELECT m.conversation_id AS conversationId,
+            m.scope,
+            COUNT(*) AS messages,
+            MIN(m.created_at) AS startedAt,
+            MAX(m.created_at) AS lastAt,
+            (SELECT content FROM ai_chat_messages
+              WHERE conversation_id = m.conversation_id AND role = 'user'
+              ORDER BY id LIMIT 1) AS firstMessage
+       FROM ai_chat_messages m
+      WHERE m.student_id = ? COLLATE NOCASE
+        AND (? IS NULL OR m.scope = ?)
+      GROUP BY m.conversation_id
+      ORDER BY MAX(m.id) DESC
+      LIMIT ?`,
+  )
+    .bind(studentId, scope ?? null, scope ?? null, limit)
+    .all();
+
+  return c.json({ status: 'success', conversations: results ?? [] });
+});
+
+app.get('/portal/:studentId/chats/:conversationId', async (c) => {
+  const studentId = c.req.param('studentId');
+  if (!(await portalTokenMatchesStudent(c, studentId))) {
+    return c.json({ status: 'error', message: 'Unauthorized' }, 401);
+  }
+
+  // student_id is part of the WHERE, not just the ownership check: without it
+  // a signed-in student could read any conversation by guessing its id.
+  const { results } = await c.env.DB.prepare(
+    `SELECT role, content, created_at AS createdAt FROM ai_chat_messages
+      WHERE conversation_id = ? AND student_id = ? COLLATE NOCASE
+      ORDER BY id`,
+  )
+    .bind(c.req.param('conversationId'), studentId)
+    .all();
+
+  if (!results || !results.length) return c.json({ status: 'error', message: 'ไม่พบบทสนทนานี้' }, 404);
+  return c.json({ status: 'success', messages: results });
+});
+
+// Lets a student delete one of their own conversations ahead of the six-month
+// sweep — the "delete on request" the AI Chat Privacy Notice promises, without
+// them having to write in for it.
+app.delete('/portal/:studentId/chats/:conversationId', async (c) => {
+  const studentId = c.req.param('studentId');
+  if (!(await portalTokenMatchesStudent(c, studentId))) {
+    return c.json({ status: 'error', message: 'Unauthorized' }, 401);
+  }
+
+  const result = await c.env.DB.prepare(
+    `DELETE FROM ai_chat_messages WHERE conversation_id = ? AND student_id = ? COLLATE NOCASE`,
+  )
+    .bind(c.req.param('conversationId'), studentId)
+    .run();
+
+  return c.json({ status: 'success', deleted: result.meta?.changes ?? 0 });
 });
 
 // AI chat for the general marketing site (litalkeducation.com — home,
@@ -794,7 +881,17 @@ app.post('/chat/ask', async (c) => {
   if (message.length > MAX_MESSAGE_LENGTH) return c.json({ status: 'error', message: errors.tooLong(MAX_MESSAGE_LENGTH) }, 400);
   if (!visitorId) return c.json({ status: 'error', message: 'Missing visitorId' }, 400);
 
-  if (!(await hasChatConsent(c.env.DB, visitorId))) {
+  // Optional sign-in. A LITALK student signing in with their
+  // @litalkeducation.com account gets their questions filed under their
+  // student id, so they can read them back later from the portal. Everyone
+  // else keeps using it anonymously — this page is also for people deciding
+  // whether to enrol, and a sign-in wall would turn them away.
+  const ident = await verifyPortalToken(c);
+  const studentId = ident ? await resolveStudentIdFromIdent(c, ident) : null;
+
+  // Consent is per browser and only asked of anonymous users; a signed-in
+  // student accepted the AI Chat Terms when they registered.
+  if (!studentId && !(await hasChatConsent(c.env.DB, visitorId))) {
     if (body.termsVersion !== CHAT_TERMS_VERSION) {
       return c.json({ status: 'error', message: errors.consent, needsConsent: true, termsVersion: CHAT_TERMS_VERSION }, 403);
     }
@@ -804,7 +901,10 @@ app.post('/chat/ask', async (c) => {
   const settings = await loadSurfaceSettings(c.env.DB, 'vocab');
   if (!settings.enabled) return c.json({ status: 'error', message: errors.disabled }, 503);
 
-  const usedToday = await visitorMessageCountToday(c.env.DB, 'vocab', visitorId);
+  // Signed in, the quota follows the student rather than the browser: it
+  // shouldn't reset when they clear storage, or double on a second device.
+  const quotaKey = studentId ? `student:${studentId}` : visitorId;
+  const usedToday = await visitorMessageCountToday(c.env.DB, 'vocab', quotaKey);
   if (usedToday >= settings.dailyLimit) return c.json({ status: 'error', message: errors.quota }, 429);
 
   const conversationId = body.conversationId || crypto.randomUUID();
@@ -837,9 +937,11 @@ app.post('/chat/ask', async (c) => {
     return c.json({ status: 'error', message: errors.callFailed }, 503);
   }
 
-  await saveChatTurn(c.env.DB, conversationId, 'vocab', null, visitorId, message, reply);
+  // student_id is what makes this conversation retrievable from
+  // GET /portal/:studentId/chats; it stays null for anonymous askers.
+  await saveChatTurn(c.env.DB, conversationId, 'vocab', studentId, quotaKey, message, reply);
 
-  return c.json({ status: 'success', conversationId, reply });
+  return c.json({ status: 'success', conversationId, reply, signedInAs: studentId });
 });
 
 // QR check-in: the student scanned the class QR the teacher is showing.
