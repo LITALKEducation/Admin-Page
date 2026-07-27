@@ -21,4 +21,5 @@ export const SCREEN_ROUTES: Record<string, string> = {
   nfc: '/nfc',
   checkins: '/checkins',
   'ai-settings': '/ai-settings',
+  service: '/service',
 };

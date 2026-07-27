@@ -1,5 +1,5 @@
-const CACHE_NAME = 'litalk-admin-cache-v2';
-const DYNAMIC_CACHE_NAME = 'litalk-admin-dynamic-v2';
+const CACHE_NAME = 'litalk-admin-cache-v3';
+const DYNAMIC_CACHE_NAME = 'litalk-admin-dynamic-v3';
 
 // Assets to precache immediately on install
 const PRECACHE_ASSETS = [
@@ -9,7 +9,6 @@ const PRECACHE_ASSETS = [
   '/404.html',
   '/manifest.json',
   '/img/LITALK-Black.png',
-  '/img/LITALK-White.png',
   '/img/icon-192.png',
   '/img/icon-512.png',
   '/img/icon-192-maskable.png'
@@ -127,7 +126,9 @@ self.addEventListener('fetch', event => {
         }).catch(() => {
           // Offline fallback for images
           if (event.request.destination === 'image') {
-            return caches.match('/img/LITALK-White.png') || caches.match('/img/LITALK-Black.png');
+            // One wordmark now: the dark variant is produced by a CSS
+            // filter rather than a second file.
+            return caches.match('/img/LITALK-Black.png');
           }
         });
       })

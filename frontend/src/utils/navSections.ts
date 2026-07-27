@@ -64,6 +64,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { screen: 'nfc', label: 'บัตร NFC', icon: 'fa-wifi' },
       { screen: 'checkins', label: 'บันทึกเข้า-ออก', icon: 'fa-right-left' },
       { screen: 'ai-settings', label: 'ตั้งค่า AI Chat', icon: 'fa-message' },
+      { screen: 'service', label: 'เปิด-ปิดระบบ', icon: 'fa-tower-broadcast' },
     ],
   },
 ];

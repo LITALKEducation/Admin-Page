@@ -39,6 +39,7 @@ const CheckinsScreen = lazy(() => import('./components/CheckinsScreen'));
 const BlogScreen = lazy(() => import('./components/BlogScreen'));
 const LinksScreen = lazy(() => import('./components/LinksScreen'));
 const AiSettingsScreen = lazy(() => import('./components/AiSettingsScreen'));
+const ServiceScreen = lazy(() => import('./components/ServiceScreen'));
 
 // Code-split the palette: it drags in cmdk + the dialog primitive, and the
 // Ctrl+K listener lives in App so nothing loads until the first open.
@@ -91,6 +92,7 @@ const TITLES: Record<string, string> = {
   '/blog': 'บทความเว็บไซต์',
   '/links': 'ลิงก์ย่อ',
   '/ai-settings': 'ตั้งค่า AI Chat',
+  '/service': 'ควบคุมการเปิด-ปิดระบบ',
 };
 
 function ScreenFallback() {
@@ -224,6 +226,7 @@ export default function App() {
                         <Route path="/blog" element={<BlogScreen />} />
                         <Route path="/links" element={<LinksScreen />} />
                         {isAdmin && <Route path="/ai-settings" element={<AiSettingsScreen />} />}
+                        {isAdmin && <Route path="/service" element={<ServiceScreen />} />}
                       </Routes>
                     </Suspense>
                   </ChunkErrorBoundary>

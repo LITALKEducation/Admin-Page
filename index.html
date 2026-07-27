@@ -622,16 +622,19 @@
         }
 
         /* Logo (sidebar header + login screens) */
+        /* One asset for both themes, recoloured in CSS rather than swapped
+           for a second file — same as the React panel and the website. The
+           filter is keyed on the app's own theme: prefers-color-scheme
+           disagrees with the manual toggle, which whitened the wordmark
+           against the light panel. */
         .logo-img {
             height: 24px;
             width: auto;
             transition: filter 0.3s;
         }
 
-        @media (prefers-color-scheme: dark) {
-            .logo-img {
-                filter: brightness(0) invert(1);
-            }
+        [data-theme="dark"] .logo-img {
+            filter: brightness(0) invert(1);
         }
 
         .admin-badge-text {
@@ -11408,14 +11411,10 @@
             if (mobileSwap) mobileSwap.setAttribute('data-state', theme === 'dark' ? 'dark' : 'light');
         }
 
-        // The sidebar logo follows the manual theme toggle directly (not the
-        // OS prefers-color-scheme media query, which the shared .logo-img
-        // filter relies on and would otherwise drift out of sync with a
-        // manually-picked theme).
-        function updateThemeLogos(theme) {
-            const src = theme === 'dark' ? '../img/LITALK-White.png' : '../img/LITALK-Black.png';
-            document.querySelectorAll('.theme-logo').forEach(img => { img.src = src; });
-        }
+        // Kept as a no-op: .logo-img now recolours in CSS off [data-theme],
+        // so there is no second file to swap in. Callers below are left
+        // calling it rather than hunting every site down.
+        function updateThemeLogos() {}
 
         // Auto-load saved theme on load
         (function() {
