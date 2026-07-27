@@ -956,7 +956,7 @@ export async function deleteShortLinkApi(getToken: GetTokenFn, id: number) {
 
 // Each surface น้องลิลลี่ answers on. They share one settings row server-side
 // but are configured independently — see worker/src/aiSettings.ts.
-export type AiSurface = 'portal' | 'general' | 'staff';
+export type AiSurface = 'portal' | 'general' | 'vocab' | 'staff';
 
 export interface AiChatOptions {
   tone?: 'friendly' | 'formal' | 'concise';
