@@ -1021,3 +1021,69 @@ export async function fetchAiChatTranscript(getToken: GetTokenFn, conversationId
     `/settings/ai-chat/logs/${encodeURIComponent(conversationId)}`,
   );
 }
+
+// ---------------------------------------------------------------------------
+// Service notices ("ควบคุมการเปิด-ปิดระบบ" screen)
+// ---------------------------------------------------------------------------
+
+// The admin panel is deliberately not among these — whoever turns a notice on
+// has to stay able to turn it off.
+export type ServiceSurface = 'website' | 'ask' | 'chat_site' | 'portal' | 'chat_portal' | 'checkin' | 'booking';
+
+export type ServicePreset =
+  | 'opening_soon'
+  | 'trial_opening_soon'
+  | 'closing_soon'
+  | 'trial_closing_soon'
+  | 'custom';
+
+export interface ServiceNotice {
+  id: number;
+  enabled: boolean;
+  preset: ServicePreset;
+  surfaces: ServiceSurface[];
+  titleTh: string;
+  titleEn: string;
+  bodyTh: string;
+  bodyEn: string;
+  /** Heads-up starts showing. Null means "as soon as it is enabled". */
+  announceFrom: string | null;
+  /** Blocking begins. Null means it only ever announces, never blocks. */
+  startsAt: string | null;
+  /** Everything stops. Null is open-ended — the screen warns about it. */
+  endsAt: string | null;
+  dismissible: boolean;
+  updatedAt?: string;
+  updatedBy?: string | null;
+}
+
+export type ServiceNoticeDraft = Omit<ServiceNotice, 'id' | 'updatedAt' | 'updatedBy'>;
+
+export async function fetchServiceNotices(getToken: GetTokenFn) {
+  return apiJson<{ notices: ServiceNotice[]; surfaces: ServiceSurface[]; bypassToken: string }>(
+    getToken,
+    '/settings/service-notices',
+  );
+}
+
+export async function createServiceNotice(getToken: GetTokenFn, draft: ServiceNoticeDraft) {
+  return apiJson<{ id: number }>(getToken, '/settings/service-notices', {
+    method: 'POST',
+    body: JSON.stringify(draft),
+  });
+}
+
+export async function updateServiceNotice(getToken: GetTokenFn, id: number, draft: ServiceNoticeDraft) {
+  return apiJson<{ status: string }>(getToken, `/settings/service-notices/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(draft),
+  });
+}
+
+export async function deleteServiceNotice(getToken: GetTokenFn, id: number) {
+  return apiJson<{ status: string }>(getToken, `/settings/service-notices/${id}`, { method: 'DELETE' });
+}
+
+export async function rotateServiceBypassToken(getToken: GetTokenFn) {
+  return apiJson<{ bypassToken: string }>(getToken, '/settings/service-notices/rotate-bypass', { method: 'POST' });
+}

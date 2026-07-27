@@ -26,6 +26,19 @@ import chat, {
   studentChatContext,
 } from './chat';
 import { composeGuidance, loadSurfaceSettings, styleLine } from './aiSettings';
+import {
+  SERVICE_SURFACES,
+  activeNotices,
+  blockedMessage,
+  bypassTokenMatches,
+  getBypassToken,
+  insertNotice,
+  listNotices,
+  rotateBypassToken,
+  sanitizeNotice,
+  surfaceBlocked,
+  updateNotice,
+} from './serviceNotices';
 import { chatReply, ChatNotConfiguredError } from './gemini';
 import { verifyStripeSignature, retrievePaymentReceiptUrl, deactivateStripePaymentLink } from './stripe';
 import type { Env } from './types';
@@ -52,6 +65,27 @@ app.use('*', async (c, next) => cors({
 
 // Published blog posts for the public website (litalkeducation.com/blog).
 app.route('/', blogPublic);
+
+// What the popup on every public page polls: the notices visible right now,
+// already filtered by phase so the client never has to reason about times.
+// Unauthenticated by design — the marketing site has no login — and it fails
+// open, returning an empty list rather than an error, because a client that
+// can't reach this must not conclude the site is down.
+//
+// ?bypass=<token> is how an admin previews a blocked page: the token is
+// checked here and never sent to the client, so it can't leak by being
+// compared in the browser.
+app.get('/service-status', async (c) => {
+  try {
+    if (await bypassTokenMatches(c.env.DB, c.req.query('bypass'))) {
+      return c.json({ status: 'success', notices: [], bypass: true });
+    }
+    return c.json({ status: 'success', notices: await activeNotices(c.env.DB), bypass: false });
+  } catch (err) {
+    console.error('service-status failed', err);
+    return c.json({ status: 'success', notices: [], bypass: false, degraded: true });
+  }
+});
 
 // A Stripe Checkout Session, as it appears on checkout.session.* events.
 interface StripeCheckoutSession {
@@ -265,6 +299,15 @@ app.get('/portal/whoami', async (c) => {
 // logging in has been retired; the portal now only "logs in" via Auth0.
 app.get('/portal/:studentId', async (c) => {
   const studentId = c.req.param('studentId');
+
+  // Blocking the portal stops it loading at all. The bypass token lets an
+  // admin open it to check; students get the notice instead of a blank page.
+  if (!(await bypassTokenMatches(c.env.DB, c.req.query('bypass')))) {
+    const blocked = await surfaceBlocked(c.env.DB, 'portal');
+    if (blocked) {
+      return c.json({ status: 'error', message: blockedMessage(blocked, 'th'), serviceBlocked: true }, 503);
+    }
+  }
   // NOCASE: the id comes from the Auth0 email local part, which is lowercased.
   const student = await c.env.DB.prepare(
     `SELECT id, name, nickname, course, email, avatar_key AS avatarKey, checkin_code AS checkinCode FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
@@ -631,6 +674,11 @@ app.post('/portal/:studentId/chat', async (c) => {
   const context = await studentChatContext(c.env.DB, studentId);
   if (!context) return c.json({ status: 'error', message: 'ไม่พบข้อมูลนักเรียนรหัสนี้ในระบบ' }, 404);
 
+  const blockedPortalChat = await surfaceBlocked(c.env.DB, 'chat_portal');
+  if (blockedPortalChat) {
+    return c.json({ status: 'error', message: blockedMessage(blockedPortalChat, 'th'), serviceBlocked: true }, 503);
+  }
+
   const settings = await loadSurfaceSettings(c.env.DB, 'portal');
   if (!settings.enabled) {
     return c.json({ status: 'error', message: 'ผู้ช่วย AI ปิดให้บริการอยู่ในขณะนี้ กรุณาติดต่อเจ้าหน้าที่ผ่าน LINE OA' }, 503);
@@ -820,6 +868,11 @@ app.post('/chat/general', async (c) => {
     await recordChatConsent(c.env.DB, visitorId, body.lang === 'th' ? 'th' : 'en');
   }
 
+  const blockedSite = await surfaceBlocked(c.env.DB, 'chat_site');
+  if (blockedSite) {
+    return c.json({ status: 'error', message: blockedMessage(blockedSite, body.lang ?? 'en'), serviceBlocked: true }, 503);
+  }
+
   // The website assistant has its own settings row as of migration 0020 —
   // it used to share the portal's, but it answers a different audience.
   const settings = await loadSurfaceSettings(c.env.DB, 'general');
@@ -897,6 +950,11 @@ app.post('/chat/ask', async (c) => {
     }
     await recordChatConsent(c.env.DB, visitorId, body.lang === 'th' ? 'th' : 'en');
   }
+
+  // A notice blocking this surface refuses here too. The popup is only the
+  // visible half; a client that ignores it still gets nothing.
+  const blocked = await surfaceBlocked(c.env.DB, 'ask');
+  if (blocked) return c.json({ status: 'error', message: blockedMessage(blocked, body.lang ?? 'en'), serviceBlocked: true }, 503);
 
   const settings = await loadSurfaceSettings(c.env.DB, 'vocab');
   if (!settings.enabled) return c.json({ status: 'error', message: errors.disabled }, 503);
@@ -1064,6 +1122,43 @@ app.use('*', verifyAuth);
 app.route('/', core);
 app.route('/', manage);
 app.route('/', accounts);
+
+// ===== Service notices: admin CRUD (behind verifyAuth + requireAdmin) =====
+
+app.get('/settings/service-notices', requireAdmin, async (c) => {
+  return c.json({
+    status: 'success',
+    notices: await listNotices(c.env.DB),
+    surfaces: SERVICE_SURFACES,
+    // Shown so an admin can build a preview link for a blocked public page.
+    bypassToken: await getBypassToken(c.env.DB),
+  });
+});
+
+app.post('/settings/service-notices', requireAdmin, async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const id = await insertNotice(c.env.DB, sanitizeNotice(body), c.get('user').email);
+  return c.json({ status: 'success', id });
+});
+
+app.put('/settings/service-notices/:id', requireAdmin, async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isFinite(id)) return c.json({ status: 'error', message: 'Bad id' }, 400);
+  const body = await c.req.json().catch(() => ({}));
+  await updateNotice(c.env.DB, id, sanitizeNotice(body), c.get('user').email);
+  return c.json({ status: 'success' });
+});
+
+app.delete('/settings/service-notices/:id', requireAdmin, async (c) => {
+  await c.env.DB.prepare(`DELETE FROM service_notices WHERE id = ?`).bind(Number(c.req.param('id'))).run();
+  return c.json({ status: 'success' });
+});
+
+// Invalidates any preview link already shared.
+app.post('/settings/service-notices/rotate-bypass', requireAdmin, async (c) => {
+  return c.json({ status: 'success', bypassToken: await rotateBypassToken(c.env.DB) });
+});
+
 app.route('/', chat);
 app.route('/', blog);
 app.route('/', shortLinks);
