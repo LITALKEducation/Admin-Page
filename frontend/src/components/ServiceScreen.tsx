@@ -9,6 +9,7 @@ import {
   updateServiceNotice,
   deleteServiceNotice,
   rotateServiceBypassToken,
+  restoreService,
   type ServiceNotice,
   type ServiceNoticeDraft,
   type ServicePreset,
@@ -54,7 +55,14 @@ const SURFACES: Array<{ id: ServiceSurface; label: string; hint: string }> = [
   { id: 'chat_portal', label: 'แชท AI ในพอร์ทัล', hint: 'เฉพาะผู้ช่วย AI ไม่กระทบส่วนอื่นของพอร์ทัล' },
   { id: 'checkin', label: 'หน้าเช็คอิน QR', hint: 'หน้าสแกนเข้าเรียน' },
   { id: 'booking', label: 'หน้าจองเรียน', hint: 'หน้าจองเวลาเรียนสาธารณะ' },
+  { id: 'admin', label: 'แผงแอดมิน (ครูและพนักงาน)', hint: 'ผู้ใช้สิทธิ์ Admin ยังเข้าได้เสมอ' },
 ];
+
+// Everything an admin can close. The whole-system switch uses this rather
+// than a hand-written list so a surface added later is included by default —
+// forgetting one would leave a hole in a switch whose whole point is that it
+// closes everything.
+const ALL_SURFACES = SURFACES.map((s) => s.id);
 
 const EMPTY: ServiceNoticeDraft = {
   enabled: true,
@@ -128,7 +136,18 @@ export default function ServiceScreen() {
   const [editingId, setEditingId] = useState<number | 'new' | null>(null);
   const [draft, setDraft] = useState<ServiceNoticeDraft>(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const [shutdownUntil, setShutdownUntil] = useState('');
   const now = Date.now();
+
+  // What is actually down right now, derived from the notices rather than
+  // stored separately — one source of truth, so a notice edited by hand and
+  // one created by the switch below are read the same way.
+  const blockingSurfaces = new Set(
+    (notices ?? []).filter((n) => phaseOf(n, now) === 'blocking').flatMap((n) => n.surfaces),
+  );
+  const everythingDown = ALL_SURFACES.every((s) => blockingSurfaces.has(s));
+  const somethingDown = blockingSurfaces.size > 0;
 
   const load = useCallback(async () => {
     try {
@@ -207,6 +226,65 @@ export default function ServiceScreen() {
     }
   };
 
+  // The whole-system switch. It is an ordinary notice covering every surface,
+  // not a separate mechanism — so it shows up in the list below, can be edited
+  // or given better wording afterwards, and expires on its own if an end time
+  // was set.
+  const shutDownEverything = async () => {
+    const until = fromLocalInput(shutdownUntil);
+    const ok = await confirmDialog(
+      until
+        ? `ปิดทุกส่วนตั้งแต่ตอนนี้จนถึง ${formatWhen(until)}? เว็บไซต์ พอร์ทัลนักเรียน แชท AI เช็คอิน การจอง และแผงแอดมินสำหรับครู จะใช้งานไม่ได้ทั้งหมด`
+        : 'ปิดทุกส่วนตั้งแต่ตอนนี้แบบไม่มีกำหนด? เว็บไซต์ พอร์ทัลนักเรียน แชท AI เช็คอิน การจอง และแผงแอดมินสำหรับครู จะใช้งานไม่ได้จนกว่าจะมากดเปิดคืน',
+      { danger: true, okLabel: 'ปิดทั้งระบบ' },
+    );
+    if (!ok) return;
+    setSwitching(true);
+    try {
+      await createServiceNotice(makeTokenGetter(getAccessTokenSilently), {
+        enabled: true,
+        preset: 'closing_soon',
+        surfaces: ALL_SURFACES,
+        titleTh: '',
+        titleEn: '',
+        bodyTh: '',
+        bodyEn: '',
+        announceFrom: null,
+        // A second in the past, so it counts as started the moment it is
+        // saved rather than depending on whose clock reads it.
+        startsAt: new Date(Date.now() - 1000).toISOString(),
+        endsAt: until,
+        // Nothing to get back to behind it.
+        dismissible: false,
+      });
+      showToast('ปิดระบบแล้ว', 'คุณยังใช้แผงแอดมินได้ตามปกติเพราะเป็นสิทธิ์ Admin', 'success');
+      setShutdownUntil('');
+      load();
+    } catch (error) {
+      showToast('ปิดระบบไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  const restoreEverything = async () => {
+    const ok = await confirmDialog(
+      'เปิดทุกส่วนกลับมาใช้งานตอนนี้? ประกาศที่กำลังปิดระบบอยู่จะถูกปิดใช้งานทั้งหมด (ยังเก็บไว้ในรายการ ไม่ได้ลบทิ้ง)',
+      { okLabel: 'เปิดระบบคืน' },
+    );
+    if (!ok) return;
+    setSwitching(true);
+    try {
+      const result = await restoreService(makeTokenGetter(getAccessTokenSilently));
+      showToast('เปิดระบบคืนแล้ว', `ปิดใช้งานประกาศที่กำลังปิดระบบอยู่ ${result.restored} รายการ`, 'success');
+      load();
+    } catch (error) {
+      showToast('เปิดระบบคืนไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
+    } finally {
+      setSwitching(false);
+    }
+  };
+
   const rotate = async () => {
     const ok = await confirmDialog('สร้างลิงก์พรีวิวใหม่? ลิงก์เดิมที่เคยแชร์ไว้จะใช้ไม่ได้ทันที', {
       okLabel: 'สร้างใหม่',
@@ -237,8 +315,81 @@ export default function ServiceScreen() {
       <div className="info-notice" style={{ marginBottom: 20 }}>
         <i className="fas fa-shield-halved"></i>
         <div>
-          <strong>แผงแอดมินไม่อยู่ในรายการที่ปิดได้</strong> — เพื่อให้คนที่สั่งปิดยังกลับมาเปิดคืนได้เสมอ
-          และหน้าข้อกำหนด/ความเป็นส่วนตัวก็ปิดไม่ได้เช่นกัน เพราะผู้ใช้ต้องอ่านได้ตลอดเวลา
+          <strong>สิทธิ์ Admin ไม่เคยถูกปิดกั้น</strong> — แม้จะปิดแผงแอดมินไว้ บัญชีที่เป็น Admin
+          ก็ยังเข้าใช้งานและกดเปิดระบบคืนได้เสมอ ข้อยกเว้นนี้เขียนไว้ในโค้ด ไม่ใช่ตัวเลือกที่เผลอปิดได้
+          ส่วนหน้าข้อกำหนดและความเป็นส่วนตัวปิดไม่ได้เลย เพราะผู้ใช้ต้องอ่านได้ตลอดเวลา
+        </div>
+      </div>
+
+      {/* ---- whole-system switch ---- */}
+      <div className="admin-card">
+        <div className="card-title-bar">
+          <span className="card-icon">
+            <i className="fas fa-power-off"></i>
+          </span>
+          <div>
+            <h3>ปิดปรับปรุงทั้งระบบ</h3>
+            <p>ปิดทุกส่วนพร้อมกันในคลิกเดียว สำหรับงานปรับปรุงเร่งด่วน</p>
+          </div>
+        </div>
+
+        <div className="form-body">
+          {somethingDown && (
+            <div className="info-notice">
+              <i className="fas fa-circle-pause" style={{ color: 'var(--accent-danger)' }}></i>
+              <div>
+                {everythingDown ? (
+                  <>
+                    <strong>ขณะนี้ปิดทั้งระบบอยู่</strong> — ผู้ใช้ทุกคนเห็นประกาศปิดปรับปรุง
+                    ยกเว้นบัญชีสิทธิ์ Admin
+                  </>
+                ) : (
+                  <>
+                    <strong>ขณะนี้ปิดอยู่บางส่วน</strong> —{' '}
+                    {ALL_SURFACES.filter((s) => blockingSurfaces.has(s))
+                      .map((s) => SURFACES.find((x) => x.id === s)?.label || s)
+                      .join(', ')}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!somethingDown && (
+            <div className="form-group">
+              <label htmlFor="svc-kill-until">
+                <i className="fas fa-circle-play"></i> กำหนดเวลากลับมาเปิด (ไม่บังคับ)
+              </label>
+              <input
+                id="svc-kill-until"
+                type="datetime-local"
+                value={shutdownUntil}
+                onChange={(e) => setShutdownUntil(e.target.value)}
+              />
+              <div className="form-hint">
+                ใส่เวลาไว้จะปลอดภัยกว่า — ระบบจะกลับมาเปิดเองเมื่อถึงเวลา ไม่ต้องพึ่งว่าจะมีคนจำได้
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {!everythingDown && (
+              <button className="btn btn-danger" onClick={shutDownEverything} disabled={switching || notices === null}>
+                <i className="fas fa-power-off"></i>{' '}
+                {switching ? 'กำลังดำเนินการ...' : somethingDown ? 'ปิดส่วนที่เหลือทั้งหมด' : 'ปิดทั้งระบบตอนนี้'}
+              </button>
+            )}
+            {somethingDown && (
+              <button className="btn btn-primary" onClick={restoreEverything} disabled={switching}>
+                <i className="fas fa-circle-play"></i> {switching ? 'กำลังดำเนินการ...' : 'เปิดระบบคืนทั้งหมด'}
+              </button>
+            )}
+          </div>
+
+          <div className="form-hint" style={{ marginTop: 10 }}>
+            ปุ่มนี้สร้างประกาศหนึ่งรายการที่ครอบคลุมทุกส่วน จึงแก้ไขข้อความหรือเวลาได้ในรายการด้านล่าง
+            เหมือนประกาศทั่วไป — ไม่ใช่กลไกแยกต่างหาก
+          </div>
         </div>
       </div>
 

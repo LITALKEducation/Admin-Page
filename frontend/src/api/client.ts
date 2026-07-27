@@ -44,6 +44,16 @@ export function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+/** The notice closing the panel, when one applies to this person. */
+export interface ServiceBlock {
+  preset: string;
+  titleTh: string;
+  titleEn: string;
+  bodyTh: string;
+  bodyEn: string;
+  endsAt: string | null;
+}
+
 export interface MeResponse {
   email?: string;
   name?: string;
@@ -51,6 +61,8 @@ export interface MeResponse {
   phone?: string | null;
   hasAvatar?: boolean;
   permissions: string[];
+  /** Always null for an admin — the Admin role is never blocked. */
+  serviceBlock?: ServiceBlock | null;
 }
 
 // Aggregated "needs attention" feed for the notification bell. Stateless by
@@ -1028,7 +1040,16 @@ export async function fetchAiChatTranscript(getToken: GetTokenFn, conversationId
 
 // The admin panel is deliberately not among these — whoever turns a notice on
 // has to stay able to turn it off.
-export type ServiceSurface = 'website' | 'ask' | 'chat_site' | 'portal' | 'chat_portal' | 'checkin' | 'booking';
+export type ServiceSurface =
+  | 'website'
+  | 'ask'
+  | 'chat_site'
+  | 'portal'
+  | 'chat_portal'
+  | 'checkin'
+  | 'booking'
+  /** This panel. The Admin role passes through it — see the middleware in worker/src/index.ts. */
+  | 'admin';
 
 export type ServicePreset =
   | 'opening_soon'
@@ -1086,4 +1107,9 @@ export async function deleteServiceNotice(getToken: GetTokenFn, id: number) {
 
 export async function rotateServiceBypassToken(getToken: GetTokenFn) {
   return apiJson<{ bypassToken: string }>(getToken, '/settings/service-notices/rotate-bypass', { method: 'POST' });
+}
+
+/** Disables every notice that is blocking right now. Returns how many. */
+export async function restoreService(getToken: GetTokenFn) {
+  return apiJson<{ restored: number }>(getToken, '/settings/service-notices/restore', { method: 'POST' });
 }

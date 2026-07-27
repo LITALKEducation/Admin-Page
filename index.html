@@ -199,7 +199,8 @@
         /* Visibility of sections */
         #admin-panel,
         #login-section,
-        #unauthorized-section {
+        #unauthorized-section,
+        #service-closed-section {
             display: none;
             z-index: 1;
         }
@@ -4430,6 +4431,30 @@
         </div>
     </div>
 
+    <!-- PANEL CLOSED FOR MAINTENANCE -->
+    <!-- Shown when an admin has closed the 'admin' surface on the เปิด-ปิดระบบ
+         screen. Only non-admins ever get here: GET /me never reports the block
+         to an admin, so whoever closed the panel can always reopen it.
+         This is presentation — the API refuses the same requests on its own. -->
+    <div id="service-closed-section" class="unauthorized-page">
+        <div class="error-card">
+            <div class="error-icon"><i class="fas fa-circle-pause"></i></div>
+            <h2 id="service-closed-title">ปิดปรับปรุงระบบชั่วคราว</h2>
+            <p id="service-closed-body">ขณะนี้ระบบแอดมินปิดให้บริการชั่วคราวเพื่อปรับปรุง กรุณาลองใหม่อีกครั้งภายหลัง</p>
+            <p id="service-closed-when" class="form-hint" style="margin-bottom: 20px;"></p>
+            <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                <button class="btn btn-primary" onclick="window.location.reload()">
+                    <i class="fas fa-rotate"></i>
+                    ลองอีกครั้ง
+                </button>
+                <button class="btn btn-secondary" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i>
+                    ออกจากระบบ
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- ADMIN PANEL -->
     <div id="admin-panel" class="admin-dashboard">
 
@@ -6562,6 +6587,12 @@
         async function initApp() {
             if (appInitialized) return;
             appInitialized = true;
+            // Permissions first, before anything renders. GET /me is what says
+            // whether the panel is closed for maintenance, and stopping here
+            // means a locked-out teacher never fires the requests behind it —
+            // opening the dashboard first would send one off to be refused.
+            await loadFilesPermissions();
+            if (applyServiceBlock()) return;
             const todayStr = new Date().toISOString().slice(0, 10);
             document.getElementById('log-date').value = todayStr;
             document.getElementById('pay-date').value = todayStr;
@@ -6571,7 +6602,6 @@
             document.getElementById('booking-date').min = minBookingDate.toISOString().split('T')[0];
             enhanceSelectsIn(document);
             goScreen('dashboard');
-            await loadFilesPermissions();
             updateAdminUI();
             await loadStudentList();
             applyRoleGating();
@@ -6582,6 +6612,31 @@
 
         function isAdminUser() {
             return Array.isArray(filesApiPermissions) && filesApiPermissions.includes('files:delete');
+        }
+
+        // GET /me carries serviceBlock when an admin has closed the panel for
+        // maintenance, and only ever for someone who is not an admin. Swaps
+        // the whole panel for the notice and reports whether it did, so the
+        // caller can stop.
+        function applyServiceBlock() {
+            const block = filesApiMe && filesApiMe.serviceBlock;
+            if (!block) return false;
+
+            const section = document.getElementById('service-closed-section');
+            if (!section) return false;
+
+            if (block.titleTh) document.getElementById('service-closed-title').textContent = block.titleTh;
+            if (block.bodyTh) document.getElementById('service-closed-body').textContent = block.bodyTh;
+
+            const when = document.getElementById('service-closed-when');
+            const ends = block.endsAt ? new Date(block.endsAt) : null;
+            when.textContent = ends && !isNaN(ends.getTime())
+                ? 'คาดว่าจะกลับมาใช้งานได้ ' + ends.toLocaleString('th-TH', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+                : 'ยังไม่ได้กำหนดเวลากลับมาใช้งาน — สอบถามผู้ดูแลระบบได้';
+
+            document.getElementById('admin-panel').style.display = 'none';
+            section.style.display = 'flex';
+            return true;
         }
 
         // Elements marked data-admin-only stay hidden unless the token holds

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { AppBindings } from './types';
-import { verifyAuth, requirePermission, requireAdmin, portalTokenMatchesStudent, verifyPortalToken, resolveStudentIdFromIdent, debugPortalAuth } from './auth';
+import { verifyAuth, requirePermission, requireAdmin, isAdmin, portalTokenMatchesStudent, verifyPortalToken, resolveStudentIdFromIdent, debugPortalAuth } from './auth';
 import { DOCUMENT_TYPES, extname, insertFileWithUniqueName, logAudit, todayCode } from './db';
 import core, { bangkokToday, generateCheckinCode } from './core';
 import manage, {
@@ -31,6 +31,7 @@ import {
   activeNotices,
   blockedMessage,
   bypassTokenMatches,
+  disableBlockingNotices,
   getBypassToken,
   insertNotice,
   listNotices,
@@ -1119,6 +1120,31 @@ app.get('/public/files/:token', async (c) => {
 
 app.use('*', verifyAuth);
 
+// The 'admin' surface: the panel closed for maintenance. Sitting here rather
+// than in each handler means a route added later is covered without anyone
+// having to remember this exists.
+//
+// Two exemptions, both deliberate:
+//
+//   Admins pass. The exemption is this line of code, not a setting — so the
+//   person who closed the panel can always reopen it, and cannot lock
+//   themselves out by misconfiguring a notice.
+//
+//   /me passes for everyone. It is how the panel learns that it is closed and
+//   what to say; blocking it too would leave a teacher staring at a wall of
+//   failed requests with no explanation.
+//
+// surfaceBlocked() fails open, so a database problem here lets everyone in
+// rather than locking all staff out.
+app.use('*', async (c, next) => {
+  if (c.req.path === '/me' || isAdmin(c.get('user'))) return next();
+  const blocked = await surfaceBlocked(c.env.DB, 'admin');
+  if (!blocked) return next();
+  const message = blockedMessage(blocked, 'th');
+  // Handlers in this codebase read either key depending on age, so send both.
+  return c.json({ status: 'error', error: message, message, serviceBlocked: true }, 503);
+});
+
 app.route('/', core);
 app.route('/', manage);
 app.route('/', accounts);
@@ -1154,6 +1180,17 @@ app.delete('/settings/service-notices/:id', requireAdmin, async (c) => {
   return c.json({ status: 'success' });
 });
 
+// The other half of the panel's whole-system switch. Closing everything is
+// just a notice covering every surface, so it goes through POST above; there
+// is no matching single row to reopen, because more than one notice can be
+// blocking at once and reopening has to clear all of them.
+//
+// Disables rather than deletes, so the record of the closure survives.
+app.post('/settings/service-notices/restore', requireAdmin, async (c) => {
+  const count = await disableBlockingNotices(c.env.DB, c.get('user').email);
+  return c.json({ status: 'success', restored: count });
+});
+
 // Invalidates any preview link already shared.
 app.post('/settings/service-notices/rotate-bypass', requireAdmin, async (c) => {
   return c.json({ status: 'success', bypassToken: await rotateBypassToken(c.env.DB) });
@@ -1166,12 +1203,36 @@ app.route('/', shortLinks);
 // Also carries title/phone/hasAvatar from the staff table (not part of the
 // JWT claims) so the admin panel's own digital ID card doesn't need a
 // second endpoint just for those three fields.
+//
+// Also carries serviceBlock: the notice closing the panel, if one is in force
+// for this person. Always null for an admin, because an admin is never
+// blocked — there is nothing for the panel to show them. This is what lets a
+// teacher see "closed for maintenance until 21:00" instead of every request
+// failing at once.
 app.get('/me', async (c) => {
   const user = c.get('user');
   const staff = await c.env.DB.prepare(`SELECT title, phone, avatar_key AS avatarKey FROM staff WHERE identity = ? COLLATE NOCASE`)
     .bind(user.email)
     .first<{ title: string | null; phone: string | null; avatarKey: string | null }>();
-  return c.json({ ...user, title: staff?.title ?? null, phone: staff?.phone ?? null, hasAvatar: !!staff?.avatarKey });
+  const blocked = isAdmin(user) ? null : await surfaceBlocked(c.env.DB, 'admin');
+  return c.json({
+    ...user,
+    title: staff?.title ?? null,
+    phone: staff?.phone ?? null,
+    hasAvatar: !!staff?.avatarKey,
+    // updatedBy is dropped: it names the admin who set the notice, which a
+    // teacher has no reason to be shown.
+    serviceBlock: blocked
+      ? {
+          preset: blocked.preset,
+          titleTh: blocked.titleTh,
+          titleEn: blocked.titleEn,
+          bodyTh: blocked.bodyTh,
+          bodyEn: blocked.bodyEn,
+          endsAt: blocked.endsAt,
+        }
+      : null,
+  });
 });
 
 // Rotating token for the staff/teacher digital ID card's QR — mirrors
