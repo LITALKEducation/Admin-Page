@@ -12,10 +12,9 @@ import {
   type AiSurfaceSettings,
 } from '../api/client';
 
-// น้องลิลลี่ answers on three surfaces. The two the school actually tunes are
-// the student portal and the public website, so those are the tabs; the
-// assistant inside the old admin panel is configurable too but lives under
-// the advanced section, since the panel it belongs to is being retired.
+// น้องลิลลี่ answers on four surfaces, each with its own audience and its
+// own prompt. The admin-panel one is last because the panel it belongs to
+// is being retired — it's kept configurable only while that panel is live.
 const SURFACES: Array<{ id: AiSurface; label: string; blurb: string; icon: string }> = [
   {
     id: 'portal',
@@ -28,6 +27,12 @@ const SURFACES: Array<{ id: AiSurface; label: string; blurb: string; icon: strin
     label: 'เว็บไซต์',
     blurb: 'ผู้ช่วยหน้าเว็บไซต์สาธารณะ — ตอบคำถามทั่วไปของผู้สนใจที่ยังไม่ได้เป็นนักเรียน (หลักสูตร วิธีเริ่มเรียน)',
     icon: 'fa-globe',
+  },
+  {
+    id: 'vocab',
+    label: 'ถามคำศัพท์ (/ask)',
+    blurb: 'ผู้ช่วยสอนคำศัพท์ที่ litalkeducation.com/ask — อธิบายความหมาย ตัวอย่างประโยค และการใช้คำภาษาอังกฤษให้นักเรียน',
+    icon: 'fa-book-open',
   },
   {
     id: 'staff',

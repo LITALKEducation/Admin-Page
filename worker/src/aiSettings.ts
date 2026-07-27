@@ -5,6 +5,7 @@
 // CHECK constraint):
 //   portal  — signed-in student/parent asking about their own account
 //   general — anonymous visitor on the public marketing site
+//   vocab   — the English vocabulary tutor at litalkeducation.com/ask
 //   staff   — the assistant inside the legacy admin panel
 //
 // Each surface carries a kill switch, a daily message cap, a set of
@@ -13,14 +14,14 @@
 // time rather than being saved as generated text, so this wording can be
 // revised without migrating stored data.
 
-export type AiSurface = 'staff' | 'portal' | 'general';
+export type AiSurface = 'staff' | 'portal' | 'general' | 'vocab';
 
 // Fallbacks for a surface with no stored row, and the values migration 0020
 // seeds the columns with. These were the hardcoded limits in chat.ts before
 // they became configurable.
-export const DEFAULT_DAILY_LIMITS: Record<AiSurface, number> = { staff: 100, portal: 40, general: 20 };
+export const DEFAULT_DAILY_LIMITS: Record<AiSurface, number> = { staff: 100, portal: 40, general: 20, vocab: 60 };
 
-export const AI_SURFACES: AiSurface[] = ['staff', 'portal', 'general'];
+export const AI_SURFACES: AiSurface[] = ['staff', 'portal', 'general', 'vocab'];
 
 export interface AiChatOptions {
   tone?: 'friendly' | 'formal' | 'concise';
@@ -135,15 +136,19 @@ interface SettingsRow {
   staff_instructions: string;
   portal_instructions: string;
   general_instructions: string;
+  vocab_instructions: string;
   staff_options: string;
   portal_options: string;
   general_options: string;
+  vocab_options: string;
   staff_enabled: number;
   portal_enabled: number;
   general_enabled: number;
+  vocab_enabled: number;
   staff_daily_limit: number;
   portal_daily_limit: number;
   general_daily_limit: number;
+  vocab_daily_limit: number;
 }
 
 function defaults(surface: AiSurface): AiSurfaceSettings {
@@ -153,10 +158,10 @@ function defaults(surface: AiSurface): AiSurfaceSettings {
 export async function loadAiChatSettings(db: D1Database): Promise<AiChatSettings> {
   const row = await db
     .prepare(
-      `SELECT staff_instructions, portal_instructions, general_instructions,
-              staff_options, portal_options, general_options,
-              staff_enabled, portal_enabled, general_enabled,
-              staff_daily_limit, portal_daily_limit, general_daily_limit
+      `SELECT staff_instructions, portal_instructions, general_instructions, vocab_instructions,
+              staff_options, portal_options, general_options, vocab_options,
+              staff_enabled, portal_enabled, general_enabled, vocab_enabled,
+              staff_daily_limit, portal_daily_limit, general_daily_limit, vocab_daily_limit
          FROM ai_chat_settings WHERE id = 1`,
     )
     .first<SettingsRow>();
@@ -171,7 +176,7 @@ export async function loadAiChatSettings(db: D1Database): Promise<AiChatSettings
     };
   };
 
-  return { staff: build('staff'), portal: build('portal'), general: build('general') };
+  return { staff: build('staff'), portal: build('portal'), general: build('general'), vocab: build('vocab') };
 }
 
 export async function loadSurfaceSettings(db: D1Database, surface: AiSurface): Promise<AiSurfaceSettings> {
@@ -198,10 +203,10 @@ export async function saveAiChatSettings(db: D1Database, settings: AiChatSetting
   await db
     .prepare(
       `UPDATE ai_chat_settings SET
-         staff_instructions = ?, portal_instructions = ?, general_instructions = ?,
-         staff_options = ?, portal_options = ?, general_options = ?,
-         staff_enabled = ?, portal_enabled = ?, general_enabled = ?,
-         staff_daily_limit = ?, portal_daily_limit = ?, general_daily_limit = ?,
+         staff_instructions = ?, portal_instructions = ?, general_instructions = ?, vocab_instructions = ?,
+         staff_options = ?, portal_options = ?, general_options = ?, vocab_options = ?,
+         staff_enabled = ?, portal_enabled = ?, general_enabled = ?, vocab_enabled = ?,
+         staff_daily_limit = ?, portal_daily_limit = ?, general_daily_limit = ?, vocab_daily_limit = ?,
          updated_at = CURRENT_TIMESTAMP, updated_by = ?
        WHERE id = 1`,
     )
@@ -209,15 +214,19 @@ export async function saveAiChatSettings(db: D1Database, settings: AiChatSetting
       settings.staff.instructions,
       settings.portal.instructions,
       settings.general.instructions,
+      settings.vocab.instructions,
       JSON.stringify(settings.staff.options),
       JSON.stringify(settings.portal.options),
       JSON.stringify(settings.general.options),
+      JSON.stringify(settings.vocab.options),
       settings.staff.enabled ? 1 : 0,
       settings.portal.enabled ? 1 : 0,
       settings.general.enabled ? 1 : 0,
+      settings.vocab.enabled ? 1 : 0,
       settings.staff.dailyLimit,
       settings.portal.dailyLimit,
       settings.general.dailyLimit,
+      settings.vocab.dailyLimit,
       updatedBy,
     )
     .run();

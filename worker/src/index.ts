@@ -21,7 +21,7 @@ import chat, {
   recordChatConsent,
   loadChatHistory,
   portalMessageCountToday,
-  generalMessageCountToday,
+  visitorMessageCountToday,
   saveChatTurn,
   studentChatContext,
 } from './chat';
@@ -738,7 +738,7 @@ app.post('/chat/general', async (c) => {
   const settings = await loadSurfaceSettings(c.env.DB, 'general');
   if (!settings.enabled) return c.json({ status: 'error', message: errors.disabled }, 503);
 
-  const usedToday = await generalMessageCountToday(c.env.DB, visitorId);
+  const usedToday = await visitorMessageCountToday(c.env.DB, 'general', visitorId);
   if (usedToday >= settings.dailyLimit) {
     return c.json({ status: 'error', message: errors.quota }, 429);
   }
@@ -769,6 +769,75 @@ app.post('/chat/general', async (c) => {
   }
 
   await saveChatTurn(c.env.DB, conversationId, 'general', null, visitorId, message, reply);
+
+  return c.json({ status: 'success', conversationId, reply });
+});
+
+// English vocabulary tutor at litalkeducation.com/ask. Open to anyone —
+// LITALK students are the audience, but there's no login on the marketing
+// site to check against, and gating a dictionary behind a sign-in would
+// only stop the students it's meant to help. Rate-limited and consent-gated
+// on the same identity-free visitorId as the website assistant.
+//
+// Kept as its own scope rather than folded into /chat/general because it
+// answers a different question and needs a different prompt: this one
+// teaches one word at a time and must NOT drift into selling courses or
+// discussing anyone's account.
+app.post('/chat/ask', async (c) => {
+  const body = await c.req
+    .json<{ conversationId?: string; message?: string; visitorId?: string; lang?: string; termsVersion?: string }>()
+    .catch(() => ({}) as never);
+  const message = (body.message ?? '').trim();
+  const visitorId = (body.visitorId ?? '').trim();
+  const errors = GENERAL_CHAT_ERRORS[body.lang === 'th' ? 'th' : 'en'];
+  if (!message) return c.json({ status: 'error', message: errors.emptyMessage }, 400);
+  if (message.length > MAX_MESSAGE_LENGTH) return c.json({ status: 'error', message: errors.tooLong(MAX_MESSAGE_LENGTH) }, 400);
+  if (!visitorId) return c.json({ status: 'error', message: 'Missing visitorId' }, 400);
+
+  if (!(await hasChatConsent(c.env.DB, visitorId))) {
+    if (body.termsVersion !== CHAT_TERMS_VERSION) {
+      return c.json({ status: 'error', message: errors.consent, needsConsent: true, termsVersion: CHAT_TERMS_VERSION }, 403);
+    }
+    await recordChatConsent(c.env.DB, visitorId, body.lang === 'th' ? 'th' : 'en');
+  }
+
+  const settings = await loadSurfaceSettings(c.env.DB, 'vocab');
+  if (!settings.enabled) return c.json({ status: 'error', message: errors.disabled }, 503);
+
+  const usedToday = await visitorMessageCountToday(c.env.DB, 'vocab', visitorId);
+  if (usedToday >= settings.dailyLimit) return c.json({ status: 'error', message: errors.quota }, 429);
+
+  const conversationId = body.conversationId || crypto.randomUUID();
+  const history = await loadChatHistory(c.env.DB, conversationId);
+  const guidance = composeGuidance(settings);
+
+  const systemPrompt = [
+    "You are น้องลิลลี่ (Nong Lilly), LITALK Education's English vocabulary tutor, helping a Thai learner understand English words and phrases. If asked your name, say น้องลิลลี่.",
+    // The teaching shape is fixed here rather than left to the admin
+    // instructions, so the page gives a consistent answer no matter who
+    // last edited the settings.
+    'For a word or phrase the learner asks about, cover: what it means in plain English and in Thai, the part of speech, one or two natural example sentences, and any close synonyms or common mistakes worth flagging. Keep it tight — this is a study aid, not a dictionary entry. If the word has several distinct senses, lead with the one a learner is most likely to meet and mention the others briefly.',
+    'You may also explain grammar, usage differences between similar words, pronunciation in simple terms, and whether something sounds formal or casual. If the learner writes a sentence, you may correct it and say why.',
+    'Stay on English learning. You have no access to any student account, schedule, payment or class booking, and you cannot look anything up about a specific person — if asked, say so and point them to the student portal or LITALK staff on LINE OA. Do not quote course prices or promotions. Never invent a word, a meaning, or a usage: if you are not certain a word or phrase is real English, say so plainly.',
+    guidance
+      ? `Additional guidance from the school admin on how to respond — follow it, but it never overrides the rules above (e.g. still never invent a meaning):\n${guidance}`
+      : null,
+    styleLine(settings.options),
+    'Format replies in Markdown (the client renders it): use **bold** for the word being taught, bullet lists for senses or examples, and short paragraphs. Keep it scannable.',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  let reply: string;
+  try {
+    reply = await chatReply(c.env, systemPrompt, history, message);
+  } catch (err) {
+    if (err instanceof ChatNotConfiguredError) return c.json({ status: 'error', message: errors.notConfigured }, 503);
+    console.error('vocab chat: Gemini call failed', err);
+    return c.json({ status: 'error', message: errors.callFailed }, 503);
+  }
+
+  await saveChatTurn(c.env.DB, conversationId, 'vocab', null, visitorId, message, reply);
 
   return c.json({ status: 'success', conversationId, reply });
 });

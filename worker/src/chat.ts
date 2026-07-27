@@ -115,7 +115,7 @@ export async function loadChatHistory(db: D1Database, conversationId: string): P
 export async function saveChatTurn(
   db: D1Database,
   conversationId: string,
-  scope: 'portal' | 'staff' | 'general',
+  scope: 'portal' | 'staff' | 'general' | 'vocab',
   studentId: string | null,
   actor: string | null,
   userMessage: string,
@@ -153,16 +153,22 @@ async function staffMessageCountToday(db: D1Database, actor: string): Promise<nu
   return row?.n ?? 0;
 }
 
-// Rate-limits the general marketing-site assistant, which has no student id
-// or staff identity to key off of — the frontend generates and persists a
-// random visitorId (localStorage) purely for this purpose, not identity.
-export async function generalMessageCountToday(db: D1Database, visitorId: string): Promise<number> {
+// Rate-limits the public surfaces that have no student id or staff identity
+// to key off of — the frontend generates and persists a random visitorId
+// (localStorage) purely for this purpose, not identity. Shared by the
+// marketing-site assistant and the /ask vocabulary tutor, which count
+// against their own quotas because the scope is part of the query.
+export async function visitorMessageCountToday(
+  db: D1Database,
+  scope: 'general' | 'vocab',
+  visitorId: string,
+): Promise<number> {
   const row = await db
     .prepare(
       `SELECT COUNT(*) AS n FROM ai_chat_messages
-       WHERE scope = 'general' AND actor = ? AND role = 'user' AND created_at >= datetime('now', '-1 day')`,
+       WHERE scope = ? AND actor = ? AND role = 'user' AND created_at >= datetime('now', '-1 day')`,
     )
-    .bind(visitorId)
+    .bind(scope, visitorId)
     .first<{ n: number }>();
   return row?.n ?? 0;
 }
