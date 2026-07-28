@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
 import QuickCreateFab from './components/QuickCreateFab';
 import TeacherEmptyState from './components/TeacherEmptyState';
+import ServiceClosed from './components/ServiceClosed';
 import Topbar from './components/Topbar';
 import { useTheme } from './hooks/useTheme';
 import { useMe } from './hooks/useMe';
@@ -148,6 +149,13 @@ export default function App() {
   }
 
   const email = user?.email || user?.nickname || user?.name || 'Admin';
+
+  // The panel closed for maintenance. Checked before the teacher gate because
+  // when the panel is shut, why it is shut is the more useful thing to say.
+  // /me only ever reports this to a non-admin, so an admin never lands here.
+  if (me?.serviceBlock) {
+    return <ServiceClosed block={me.serviceBlock} isStaff={me.email || user?.email} />;
+  }
 
   // A non-admin teacher with no assigned students gets no menus — just a
   // notice to contact staff (legacy applyRoleGating). Wait for both the

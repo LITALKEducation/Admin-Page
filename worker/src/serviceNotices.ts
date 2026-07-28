@@ -7,9 +7,12 @@
 //   maintenance system that takes the site down when it errors is worse than
 //   not having one.
 //
-//   Admins are never locked out. The admin panel is not a gateable surface,
-//   an authenticated admin bypasses every block on the API, and a bypass
-//   token opens blocked public pages that have no login to check.
+//   Admins are never locked out. The 'admin' surface closes the admin panel
+//   to teachers and other staff, but the Admin role passes through it — the
+//   exemption is in the code, not in a setting someone can switch off, so
+//   whoever turns a notice on can always turn it off again. On the API an
+//   admin token passes every block; on public pages that have no login, a
+//   bypass token stands in.
 
 export type ServiceSurface =
   | 'website'
@@ -18,12 +21,12 @@ export type ServiceSurface =
   | 'portal'
   | 'chat_portal'
   | 'checkin'
-  | 'booking';
+  | 'booking'
+  | 'admin';
 
-// The admin panel is deliberately absent: whoever turns a notice on has to
-// stay able to turn it off. The legal pages are absent too — someone must be
-// able to read the terms and privacy notice at any time, including while the
-// service they describe is down.
+// The legal pages are deliberately absent: someone must be able to read the
+// terms and the privacy notice at any time, including while the service they
+// describe is down.
 export const SERVICE_SURFACES: ServiceSurface[] = [
   'website',
   'ask',
@@ -32,6 +35,7 @@ export const SERVICE_SURFACES: ServiceSurface[] = [
   'chat_portal',
   'checkin',
   'booking',
+  'admin',
 ];
 
 export type ServicePreset =
@@ -249,6 +253,23 @@ export async function updateNotice(db: D1Database, id: number, n: Omit<ServiceNo
       n.announceFrom, n.startsAt, n.endsAt, n.dismissible ? 1 : 0, by, id,
     )
     .run();
+}
+
+// Turns off every notice that is blocking something right now — what the
+// panel's "reopen everything" button calls. It disables rather than deletes
+// so the record of the closure survives, and it only touches notices that are
+// actually blocking, leaving scheduled and announcement-only ones alone.
+export async function disableBlockingNotices(db: D1Database, by: string): Promise<number> {
+  const blocking = (await activeNotices(db)).filter((n) => n.phase === 'blocking');
+  if (!blocking.length) return 0;
+  await db.batch(
+    blocking.map((n) =>
+      db
+        .prepare(`UPDATE service_notices SET enabled = 0, updated_at = CURRENT_TIMESTAMP, updated_by = ? WHERE id = ?`)
+        .bind(by, n.id),
+    ),
+  );
+  return blocking.length;
 }
 
 export async function bypassTokenMatches(db: D1Database, token: string | undefined): Promise<boolean> {
