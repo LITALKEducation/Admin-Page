@@ -1113,3 +1113,107 @@ export async function rotateServiceBypassToken(getToken: GetTokenFn) {
 export async function restoreService(getToken: GetTokenFn) {
   return apiJson<{ restored: number }>(getToken, '/settings/service-notices/restore', { method: 'POST' });
 }
+
+/* ===================== Quizzes / online tests ===================== */
+
+export type QuizStatus = 'draft' | 'published' | 'archived';
+export type QuestionType = 'single' | 'multiple' | 'truefalse' | 'short';
+
+export interface QuizSummary {
+  id: number;
+  title: string;
+  titleTh: string | null;
+  description: string | null;
+  descriptionTh: string | null;
+  category: string | null;
+  status: QuizStatus;
+  timeLimitMin: number | null;
+  passScore: number;
+  allowRetake: number;
+  showAnswers: number;
+  authorName: string | null;
+  reviewedBy: string | null;
+  publishedAt: string | null;
+  questionCount: number;
+  attemptCount: number;
+}
+
+export interface QuizQuestion {
+  id?: number;
+  type: QuestionType;
+  prompt: string;
+  options: string[];
+  // Shape depends on type: single -> number, multiple -> number[],
+  // truefalse -> boolean, short -> string[].
+  answer: unknown;
+  explanation: string | null;
+  points: number;
+}
+
+export interface QuizPayload {
+  title: string;
+  titleTh?: string;
+  description?: string;
+  descriptionTh?: string;
+  lesson?: string;
+  lessonTh?: string;
+  category?: string;
+  timeLimitMin?: number | null;
+  passScore?: number;
+  allowRetake?: boolean;
+  showAnswers?: boolean;
+  questions?: QuizQuestion[];
+}
+
+export interface QuizDetail extends QuizSummary {
+  lesson: string | null;
+  lessonTh: string | null;
+}
+
+export interface QuizAttemptRow {
+  id: number;
+  studentId: string;
+  studentName: string | null;
+  studentNickname: string | null;
+  score: number;
+  maxScore: number;
+  passed: number;
+  submittedAt: string;
+}
+
+export async function fetchQuizzes(getToken: GetTokenFn) {
+  return apiJson<{ isAdmin: boolean; quizzes: QuizSummary[] }>(getToken, '/quizzes');
+}
+
+export async function fetchQuiz(getToken: GetTokenFn, id: number) {
+  return apiJson<{ quiz: QuizDetail; questions: QuizQuestion[] }>(getToken, `/quizzes/${id}`);
+}
+
+export async function createQuiz(getToken: GetTokenFn, payload: QuizPayload) {
+  return apiJson<{ ok: boolean; id: number; error?: string }>(getToken, '/quizzes', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateQuiz(getToken: GetTokenFn, id: number, payload: QuizPayload) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/quizzes/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function setQuizStatusApi(getToken: GetTokenFn, id: number, status: QuizStatus) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/quizzes/${id}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function deleteQuizApi(getToken: GetTokenFn, id: number) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/quizzes/${id}`, { method: 'DELETE' });
+}
+
+export async function fetchQuizAttempts(getToken: GetTokenFn, id: number) {
+  return apiJson<{ attempts: QuizAttemptRow[] }>(getToken, `/quizzes/${id}/attempts`);
+}

@@ -44,6 +44,7 @@ import { chatReply, ChatNotConfiguredError } from './gemini';
 import { verifyStripeSignature, retrievePaymentReceiptUrl, deactivateStripePaymentLink } from './stripe';
 import type { Env } from './types';
 import blog, { blogPublic } from './blog';
+import quizzes, { quizzesPortal } from './quizzes';
 import shortLinks, { shortLinkRedirect } from './shortlinks';
 
 const app = new Hono<AppBindings>();
@@ -1116,6 +1117,11 @@ app.get('/public/files/:token', async (c) => {
   });
 });
 
+// Student-facing quiz/learning routes. Public like the other /portal/* routes
+// (registered before verifyAuth) — each proves ownership with the portal token
+// itself. See worker/src/quizzes.ts.
+app.route('/', quizzesPortal);
+
 // ===== Authenticated routes =====
 
 app.use('*', verifyAuth);
@@ -1198,6 +1204,7 @@ app.post('/settings/service-notices/rotate-bypass', requireAdmin, async (c) => {
 
 app.route('/', chat);
 app.route('/', blog);
+app.route('/', quizzes);
 app.route('/', shortLinks);
 
 // Also carries title/phone/hasAvatar from the staff table (not part of the
