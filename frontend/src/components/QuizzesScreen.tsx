@@ -60,6 +60,46 @@ const EMPTY_FORM: QuizForm = {
   showAnswers: true,
 };
 
+// ----- On-device editor auto-save -----
+// While a quiz is being authored, the whole editor (metadata + questions) is
+// kept on THIS device only (localStorage). Nothing reaches the cloud until
+// "บันทึก" is pressed, so a reload, an accidental navigation, or a closed tab
+// never loses work-in-progress — and unsaved drafts never hit the server.
+interface EditorDraft {
+  form: QuizForm;
+  questions: QuizQuestion[];
+  savedAt: number;
+}
+
+function editorDraftKey(id: number | null): string {
+  return `litalk_quiz_editor_${id ?? 'new'}`;
+}
+
+function readEditorDraft(id: number | null): EditorDraft | null {
+  try {
+    const raw = localStorage.getItem(editorDraftKey(id));
+    return raw ? (JSON.parse(raw) as EditorDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeEditorDraft(id: number | null, draft: EditorDraft): void {
+  try {
+    localStorage.setItem(editorDraftKey(id), JSON.stringify(draft));
+  } catch {
+    /* quota / private mode — auto-save is best-effort */
+  }
+}
+
+function clearEditorDraft(id: number | null): void {
+  try {
+    localStorage.removeItem(editorDraftKey(id));
+  } catch {
+    /* ignore */
+  }
+}
+
 // A fresh question of a given type, pre-seeded so its `answer` already has a
 // valid shape (the grading code and the server validator both expect it).
 function blankQuestion(type: QuestionType = 'single'): QuizQuestion {
@@ -308,6 +348,7 @@ export default function QuizzesScreen() {
   const [form, setForm] = useState<QuizForm>(EMPTY_FORM);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [saving, setSaving] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
 
   const [resultsFor, setResultsFor] = useState<QuizSummary | null>(null);
   const [attempts, setAttempts] = useState<QuizAttemptRow[] | null>(null);
@@ -329,6 +370,16 @@ export default function QuizzesScreen() {
     load();
   }, [load]);
 
+  // Persist the open editor to this device on every change. Runs on open too
+  // (writing the initial snapshot) and on each keystroke — cheap, synchronous,
+  // and never leaves the browser.
+  useEffect(() => {
+    if (!editorOpen) return;
+    const savedAt = Date.now();
+    writeEditorDraft(editingId, { form, questions, savedAt });
+    setDraftSavedAt(savedAt);
+  }, [editorOpen, editingId, form, questions]);
+
   const filtered = useMemo(() => {
     if (!quizzes) return [];
     const term = search.trim().toLowerCase();
@@ -339,7 +390,22 @@ export default function QuizzesScreen() {
     });
   }, [quizzes, search, statusFilter]);
 
-  const openNew = () => {
+  const openNew = async () => {
+    const draft = readEditorDraft(null);
+    if (
+      draft?.form &&
+      (await confirmDialog('พบฉบับร่างที่บันทึกไว้บนอุปกรณ์นี้ (ยังไม่ได้บันทึกขึ้นคลาวด์) ต้องการกู้คืนหรือไม่?', {
+        title: 'กู้คืนฉบับร่าง',
+        okLabel: 'กู้คืนฉบับร่าง',
+      }))
+    ) {
+      setEditingId(null);
+      setForm(draft.form);
+      setQuestions(draft.questions?.length ? draft.questions : [blankQuestion('single')]);
+      setEditorOpen(true);
+      return;
+    }
+    clearEditorDraft(null);
     setEditingId(null);
     setForm(EMPTY_FORM);
     setQuestions([blankQuestion('single')]);
@@ -350,6 +416,21 @@ export default function QuizzesScreen() {
     try {
       const getToken = makeTokenGetter(getAccessTokenSilently);
       const { quiz, questions: qs } = await fetchQuiz(getToken, id);
+      const draft = readEditorDraft(id);
+      if (
+        draft?.form &&
+        (await confirmDialog('พบฉบับร่างของแบบทดสอบนี้ที่บันทึกไว้บนอุปกรณ์ (ยังไม่ได้บันทึกขึ้นคลาวด์) ต้องการกู้คืนหรือไม่?', {
+          title: 'กู้คืนฉบับร่าง',
+          okLabel: 'กู้คืนฉบับร่าง',
+        }))
+      ) {
+        setEditingId(id);
+        setForm(draft.form);
+        setQuestions(draft.questions?.length ? draft.questions : [blankQuestion('single')]);
+        setEditorOpen(true);
+        return;
+      }
+      clearEditorDraft(id);
       setEditingId(id);
       setForm({
         title: quiz.title,
@@ -436,6 +517,10 @@ export default function QuizzesScreen() {
       if (publishAfter && id && isAdmin) {
         await setQuizStatusApi(getToken, id, 'published');
       }
+      // Uploaded to the cloud — the on-device draft is now redundant. Clear
+      // it (using the key the draft was written under) before resetting state.
+      clearEditorDraft(editingId);
+      setDraftSavedAt(null);
       showToast(editingId ? 'บันทึกแบบทดสอบแล้ว' : 'สร้างแบบทดสอบแล้ว', undefined, 'success');
       closeEditor();
       load();
@@ -508,7 +593,15 @@ export default function QuizzesScreen() {
             </span>
             <div style={{ flex: 1 }}>
               <h3>{editingId ? 'แก้ไขแบบทดสอบ' : 'สร้างแบบทดสอบใหม่'}</h3>
-              <p>ใส่บทเรียน (ถ้ามี) แล้วเพิ่มคำถาม · คะแนนรวม {totalPoints} คะแนน</p>
+              <p>
+                ใส่บทเรียน (ถ้ามี) แล้วเพิ่มคำถาม · คะแนนรวม {totalPoints} คะแนน
+                {draftSavedAt && (
+                  <span style={{ marginLeft: 10, color: 'var(--text-secondary, #888)' }}>
+                    <i className="fas fa-floppy-disk"></i> บันทึกร่างบนอุปกรณ์แล้ว{' '}
+                    {new Date(draftSavedAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+              </p>
             </div>
             <button type="button" className="btn btn-secondary" onClick={closeEditor}>
               <i className="fas fa-xmark"></i> ปิด
