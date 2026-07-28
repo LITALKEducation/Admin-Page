@@ -199,7 +199,7 @@ export default function AccessScreen() {
         </div>
       </div>
 
-      <div className="admin-card" style={{ marginTop: 24 }}>
+      <div className="admin-card">
         <div className="card-title-bar">
           <span className="card-icon">
             <i className="fas fa-list"></i>

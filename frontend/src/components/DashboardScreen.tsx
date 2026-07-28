@@ -126,7 +126,7 @@ export default function DashboardScreen() {
             ))}
       </div>
 
-      <div className="admin-card" style={{ marginBottom: 20 }}>
+      <div className="admin-card">
         <div className="card-title-bar">
           <span className="card-icon">
             <i className="fas fa-calendar-week"></i>

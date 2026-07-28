@@ -444,7 +444,7 @@ export default function BlogScreen() {
         <p>เขียนและจัดการบทความที่แสดงบนหน้า Blog ของเว็บไซต์ litalkeducation.com — บทความของครูจะแสดงบนเว็บไซต์หลังจากแอดมินหรือเจ้าหน้าที่อนุมัติแล้ว</p>
       </div>
 
-      <div className="admin-card" style={{ marginBottom: 20 }}>
+      <div className="admin-card">
         <div className="card-title-bar">
           <span className="card-icon">
             <i className="fas fa-pen-nib"></i>

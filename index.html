@@ -6558,12 +6558,30 @@
         // Auth0 API identifier for the Student Files Worker (see worker/README.md step 1)
         const filesApiAudience = 'https://admin.litalkeducation.com/files-api';
 
+        // redirect_uri is pinned to the origin rather than derived from the
+        // current URL. href.split('?')[0] keeps any #fragment and changes with
+        // the path, so landing on /index.html or a link with a hash produced a
+        // redirect_uri that is not in Auth0's Allowed Callback URLs — which
+        // fails the callback and drops the user back at the login screen.
         const auth0Client = new auth0.Auth0Client({
             domain: 'litalkeducation.us.auth0.com',
             clientId: 'IYA9knWCvuP6UXlTI3M6idEFuiBQDXLS',
-            authorizationParams: { redirect_uri: window.location.href.split('?')[0], audience: filesApiAudience },
+            authorizationParams: {
+                redirect_uri: window.location.origin + '/',
+                audience: filesApiAudience,
+                // Spelled out rather than left to the SDK's implicit default:
+                // without offline_access Auth0 issues no refresh token, and
+                // every visit becomes a fresh login.
+                scope: 'openid profile email offline_access'
+            },
             cacheLocation: 'localstorage',
-            useRefreshTokens: true
+            useRefreshTokens: true,
+            // Defaults to false, which makes "no refresh token" a dead end
+            // straight to the login screen. On, the SDK falls back to a silent
+            // /authorize in a hidden iframe. Safari blocks that iframe, so it
+            // is a safety net rather than the fix — the fix is Allow Offline
+            // Access on the API (worker/README.md).
+            useRefreshTokensFallback: true
         });
 
         // Cloudflare Worker API — all admin data now lives here (D1), replacing
@@ -6737,7 +6755,9 @@
         const login = async () => { await auth0Client.loginWithRedirect(); };
         const logout = () => {
             eraseCookie('litalk_admin_email');
-            auth0Client.logout({ logoutParams: { returnTo: window.location.href.split('?')[0] } });
+            // Pinned for the same reason as redirect_uri above — Auth0 checks
+            // this against Allowed Logout URLs.
+            auth0Client.logout({ logoutParams: { returnTo: window.location.origin + '/' } });
         };
 
         // Mobile Menu Logic

@@ -312,7 +312,7 @@ export default function ServiceScreen() {
         </p>
       </div>
 
-      <div className="info-notice" style={{ marginBottom: 20 }}>
+      <div className="info-notice">
         <i className="fas fa-shield-halved"></i>
         <div>
           <strong>สิทธิ์ Admin ไม่เคยถูกปิดกั้น</strong> — แม้จะปิดแผงแอดมินไว้ บัญชีที่เป็น Admin

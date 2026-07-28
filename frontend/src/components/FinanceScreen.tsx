@@ -91,7 +91,7 @@ export default function FinanceScreen() {
         )}
       </div>
 
-      <div className="admin-card" style={{ marginTop: 20 }}>
+      <div className="admin-card">
         <div className="card-title-bar">
           <span className="card-icon">
             <i className="fas fa-chalkboard-user"></i>
@@ -120,7 +120,7 @@ export default function FinanceScreen() {
         </div>
       </div>
 
-      <div className="admin-card" style={{ marginTop: 20 }}>
+      <div className="admin-card">
         <div className="card-title-bar">
           <span className="card-icon">
             <i className="fas fa-user-pen"></i>
@@ -147,7 +147,7 @@ export default function FinanceScreen() {
         </div>
       </div>
 
-      <div className="admin-card" style={{ marginTop: 20 }}>
+      <div className="admin-card">
         <div className="card-title-bar">
           <span className="card-icon">
             <i className="fas fa-receipt"></i>
@@ -207,7 +207,7 @@ export default function FinanceScreen() {
         </div>
       </div>
 
-      <div className="admin-card" style={{ marginTop: 20 }}>
+      <div className="admin-card">
         <div className="card-title-bar">
           <span className="card-icon">
             <i className="fas fa-chart-column"></i>
