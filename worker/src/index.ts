@@ -45,7 +45,7 @@ import { verifyStripeSignature, retrievePaymentReceiptUrl, deactivateStripePayme
 import type { Env } from './types';
 import blog, { blogPublic } from './blog';
 import quizzes, { quizzesPortal } from './quizzes';
-import courses, { coursesPortal, grantEnrollment } from './courses';
+import courses, { coursesPortal, coursesPublic, grantEnrollment } from './courses';
 import shortLinks, { shortLinkRedirect } from './shortlinks';
 
 const app = new Hono<AppBindings>();
@@ -68,6 +68,9 @@ app.use('*', async (c, next) => cors({
 
 // Published blog posts for the public website (litalkeducation.com/blog).
 app.route('/', blogPublic);
+
+// Public on-demand course catalogue for the marketing site (no login).
+app.route('/', coursesPublic);
 
 // What the popup on every public page polls: the notices visible right now,
 // already filtered by phase so the client never has to reason about times.

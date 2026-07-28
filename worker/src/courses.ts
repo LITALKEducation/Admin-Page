@@ -428,6 +428,45 @@ courses.get('/courses/:id/enrollments', async (c) => {
   return c.json({ status: 'success', enrollments: results ?? [] });
 });
 
+/* ===================== Public routes (before verifyAuth, no login) ===================== */
+// Powers the public on-demand course catalogue on the marketing site
+// (litalkeducation.com/courses) — promotion + syllabus, no student data. Same
+// shape idea as blogPublic.
+export const coursesPublic = new Hono<AppBindings>();
+
+coursesPublic.get('/courses/public', async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT c.id, c.title, c.title_th AS titleTh, c.description, c.description_th AS descriptionTh,
+            c.category, c.price_satang AS priceSatang, c.currency, c.published_at AS publishedAt,
+            (SELECT COUNT(*) FROM course_items ci WHERE ci.course_id = c.id) AS itemCount
+     FROM courses c WHERE c.status = 'published' ORDER BY c.published_at DESC, c.id DESC LIMIT 200`,
+  ).all();
+  return c.json({ status: 'success', courses: results ?? [] });
+});
+
+coursesPublic.get('/courses/public/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  const course = await c.env.DB.prepare(
+    `SELECT id, title, title_th AS titleTh, description, description_th AS descriptionTh,
+            overview, overview_th AS overviewTh, category, price_satang AS priceSatang, currency
+     FROM courses WHERE id = ? AND status = 'published'`,
+  )
+    .bind(id)
+    .first<CourseRow>();
+  if (!course) return c.json({ status: 'error', message: 'Not found' }, 404);
+  // Syllabus for the promo page — titles only, no questions/answers.
+  const { results } = await c.env.DB.prepare(
+    `SELECT q.title, q.title_th AS titleTh, ci.kind AS kind,
+            (SELECT COUNT(*) FROM quiz_questions qq WHERE qq.quiz_id = q.id) AS questionCount,
+            (q.video_url IS NOT NULL AND q.video_url != '') AS hasVideo
+     FROM course_items ci JOIN quizzes q ON q.id = ci.quiz_id
+     WHERE ci.course_id = ? ORDER BY ci.position, ci.id`,
+  )
+    .bind(id)
+    .all();
+  return c.json({ status: 'success', course, items: results ?? [] });
+});
+
 /* ===================== Portal routes (before verifyAuth) ===================== */
 
 export const coursesPortal = new Hono<AppBindings>();
