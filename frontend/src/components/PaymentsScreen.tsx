@@ -216,7 +216,7 @@ export default function PaymentsScreen() {
         </div>
       </div>
 
-      <div className="admin-card" style={{ marginTop: 24 }}>
+      <div className="admin-card">
         <div className="card-title-bar">
           <span className="card-icon">
             <i className="fas fa-sack-dollar"></i>
@@ -300,7 +300,7 @@ export default function PaymentsScreen() {
       </div>
 
       {isAdmin && (
-        <div className="admin-card" style={{ marginTop: 24 }}>
+        <div className="admin-card">
           <div className="card-title-bar">
             <span className="card-icon">
               <i className="fab fa-stripe-s"></i>

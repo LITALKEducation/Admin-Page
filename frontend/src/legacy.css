@@ -1237,9 +1237,24 @@
         }
 
         /* Booking wizard */
+        /* The booking screen puts everything inside this wrapper, so it is the
+           screen's stack rather than .tab-content — same spacing rules, one
+           level down. The auto side margins still centre it, since only the
+           vertical ones are zeroed on the children. */
         .booking-wrap {
             max-width: 640px;
             margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-3);
+        }
+
+        /* Two classes deep on purpose: `.booking-wrap > *` alone ties with
+           `.step-indicator`, which is defined further down the file and would
+           win the tie and keep its 20px. */
+        .tab-content .booking-wrap > * {
+            margin-top: 0;
+            margin-bottom: 0;
         }
 
         .step-indicator {
@@ -1466,8 +1481,28 @@
             animation: fadeIn 250ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
+        /* One rule owns the spacing between the blocks of a screen.
+           It used to be `display: block` with no gap at all, so the distance
+           between two cards was whatever margin-bottom that particular
+           component happened to set — which measured anywhere from 0px to
+           24px across the app, and 0px on seven screens where nobody had set
+           one. Screens now space themselves and components do not need to. */
         .tab-content.active {
-            display: block;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-3);
+        }
+
+        /* Anything a top-level block carries of its own would add to that gap
+           instead of replacing it — .screen-header's 18px, .stat-grid's 22px,
+           .info-notice's 20px, and so on, each landing at a different total.
+           Zeroed here rather than edited at each source, because those same
+           classes are also used nested inside cards, where their margins are
+           still doing a job. Left/right are untouched, so anything centring
+           itself with `margin: 0 auto` keeps working. */
+        .tab-content.active > * {
+            margin-top: 0;
+            margin-bottom: 0;
         }
 
         /* Screen/panel reveals translate as well as fade, so they need an

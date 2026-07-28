@@ -39,6 +39,8 @@ configured correctly. Only the admin panel (`index.html`) uses the raw `AUTH0_DO
 2. On that API's **Settings** tab, enable:
    - **RBAC**
    - **Add Permissions in the Access Token**
+   - **Allow Offline Access** — see the note below. Without this, staff are
+     asked to sign in again constantly.
 3. On the API's **Permissions** tab, add:
    - `files:read`
    - `files:write`
@@ -69,6 +71,42 @@ Once the API exists, the frontend (`index.html`) needs `audience` added to
 its `Auth0Client` config and to request an access token via
 `getTokenSilently()` for calls to this Worker — see the root `index.html`
 changes in this repo for that wiring.
+
+### Staying signed in ("why does it keep asking me to log in?")
+
+Both panels run `useRefreshTokens: true` with `cacheLocation: 'localstorage'`,
+which is what keeps a session alive across reloads and across days. That only
+works if Auth0 actually issues a refresh token, and it will not unless **the
+API has Allow Offline Access enabled** (step 1.2 above). With it off,
+`getTokenSilently()` fails with `missing_refresh_token` and the panel falls
+back to the login screen — which looks exactly like "it logs me out all the
+time".
+
+The browser matters too. Without a refresh token the SDK's only other option
+is a silent `/authorize` in a hidden iframe, and Safari's tracking prevention
+blocks the Auth0 session cookie there. So on Safari — including every browser
+on iPhone and iPad — the refresh token is not merely a nicety, it is the only
+thing keeping anyone signed in.
+
+Check, in order:
+
+1. **Applications → APIs → [this API] → Settings → Allow Offline Access: on.**
+   This is the setting that is almost always the cause.
+2. **Applications → [the SPA] → Settings → Refresh Token Rotation: on**, with
+   *Reuse Interval* around 30s. Rotation is what makes a long-lived refresh
+   token safe to keep in `localStorage`.
+3. **Absolute Lifetime** on the same screen. This is the real ceiling on how
+   long someone stays signed in — the default of 2592000s (30 days) is
+   sensible; a short value here re-creates the problem no matter what else is
+   set.
+4. **Inactivity Lifetime**, likewise: someone who does not open the panel for
+   longer than this has to sign in again, which is the intended behaviour but
+   worth knowing when choosing the number.
+
+One caveat that no setting fixes: Safari deletes script-writable storage,
+`localStorage` included, after **7 days without a visit to the site**. Staff
+who use the panel most weeks will never see it; someone returning after a
+holiday will sign in once.
 
 ### Auto-creating student logins (Auth0 Management API)
 

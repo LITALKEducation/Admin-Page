@@ -305,7 +305,7 @@ export default function BookingScreen() {
           </div>
         )}
 
-        <div className="admin-card" style={{ marginTop: 24 }}>
+        <div className="admin-card">
           <div className="card-title-bar">
             <span className="card-icon">
               <i className="fas fa-table-list"></i>
