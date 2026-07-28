@@ -11,6 +11,8 @@ export const SCREEN_ROUTES: Record<string, string> = {
   schedule: '/schedule',
   hours: '/hours',
   logs: '/logs',
+  quizzes: '/quizzes',
+  courses: '/courses',
   payments: '/payments',
   finance: '/finance',
   blog: '/blog',

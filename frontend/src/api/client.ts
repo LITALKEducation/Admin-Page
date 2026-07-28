@@ -1113,3 +1113,211 @@ export async function rotateServiceBypassToken(getToken: GetTokenFn) {
 export async function restoreService(getToken: GetTokenFn) {
   return apiJson<{ restored: number }>(getToken, '/settings/service-notices/restore', { method: 'POST' });
 }
+
+/* ===================== Quizzes / online tests ===================== */
+
+export type QuizStatus = 'draft' | 'published' | 'archived';
+export type QuestionType = 'single' | 'multiple' | 'truefalse' | 'short';
+
+export interface QuizSummary {
+  id: number;
+  title: string;
+  titleTh: string | null;
+  description: string | null;
+  descriptionTh: string | null;
+  category: string | null;
+  status: QuizStatus;
+  timeLimitMin: number | null;
+  passScore: number;
+  allowRetake: number;
+  showAnswers: number;
+  authorName: string | null;
+  reviewedBy: string | null;
+  publishedAt: string | null;
+  questionCount: number;
+  attemptCount: number;
+}
+
+export interface QuizQuestion {
+  id?: number;
+  type: QuestionType;
+  prompt: string;
+  options: string[];
+  // Shape depends on type: single -> number, multiple -> number[],
+  // truefalse -> boolean, short -> string[].
+  answer: unknown;
+  explanation: string | null;
+  points: number;
+}
+
+export interface QuizPayload {
+  title: string;
+  titleTh?: string;
+  description?: string;
+  descriptionTh?: string;
+  lesson?: string;
+  lessonTh?: string;
+  category?: string;
+  timeLimitMin?: number | null;
+  passScore?: number;
+  allowRetake?: boolean;
+  showAnswers?: boolean;
+  questions?: QuizQuestion[];
+}
+
+export interface QuizDetail extends QuizSummary {
+  lesson: string | null;
+  lessonTh: string | null;
+}
+
+export interface QuizAttemptRow {
+  id: number;
+  studentId: string;
+  studentName: string | null;
+  studentNickname: string | null;
+  score: number;
+  maxScore: number;
+  passed: number;
+  submittedAt: string;
+}
+
+export async function fetchQuizzes(getToken: GetTokenFn) {
+  return apiJson<{ isAdmin: boolean; quizzes: QuizSummary[] }>(getToken, '/quizzes');
+}
+
+export async function fetchQuiz(getToken: GetTokenFn, id: number) {
+  return apiJson<{ quiz: QuizDetail; questions: QuizQuestion[] }>(getToken, `/quizzes/${id}`);
+}
+
+export async function createQuiz(getToken: GetTokenFn, payload: QuizPayload) {
+  return apiJson<{ ok: boolean; id: number; error?: string }>(getToken, '/quizzes', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateQuiz(getToken: GetTokenFn, id: number, payload: QuizPayload) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/quizzes/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function setQuizStatusApi(getToken: GetTokenFn, id: number, status: QuizStatus) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/quizzes/${id}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function deleteQuizApi(getToken: GetTokenFn, id: number) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/quizzes/${id}`, { method: 'DELETE' });
+}
+
+export async function fetchQuizAttempts(getToken: GetTokenFn, id: number) {
+  return apiJson<{ attempts: QuizAttemptRow[] }>(getToken, `/quizzes/${id}/attempts`);
+}
+
+/* ===================== Courses (paid, Stripe-gated) ===================== */
+
+export type CourseStatus = 'draft' | 'published' | 'archived';
+
+export interface CourseSummary {
+  id: number;
+  title: string;
+  titleTh: string | null;
+  description: string | null;
+  descriptionTh: string | null;
+  category: string | null;
+  priceSatang: number;
+  currency: string;
+  status: CourseStatus;
+  authorName: string | null;
+  reviewedBy: string | null;
+  publishedAt: string | null;
+  itemCount: number;
+  enrollCount: number;
+}
+
+export interface CourseDetail extends CourseSummary {
+  overview: string | null;
+  overviewTh: string | null;
+}
+
+export interface CourseItem {
+  quizId: number;
+  title: string;
+  titleTh: string | null;
+}
+
+export interface CourseAvailableQuiz {
+  id: number;
+  title: string;
+  titleTh: string | null;
+  status: string;
+  courseId: number | null;
+}
+
+export interface CourseEnrollmentRow {
+  id: number;
+  studentId: string;
+  studentName: string | null;
+  studentNickname: string | null;
+  amount: number;
+  status: string;
+  enrolledAt: string;
+}
+
+export interface CoursePayload {
+  title: string;
+  titleTh?: string;
+  description?: string;
+  descriptionTh?: string;
+  overview?: string;
+  overviewTh?: string;
+  category?: string;
+  priceSatang?: number;
+  currency?: string;
+  quizIds?: number[];
+}
+
+export async function fetchCourses(getToken: GetTokenFn) {
+  return apiJson<{ isAdmin: boolean; courses: CourseSummary[] }>(getToken, '/courses');
+}
+
+export async function fetchCourse(getToken: GetTokenFn, id: number) {
+  return apiJson<{ course: CourseDetail; items: CourseItem[] }>(getToken, `/courses/${id}`);
+}
+
+export async function fetchCourseAvailableQuizzes(getToken: GetTokenFn, id: number) {
+  return apiJson<{ quizzes: CourseAvailableQuiz[] }>(getToken, `/courses/${id}/available-quizzes`);
+}
+
+export async function createCourse(getToken: GetTokenFn, payload: CoursePayload) {
+  return apiJson<{ ok: boolean; id: number; error?: string }>(getToken, '/courses', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateCourse(getToken: GetTokenFn, id: number, payload: CoursePayload) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/courses/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function setCourseStatusApi(getToken: GetTokenFn, id: number, status: CourseStatus) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/courses/${id}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function deleteCourseApi(getToken: GetTokenFn, id: number) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/courses/${id}`, { method: 'DELETE' });
+}
+
+export async function fetchCourseEnrollments(getToken: GetTokenFn, id: number) {
+  return apiJson<{ enrollments: CourseEnrollmentRow[] }>(getToken, `/courses/${id}/enrollments`);
+}
