@@ -99,6 +99,7 @@ interface ProgressRow {
   attempts: number;
   passed: number | null;
   bestScore: number | null;
+  bestPercent: number | null;
 }
 
 // All of a course's items with the caller's attempt/pass state, in order.
@@ -112,13 +113,22 @@ export async function loadItemsWithProgress(db: D1Database, courseId: number, st
               (q.lesson IS NOT NULL AND q.lesson != '') AS hasLesson,
               (SELECT COUNT(*) FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS attempts,
               (SELECT MAX(qa.passed) FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS passed,
-              (SELECT MAX(qa.score) FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS bestScore
+              (SELECT MAX(qa.score) FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS bestScore,
+              (SELECT MAX(CASE WHEN qa.max_score > 0 THEN CAST(qa.score AS REAL) * 100.0 / qa.max_score ELSE NULL END)
+                 FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS bestPercent
        FROM course_items ci JOIN quizzes q ON q.id = ci.quiz_id
        WHERE ci.course_id = ? ORDER BY ci.position, ci.id`,
     )
-    .bind(studentId, studentId, studentId, courseId)
+    .bind(studentId, studentId, studentId, studentId, courseId)
     .all<ProgressRow>();
   return results ?? [];
+}
+
+// Whether a course item counts as "done" for progress/to-do — lessons need a
+// pass (or an attempt when they carry no pass mark), pretest/posttest just an
+// attempt. Exported for the on-demand dashboard.
+export function computeItemDone(r: ProgressRow): boolean {
+  return r.kind === 'lesson' ? lessonDone(r) : attempted(r);
 }
 
 // "Attempted" is enough for a pretest/posttest (and for a quiz with no
@@ -603,5 +613,120 @@ function validatedReturnUrl(env: Env, body: { returnUrl?: string }): string {
   }
   return fallback;
 }
+
+/* ===================== On-demand student dashboard ===================== */
+// Everything the on-demand portal (study.html) needs in one call: the
+// learner's profile, progress on each enrolled course, an aggregated to-do
+// list, completed courses, receipts, and a couple of recommended courses.
+coursesPortal.get('/portal/:studentId/dashboard', async (c) => {
+  const studentId = c.req.param('studentId');
+  if (!(await portalTokenMatchesStudent(c, studentId))) return c.json({ status: 'error', message: 'Unauthorized' }, 401);
+
+  const student = await c.env.DB.prepare(
+    `SELECT id, name, email, avatar_key AS avatarKey, account_type AS accountType FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
+  )
+    .bind(studentId)
+    .first<{ id: string; name: string; email: string | null; avatarKey: string | null; accountType: string }>();
+  if (!student) return c.json({ status: 'error', message: 'ไม่พบบัญชี' }, 404);
+
+  // Enrolled courses (include archived so a bought course still appears).
+  const { results: enrRows } = await c.env.DB.prepare(
+    `SELECT ce.course_id AS courseId, ce.amount, ce.stripe_session_id AS stripeSessionId, ce.enrolled_at AS enrolledAt,
+            c.title, c.title_th AS titleTh, c.price_satang AS priceSatang,
+            p.paid_date AS paidDate, p.proof_url AS receiptUrl
+     FROM course_enrollments ce
+     JOIN courses c ON c.id = ce.course_id
+     LEFT JOIN payments p ON p.stripe_session_id = ce.stripe_session_id
+     WHERE ce.student_id = ? COLLATE NOCASE AND ce.status = 'active'
+     ORDER BY ce.enrolled_at DESC`,
+  )
+    .bind(studentId)
+    .all<{
+      courseId: number; amount: number; stripeSessionId: string | null; enrolledAt: string;
+      title: string; titleTh: string | null; priceSatang: number; paidDate: string | null; receiptUrl: string | null;
+    }>();
+  const enrollments = enrRows ?? [];
+
+  const enrolled: unknown[] = [];
+  const completed: unknown[] = [];
+  const todo: unknown[] = [];
+
+  for (const e of enrollments) {
+    const items = await loadItemsWithProgress(c.env.DB, e.courseId, studentId);
+    const pretest = items.find((p) => p.kind === 'pretest');
+    const lessons = items.filter((p) => p.kind === 'lesson');
+    const pretestDone = !pretest || computeItemDone(pretest);
+    const lessonsAllDone = lessons.length === 0 || lessons.every(computeItemDone);
+
+    let done = 0;
+    const percents: number[] = [];
+    for (const it of items) {
+      const isDone = computeItemDone(it);
+      if (isDone) done += 1;
+      if ((it.questionCount ?? 0) > 0 && it.bestPercent != null) percents.push(it.bestPercent);
+      if (!isDone) {
+        const locked =
+          it.kind === 'lesson' ? !pretestDone : it.kind === 'posttest' ? !(pretestDone && lessonsAllDone) : false;
+        todo.push({
+          courseId: e.courseId,
+          courseTitle: e.titleTh || e.title,
+          quizId: it.quizId,
+          title: e.titleTh ? it.titleTh || it.title : it.title,
+          kind: it.kind,
+          hasVideo: it.videoUrl ? 1 : 0,
+          reason: (it.attempts ?? 0) === 0 ? 'not_started' : 'not_passed',
+          locked,
+        });
+      }
+    }
+    const total = items.length;
+    const avgScore = percents.length ? Math.round(percents.reduce((a, b) => a + b, 0) / percents.length) : null;
+    const card = {
+      courseId: e.courseId,
+      title: e.titleTh || e.title,
+      total,
+      done,
+      progressPct: total ? Math.round((done / total) * 100) : 0,
+      avgScore,
+      enrolledAt: e.enrolledAt,
+    };
+    enrolled.push(card);
+    if (total > 0 && done === total) completed.push(card);
+  }
+
+  const enrolledIds = enrollments.map((e) => e.courseId);
+  // Omit the exclusion entirely when there's nothing enrolled yet, so a brand
+  // new learner still gets recommendations (id NOT IN (NULL) matches nothing).
+  const notEnrolled = enrolledIds.length ? `AND id NOT IN (${enrolledIds.map(() => '?').join(',')})` : '';
+  const { results: recRows } = await c.env.DB.prepare(
+    `SELECT id, title, title_th AS titleTh, description, description_th AS descriptionTh,
+            category, price_satang AS priceSatang,
+            (SELECT COUNT(*) FROM course_items ci WHERE ci.course_id = courses.id) AS itemCount
+     FROM courses
+     WHERE status = 'published' ${notEnrolled}
+     ORDER BY published_at DESC, id DESC LIMIT 2`,
+  )
+    .bind(...enrolledIds)
+    .all();
+
+  const receipts = enrollments.map((e) => ({
+    courseId: e.courseId,
+    title: e.titleTh || e.title,
+    amount: e.amount,
+    paidDate: e.paidDate || e.enrolledAt,
+    receiptUrl: e.receiptUrl,
+    free: (e.amount ?? 0) <= 0,
+  }));
+
+  return c.json({
+    status: 'success',
+    student: { id: student.id, name: student.name, email: student.email, hasAvatar: !!student.avatarKey, accountType: student.accountType },
+    enrolled,
+    completed,
+    todo,
+    recommended: recRows ?? [],
+    receipts,
+  });
+});
 
 export default courses;

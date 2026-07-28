@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { AppBindings } from './types';
-import { verifyAuth, requirePermission, requireAdmin, isAdmin, portalTokenMatchesStudent, verifyPortalToken, resolveStudentIdFromIdent, debugPortalAuth } from './auth';
+import { verifyAuth, requirePermission, requireAdmin, isAdmin, portalTokenMatchesStudent, verifyPortalToken, resolveStudentIdFromIdent, resolveOrProvisionStudent, debugPortalAuth } from './auth';
 import { DOCUMENT_TYPES, extname, insertFileWithUniqueName, logAudit, todayCode } from './db';
 import core, { bangkokToday, generateCheckinCode } from './core';
 import manage, {
@@ -302,8 +302,12 @@ app.get('/portal/whoami', async (c) => {
   const ident = await verifyPortalToken(c);
   if (!ident) return c.json({ status: 'error', message: 'Unauthorized' }, 401);
 
-  const studentId = await resolveStudentIdFromIdent(c, ident);
-  if (studentId) return c.json({ status: 'success', studentId });
+  // Resolves tutored students, and auto-provisions a self-registered
+  // (arbitrary-email) learner as an on_demand student on first sign-in.
+  const resolved = await resolveOrProvisionStudent(c, ident);
+  if (resolved) {
+    return c.json({ status: 'success', studentId: resolved.studentId, accountType: resolved.accountType });
+  }
 
   return c.json({ status: 'error', message: 'ไม่พบบัญชีนักเรียนที่ผูกกับผู้ใช้นี้ในระบบ กรุณาติดต่อเจ้าหน้าที่' }, 404);
 });
