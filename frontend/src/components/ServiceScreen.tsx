@@ -55,6 +55,7 @@ const SURFACES: Array<{ id: ServiceSurface; label: string; hint: string }> = [
   { id: 'chat_portal', label: 'แชท AI ในพอร์ทัล', hint: 'เฉพาะผู้ช่วย AI ไม่กระทบส่วนอื่นของพอร์ทัล' },
   { id: 'checkin', label: 'หน้าเช็คอิน QR', hint: 'หน้าสแกนเข้าเรียน' },
   { id: 'booking', label: 'หน้าจองเรียน', hint: 'หน้าจองเวลาเรียนสาธารณะ' },
+  { id: 'learning', label: 'เรียนออนไลน์ (On Demand)', hint: 'คอร์สออนไลน์ บทเรียน แบบทดสอบ และแดชบอร์ดผู้เรียน' },
   { id: 'admin', label: 'แผงแอดมิน (ครูและพนักงาน)', hint: 'ผู้ใช้สิทธิ์ Admin ยังเข้าได้เสมอ' },
 ];
 

@@ -22,6 +22,7 @@ export type ServiceSurface =
   | 'chat_portal'
   | 'checkin'
   | 'booking'
+  | 'learning'
   | 'admin';
 
 // The legal pages are deliberately absent: someone must be able to read the
@@ -35,6 +36,7 @@ export const SERVICE_SURFACES: ServiceSurface[] = [
   'chat_portal',
   'checkin',
   'booking',
+  'learning',
   'admin',
 ];
 

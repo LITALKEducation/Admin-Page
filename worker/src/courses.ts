@@ -12,13 +12,14 @@
 import { Hono } from 'hono';
 import type { AppBindings, AuthUser, Env } from './types';
 import { isAdmin, requireAdmin, portalTokenMatchesStudent } from './auth';
-import { logAudit } from './db';
+import { logAudit, extname } from './db';
 import { createStripePaymentLink, withPolicyNote } from './stripe';
 
 const MAX_TITLE = 300;
 const MAX_TEXT = 2_000;
 const MAX_OVERVIEW = 40_000;
 const MAX_ITEMS = 100;
+const MAX_COVER_BYTES = 4 * 1024 * 1024; // 4 MB
 
 interface CourseRow {
   id: number;
@@ -259,7 +260,7 @@ const courses = new Hono<AppBindings>();
 
 courses.get('/courses', async (c) => {
   const user = c.get('user');
-  const base = `SELECT ${COURSE_FIELDS},
+  const base = `SELECT ${COURSE_FIELDS}, (c.cover_key IS NOT NULL) AS hasCover,
       (SELECT COUNT(*) FROM course_items ci WHERE ci.course_id = c.id) AS itemCount,
       (SELECT COUNT(*) FROM course_enrollments ce WHERE ce.course_id = c.id AND ce.status = 'active') AS enrollCount
     FROM courses c ${AUTHOR_JOIN} ${REVIEWER_JOIN}`;
@@ -274,7 +275,7 @@ courses.get('/courses', async (c) => {
 courses.get('/courses/:id', async (c) => {
   const user = c.get('user');
   const id = Number(c.req.param('id'));
-  const course = await c.env.DB.prepare(`SELECT ${COURSE_FIELDS} FROM courses c ${AUTHOR_JOIN} ${REVIEWER_JOIN} WHERE c.id = ?`)
+  const course = await c.env.DB.prepare(`SELECT ${COURSE_FIELDS}, (c.cover_key IS NOT NULL) AS hasCover FROM courses c ${AUTHOR_JOIN} ${REVIEWER_JOIN} WHERE c.id = ?`)
     .bind(id)
     .first<CourseRow>();
   if (!course) return c.json({ error: 'ไม่พบคอร์ส' }, 404);
@@ -438,6 +439,55 @@ courses.get('/courses/:id/enrollments', async (c) => {
   return c.json({ status: 'success', enrollments: results ?? [] });
 });
 
+// Upload / replace a course cover image (multipart form, field "file").
+courses.post('/courses/:id/cover', async (c) => {
+  const user = c.get('user');
+  const id = Number(c.req.param('id'));
+  const course = await c.env.DB.prepare(`SELECT cover_key AS coverKey, author_identity AS authorIdentity FROM courses WHERE id = ?`)
+    .bind(id)
+    .first<{ coverKey: string | null; authorIdentity: string }>();
+  if (!course) return c.json({ error: 'ไม่พบคอร์ส' }, 404);
+  if (!canEdit(user, course)) return c.json({ error: 'Forbidden' }, 403);
+
+  const form = await c.req.formData();
+  const file = form.get('file') as unknown as File | string | null;
+  if (typeof file === 'string' || file === null) return c.json({ error: 'ไม่พบไฟล์' }, 400);
+  if (!file.type.startsWith('image/')) return c.json({ error: 'ไฟล์ต้องเป็นรูปภาพ' }, 400);
+  if (file.size > MAX_COVER_BYTES) return c.json({ error: 'รูปภาพใหญ่เกินไป (สูงสุด 4 MB)' }, 400);
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const key = `course/covers/${id}-${crypto.randomUUID().slice(0, 8)}${extname(file.name) || '.jpg'}`;
+  await c.env.BUCKET.put(key, bytes, { httpMetadata: { contentType: file.type } });
+  await c.env.DB.prepare(`UPDATE courses SET cover_key = ?, cover_mime = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+    .bind(key, file.type, id)
+    .run();
+  if (course.coverKey) await c.env.BUCKET.delete(course.coverKey).catch(() => {});
+  await logAudit(c.env.DB, user, 'COURSE_COVER', null, String(id), true);
+  return c.json({ ok: true });
+});
+
+// Serve the current cover to the editor regardless of publish status.
+courses.get('/courses/:id/cover', async (c) => {
+  const user = c.get('user');
+  const id = Number(c.req.param('id'));
+  const course = await c.env.DB.prepare(
+    `SELECT cover_key AS coverKey, cover_mime AS coverMime, author_identity AS authorIdentity FROM courses WHERE id = ?`,
+  )
+    .bind(id)
+    .first<{ coverKey: string | null; coverMime: string | null; authorIdentity: string }>();
+  if (!course) return c.json({ error: 'ไม่พบคอร์ส' }, 404);
+  if (!canEdit(user, course)) return c.json({ error: 'Forbidden' }, 403);
+  if (!course.coverKey) return c.json({ error: 'No cover' }, 404);
+  const object = await c.env.BUCKET.get(course.coverKey);
+  if (!object) return c.json({ error: 'Not found' }, 404);
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': course.coverMime || object.httpMetadata?.contentType || 'image/jpeg',
+      'Cache-Control': 'private, no-store',
+    },
+  });
+});
+
 /* ===================== Public routes (before verifyAuth, no login) ===================== */
 // Powers the public on-demand course catalogue on the marketing site
 // (litalkeducation.com/courses) — promotion + syllabus, no student data. Same
@@ -448,17 +498,38 @@ coursesPublic.get('/courses/public', async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT c.id, c.title, c.title_th AS titleTh, c.description, c.description_th AS descriptionTh,
             c.category, c.price_satang AS priceSatang, c.currency, c.published_at AS publishedAt,
+            (c.cover_key IS NOT NULL) AS hasCover,
             (SELECT COUNT(*) FROM course_items ci WHERE ci.course_id = c.id) AS itemCount
      FROM courses c WHERE c.status = 'published' ORDER BY c.published_at DESC, c.id DESC LIMIT 200`,
   ).all();
   return c.json({ status: 'success', courses: results ?? [] });
 });
 
+// Serve a published course's cover image (public, cacheable).
+coursesPublic.get('/courses/public/:id/cover', async (c) => {
+  const id = Number(c.req.param('id'));
+  const row = await c.env.DB.prepare(
+    `SELECT cover_key AS coverKey, cover_mime AS coverMime FROM courses WHERE id = ? AND status = 'published'`,
+  )
+    .bind(id)
+    .first<{ coverKey: string | null; coverMime: string | null }>();
+  if (!row?.coverKey) return c.json({ status: 'error', message: 'Not found' }, 404);
+  const object = await c.env.BUCKET.get(row.coverKey);
+  if (!object) return c.json({ status: 'error', message: 'Not found' }, 404);
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': row.coverMime || object.httpMetadata?.contentType || 'image/jpeg',
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
+});
+
 coursesPublic.get('/courses/public/:id', async (c) => {
   const id = Number(c.req.param('id'));
   const course = await c.env.DB.prepare(
     `SELECT id, title, title_th AS titleTh, description, description_th AS descriptionTh,
-            overview, overview_th AS overviewTh, category, price_satang AS priceSatang, currency
+            overview, overview_th AS overviewTh, category, price_satang AS priceSatang, currency,
+            (cover_key IS NOT NULL) AS hasCover
      FROM courses WHERE id = ? AND status = 'published'`,
   )
     .bind(id)
@@ -488,6 +559,7 @@ coursesPortal.get('/portal/:studentId/courses', async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT c.id, c.title, c.title_th AS titleTh, c.description, c.description_th AS descriptionTh,
             c.category, c.price_satang AS priceSatang, c.currency, c.published_at AS publishedAt,
+            (c.cover_key IS NOT NULL) AS hasCover,
             (SELECT COUNT(*) FROM course_items ci WHERE ci.course_id = c.id) AS itemCount,
             (SELECT COUNT(*) FROM course_enrollments ce WHERE ce.course_id = c.id AND ce.student_id = ? COLLATE NOCASE AND ce.status = 'active') AS enrolled
      FROM courses c WHERE c.status = 'published' ORDER BY c.published_at DESC, c.id DESC LIMIT 200`,
@@ -506,7 +578,8 @@ coursesPortal.get('/portal/:studentId/courses/:courseId', async (c) => {
   if (!(await portalTokenMatchesStudent(c, studentId))) return c.json({ status: 'error', message: 'Unauthorized' }, 401);
   const course = await c.env.DB.prepare(
     `SELECT id, title, title_th AS titleTh, description, description_th AS descriptionTh,
-            overview, overview_th AS overviewTh, category, price_satang AS priceSatang, currency
+            overview, overview_th AS overviewTh, category, price_satang AS priceSatang, currency,
+            (cover_key IS NOT NULL) AS hasCover
      FROM courses WHERE id = ? AND status = 'published'`,
   )
     .bind(courseId)

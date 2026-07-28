@@ -13,6 +13,8 @@ import {
   setCourseStatusApi,
   deleteCourseApi,
   fetchCourseEnrollments,
+  uploadCourseCover,
+  fetchCourseCoverBlob,
   type CourseSummary,
   type CourseStatus,
   type CourseItemKind,
@@ -107,6 +109,9 @@ export default function CoursesScreen() {
   const [enrollFor, setEnrollFor] = useState<CourseSummary | null>(null);
   const [enrollments, setEnrollments] = useState<CourseEnrollmentRow[] | null>(null);
 
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [coverUploading, setCoverUploading] = useState(false);
+
   const load = useCallback(async () => {
     try {
       const getToken = makeTokenGetter(getAccessTokenSilently);
@@ -151,7 +156,41 @@ export default function CoursesScreen() {
     }
   };
 
+  const loadCover = async (id: number, hasCover: boolean) => {
+    if (!hasCover) {
+      setCoverUrl(null);
+      return;
+    }
+    try {
+      const getToken = makeTokenGetter(getAccessTokenSilently);
+      const blob = await fetchCourseCoverBlob(getToken, id);
+      setCoverUrl(URL.createObjectURL(blob));
+    } catch {
+      setCoverUrl(null);
+    }
+  };
+
+  const onPickCover = async (file: File | null) => {
+    if (!file || !editingId) return;
+    if (file.size > 4 * 1024 * 1024) {
+      showToast('ตรวจสอบไฟล์', 'รูปภาพใหญ่เกินไป (สูงสุด 4 MB)', 'error');
+      return;
+    }
+    setCoverUploading(true);
+    try {
+      const getToken = makeTokenGetter(getAccessTokenSilently);
+      await uploadCourseCover(getToken, editingId, file);
+      setCoverUrl(URL.createObjectURL(file));
+      showToast('อัปโหลดภาพปกแล้ว', undefined, 'success');
+      load();
+    } catch (error) {
+      showToast('อัปโหลดภาพปกไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
+    }
+    setCoverUploading(false);
+  };
+
   const openNew = async () => {
+    setCoverUrl(null);
     const draft = readDraft(null);
     await loadAvailableQuizzes(0);
     if (
@@ -177,6 +216,7 @@ export default function CoursesScreen() {
       const getToken = makeTokenGetter(getAccessTokenSilently);
       const { course, items } = await fetchCourse(getToken, id);
       await loadAvailableQuizzes(id);
+      await loadCover(id, !!course.hasCover);
       const cloudForm: CourseForm = {
         title: course.title,
         titleTh: course.titleTh ?? '',
@@ -388,6 +428,50 @@ export default function CoursesScreen() {
                 placeholder="อธิบายสั้น ๆ ว่าคอร์สนี้เกี่ยวกับอะไร"
                 onChange={(e) => setForm({ ...form, descriptionTh: e.target.value })}
               />
+            </div>
+
+            <div className="form-group">
+              <label>
+                <i className="fas fa-image"></i> ภาพปกคอร์ส
+              </label>
+              {editingId ? (
+                <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div
+                    style={{
+                      width: 160,
+                      height: 90,
+                      borderRadius: 10,
+                      border: '1px solid var(--border-color, #e5e7eb)',
+                      background: coverUrl ? `center/cover no-repeat url(${coverUrl})` : 'var(--bg-tertiary, #f1f3f7)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--text-secondary, #999)',
+                      flex: '0 0 auto',
+                    }}
+                  >
+                    {!coverUrl && <i className="fas fa-image" style={{ fontSize: 22 }}></i>}
+                  </div>
+                  <div>
+                    <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
+                      <i className="fas fa-cloud-arrow-up"></i> {coverUploading ? 'กำลังอัปโหลด...' : coverUrl ? 'เปลี่ยนภาพปก' : 'อัปโหลดภาพปก'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        disabled={coverUploading}
+                        onChange={(e) => {
+                          onPickCover(e.target.files?.[0] || null);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                    <div className="form-hint">JPG, PNG, WEBP · สูงสุด 4 MB · แนะนำอัตราส่วน 16:9</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="form-hint">บันทึกคอร์สก่อน จึงจะเพิ่มภาพปกได้</div>
+              )}
             </div>
 
             <div className="form-group">

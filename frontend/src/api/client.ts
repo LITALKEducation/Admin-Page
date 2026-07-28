@@ -1048,6 +1048,7 @@ export type ServiceSurface =
   | 'chat_portal'
   | 'checkin'
   | 'booking'
+  | 'learning'
   /** This panel. The Admin role passes through it — see the middleware in worker/src/index.ts. */
   | 'admin';
 
@@ -1242,6 +1243,7 @@ export interface CourseSummary {
   publishedAt: string | null;
   itemCount: number;
   enrollCount: number;
+  hasCover: number;
 }
 
 export interface CourseDetail extends CourseSummary {
@@ -1328,4 +1330,14 @@ export async function deleteCourseApi(getToken: GetTokenFn, id: number) {
 
 export async function fetchCourseEnrollments(getToken: GetTokenFn, id: number) {
   return apiJson<{ enrollments: CourseEnrollmentRow[] }>(getToken, `/courses/${id}/enrollments`);
+}
+
+export async function uploadCourseCover(getToken: GetTokenFn, id: number, file: File) {
+  const form = new FormData();
+  form.append('file', file);
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/courses/${id}/cover`, { method: 'POST', body: form });
+}
+
+export async function fetchCourseCoverBlob(getToken: GetTokenFn, id: number) {
+  return apiFetchBlob(getToken, `/courses/${id}/cover`);
 }
