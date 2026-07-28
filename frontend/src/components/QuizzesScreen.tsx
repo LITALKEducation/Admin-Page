@@ -749,7 +749,7 @@ export default function QuizzesScreen() {
               </label>
             </div>
 
-            <hr style={{ border: 'none', borderTop: '1px solid var(--border, #e5e7eb)', margin: '10px 0 18px' }} />
+            <hr style={{ border: 'none', borderTop: '1px solid var(--border-color, #e5e7eb)', margin: '10px 0 18px' }} />
 
             <h3 style={{ margin: '0 0 12px' }}>
               <i className="fas fa-list-ol"></i> คำถาม ({questions.length})
@@ -842,11 +842,11 @@ export default function QuizzesScreen() {
 
           <div className="row-list">
             {filtered.map((quiz) => (
-              <div key={quiz.id} className="quiz-row" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 4px', borderBottom: '1px solid var(--border, #eee)', flexWrap: 'wrap' }}>
+              <div key={quiz.id} className="quiz-row" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 4px', borderBottom: '1px solid var(--border-color, #eee)', flexWrap: 'wrap' }}>
                 <div style={{ flex: '1 1 260px', minWidth: 0 }}>
                   <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     {quiz.titleTh || quiz.title}
-                    <span className={`badge badge-${quiz.status}`} style={{ fontSize: 12, padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2, #f1f5f9)' }}>
+                    <span className={`badge badge-${quiz.status}`} style={{ fontSize: 12, padding: '2px 8px', borderRadius: 999, background: 'var(--bg-tertiary, #f1f5f9)' }}>
                       {STATUS_LABEL[quiz.status]}
                     </span>
                     <span
@@ -918,7 +918,7 @@ export default function QuizzesScreen() {
                   {attempts.map((a) => {
                     const percent = a.maxScore > 0 ? Math.round((a.score / a.maxScore) * 100) : 0;
                     return (
-                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: '1px solid var(--border, #eee)' }}>
+                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: '1px solid var(--border-color, #eee)' }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: 600 }}>{a.studentNickname || a.studentName || a.studentId}</div>
                           <div className="form-hint">{a.studentId} · {new Date(a.submittedAt).toLocaleString('th-TH')}</div>

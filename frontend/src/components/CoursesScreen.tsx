@@ -444,7 +444,7 @@ export default function CoursesScreen() {
                     return (
                       <div
                         key={q.id}
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid var(--border, #e5e7eb)', borderRadius: 8, flexWrap: 'wrap' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid var(--border-color, #e5e7eb)', borderRadius: 8, flexWrap: 'wrap' }}
                       >
                         <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 400, flex: 1, minWidth: 160 }}>
                           <input type="checkbox" checked={!!item} onChange={() => toggleQuiz(q.id)} />
@@ -525,11 +525,11 @@ export default function CoursesScreen() {
 
           <div className="row-list">
             {filtered.map((course) => (
-              <div key={course.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 4px', borderBottom: '1px solid var(--border, #eee)', flexWrap: 'wrap' }}>
+              <div key={course.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 4px', borderBottom: '1px solid var(--border-color, #eee)', flexWrap: 'wrap' }}>
                 <div style={{ flex: '1 1 260px', minWidth: 0 }}>
                   <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     {course.titleTh || course.title}
-                    <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2, #f1f5f9)' }}>
+                    <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 999, background: 'var(--bg-tertiary, #f1f5f9)' }}>
                       {STATUS_LABEL[course.status]}
                     </span>
                   </div>
@@ -590,7 +590,7 @@ export default function CoursesScreen() {
               {enrollments && enrollments.length > 0 && (
                 <div className="row-list">
                   {enrollments.map((e) => (
-                    <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: '1px solid var(--border, #eee)' }}>
+                    <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: '1px solid var(--border-color, #eee)' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 600 }}>{e.studentNickname || e.studentName || e.studentId}</div>
                         <div className="form-hint">{e.studentId} · {new Date(e.enrolledAt).toLocaleString('th-TH')}</div>
