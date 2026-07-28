@@ -17,6 +17,7 @@ import { Hono } from 'hono';
 import type { AppBindings, AuthUser } from './types';
 import { isAdmin, requireAdmin, portalTokenMatchesStudent } from './auth';
 import { logAudit } from './db';
+import { canAccessQuiz, courseIdForQuiz } from './courses';
 
 const MAX_TITLE = 300;
 const MAX_TEXT = 2_000;
@@ -461,7 +462,10 @@ quizzesPortal.get('/portal/:studentId/quizzes', async (c) => {
             (SELECT COUNT(*) FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS attempts,
             (SELECT MAX(qa.score) FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS bestScore,
             (SELECT MAX(qa.passed) FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS passed
-     FROM quizzes q WHERE q.status = 'published' ORDER BY q.published_at DESC, q.id DESC LIMIT 200`,
+     FROM quizzes q
+     WHERE q.status = 'published'
+       AND NOT EXISTS (SELECT 1 FROM course_items ci WHERE ci.quiz_id = q.id)
+     ORDER BY q.published_at DESC, q.id DESC LIMIT 200`,
   )
     .bind(studentId, studentId, studentId)
     .all();
@@ -486,6 +490,13 @@ quizzesPortal.get('/portal/:studentId/quizzes/:quizId', async (c) => {
     .bind(quizId)
     .first<QuizRow>();
   if (!quiz) return c.json({ status: 'error', message: 'ไม่พบแบบทดสอบ' }, 404);
+
+  // A quiz that belongs to a paid course requires enrollment. Report the
+  // course id so the portal can send the student to buy it.
+  if (!(await canAccessQuiz(c.env.DB, quizId, studentId))) {
+    const courseId = await courseIdForQuiz(c.env.DB, quizId);
+    return c.json({ status: 'error', message: 'ต้องลงทะเบียนคอร์สนี้ก่อนจึงจะเข้าเรียนได้', courseId, locked: true }, 403);
+  }
 
   const { results } = await c.env.DB.prepare(
     `SELECT id, position, type, prompt, options, points FROM quiz_questions WHERE quiz_id = ? ORDER BY position, id`,
@@ -528,6 +539,11 @@ quizzesPortal.post('/portal/:studentId/quizzes/:quizId/attempts', async (c) => {
     .bind(quizId)
     .first<{ id: number; passScore: number; allowRetake: number; showAnswers: number }>();
   if (!quiz) return c.json({ status: 'error', message: 'ไม่พบแบบทดสอบ' }, 404);
+
+  // A paid-course quiz can't be submitted without enrollment either.
+  if (!(await canAccessQuiz(c.env.DB, quizId, studentId))) {
+    return c.json({ status: 'error', message: 'ต้องลงทะเบียนคอร์สนี้ก่อน', locked: true }, 403);
+  }
 
   // Enforce single-attempt quizzes server-side, not just in the UI.
   if (quiz.allowRetake === 0) {

@@ -68,6 +68,11 @@ export async function createStripePaymentLink(
     amountSatang: number; // THB x100
     currency: string;
     metadata: Record<string, string>;
+    // When set, Stripe redirects the payer to this URL after a successful
+    // payment (Payment Links `after_completion` redirect) instead of showing
+    // the default hosted confirmation — used to send a course buyer back to
+    // the portal. Must be a full https URL.
+    afterCompletionUrl?: string;
   },
 ): Promise<CreatedPaymentLink> {
   // Stripe's price-create endpoint only accepts a handful of product_data
@@ -91,6 +96,12 @@ export async function createStripePaymentLink(
     // The description belongs on the resulting PaymentIntent instead, where
     // it shows up on the checkout page, receipt, and dashboard.
     ...(opts.productDescription ? { 'payment_intent_data[description]': opts.productDescription } : {}),
+    ...(opts.afterCompletionUrl
+      ? {
+          'after_completion[type]': 'redirect',
+          'after_completion[redirect][url]': opts.afterCompletionUrl,
+        }
+      : {}),
   };
   for (const [k, v] of Object.entries(opts.metadata)) {
     params[`metadata[${k}]`] = v;

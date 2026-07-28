@@ -26,6 +26,7 @@ const StudentsScreen = lazy(() => import('./components/StudentsScreen'));
 const CheckScreen = lazy(() => import('./components/CheckScreen'));
 const LogsScreen = lazy(() => import('./components/LogsScreen'));
 const QuizzesScreen = lazy(() => import('./components/QuizzesScreen'));
+const CoursesScreen = lazy(() => import('./components/CoursesScreen'));
 const PaymentsScreen = lazy(() => import('./components/PaymentsScreen'));
 const CreateStudentScreen = lazy(() => import('./components/CreateStudentScreen'));
 const FilesScreen = lazy(() => import('./components/FilesScreen'));
@@ -80,6 +81,7 @@ const TITLES: Record<string, string> = {
   '/check': 'โปรไฟล์นักเรียน',
   '/logs': 'บันทึกการเรียน',
   '/quizzes': 'แบบทดสอบออนไลน์',
+  '/courses': 'คอร์สเรียนออนไลน์',
   '/payments': 'บันทึกการชำระเงิน',
   '/create': 'สร้างบัญชีนักเรียน',
   '/files': 'ไฟล์นักเรียน',
@@ -222,6 +224,7 @@ export default function App() {
                         <Route path="/check" element={<CheckScreen />} />
                         <Route path="/logs" element={<LogsScreen />} />
                         <Route path="/quizzes" element={<QuizzesScreen />} />
+                        <Route path="/courses" element={<CoursesScreen />} />
                         <Route path="/payments" element={<PaymentsScreen />} />
                         {isAdmin && <Route path="/create" element={<CreateStudentScreen />} />}
                         <Route path="/files" element={<FilesScreen />} />

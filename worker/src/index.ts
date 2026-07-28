@@ -45,6 +45,7 @@ import { verifyStripeSignature, retrievePaymentReceiptUrl, deactivateStripePayme
 import type { Env } from './types';
 import blog, { blogPublic } from './blog';
 import quizzes, { quizzesPortal } from './quizzes';
+import courses, { coursesPortal, grantEnrollment } from './courses';
 import shortLinks, { shortLinkRedirect } from './shortlinks';
 
 const app = new Hono<AppBindings>();
@@ -150,6 +151,16 @@ async function recordCheckoutPayment(env: Env, session: StripeCheckoutSession): 
       .bind(discountAmount, session.payment_link)
       .run();
   }
+  // A course purchase (metadata.type === 'course') grants enrollment and must
+  // NOT touch schedules — otherwise buying a course would inadvertently
+  // activate any approved-but-unpaid schedule the student happens to have.
+  const courseId = Number(meta.course_id);
+  if (meta.type === 'course' && Number.isFinite(courseId) && courseId > 0 && meta.student_id) {
+    await grantEnrollment(env.DB, courseId, meta.student_id, session.amount_total / 100, session.id);
+    await logAudit(env.DB, null, 'COURSE_ENROLL_PAID', meta.student_id, session.id, true);
+    return;
+  }
+
   // A successful payment starts the approved schedule (or amendment) right away.
   const scheduleId = Number(meta.schedule_id);
   const amendmentId = Number(meta.amendment_id);
@@ -1121,6 +1132,7 @@ app.get('/public/files/:token', async (c) => {
 // (registered before verifyAuth) — each proves ownership with the portal token
 // itself. See worker/src/quizzes.ts.
 app.route('/', quizzesPortal);
+app.route('/', coursesPortal);
 
 // ===== Authenticated routes =====
 
@@ -1205,6 +1217,7 @@ app.post('/settings/service-notices/rotate-bypass', requireAdmin, async (c) => {
 app.route('/', chat);
 app.route('/', blog);
 app.route('/', quizzes);
+app.route('/', courses);
 app.route('/', shortLinks);
 
 // Also carries title/phone/hasAvatar from the staff table (not part of the
