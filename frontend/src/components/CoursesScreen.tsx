@@ -15,6 +15,7 @@ import {
   fetchCourseEnrollments,
   type CourseSummary,
   type CourseStatus,
+  type CourseItemKind,
   type CourseAvailableQuiz,
   type CourseEnrollmentRow,
 } from '../api/client';
@@ -33,8 +34,14 @@ interface CourseForm {
   overviewTh: string;
   category: string;
   priceBaht: string;
-  quizIds: number[];
+  items: { quizId: number; kind: CourseItemKind }[];
 }
+
+const KIND_LABEL: Record<CourseItemKind, string> = {
+  pretest: 'Pretest (แบบทดสอบก่อนเรียน)',
+  lesson: 'บทเรียน',
+  posttest: 'Posttest (แบบทดสอบหลังเรียน)',
+};
 
 const EMPTY_FORM: CourseForm = {
   title: '',
@@ -44,7 +51,7 @@ const EMPTY_FORM: CourseForm = {
   overviewTh: '',
   category: '',
   priceBaht: '0',
-  quizIds: [],
+  items: [],
 };
 
 // ----- On-device editor auto-save (same model as the quiz editor) -----
@@ -178,7 +185,7 @@ export default function CoursesScreen() {
         overviewTh: course.overviewTh ?? '',
         category: course.category ?? '',
         priceBaht: String((course.priceSatang ?? 0) / 100),
-        quizIds: items.map((it) => it.quizId),
+        items: items.map((it) => ({ quizId: it.quizId, kind: it.kind })),
       };
       const draft = readDraft(id);
       if (
@@ -210,7 +217,22 @@ export default function CoursesScreen() {
   const toggleQuiz = (quizId: number) => {
     setForm((f) => ({
       ...f,
-      quizIds: f.quizIds.includes(quizId) ? f.quizIds.filter((x) => x !== quizId) : [...f.quizIds, quizId],
+      items: f.items.some((it) => it.quizId === quizId)
+        ? f.items.filter((it) => it.quizId !== quizId)
+        : [...f.items, { quizId, kind: 'lesson' as CourseItemKind }],
+    }));
+  };
+
+  const setItemKind = (quizId: number, kind: CourseItemKind) => {
+    setForm((f) => ({
+      ...f,
+      // Only one pretest and one posttest per course — assigning a role moves
+      // it off whoever held it before.
+      items: f.items.map((it) => {
+        if (it.quizId === quizId) return { ...it, kind };
+        if ((kind === 'pretest' || kind === 'posttest') && it.kind === kind) return { ...it, kind: 'lesson' as CourseItemKind };
+        return it;
+      }),
     }));
   };
 
@@ -236,7 +258,7 @@ export default function CoursesScreen() {
         category: form.category.trim() || undefined,
         priceSatang: Math.round(priceBaht * 100),
         currency: 'thb',
-        quizIds: form.quizIds,
+        items: form.items,
       };
       let id = editingId;
       if (editingId) {
@@ -405,26 +427,45 @@ export default function CoursesScreen() {
 
             <div className="form-group">
               <label>
-                <i className="fas fa-list-check"></i> บทเรียน/แบบทดสอบในคอร์ส ({form.quizIds.length} รายการ)
+                <i className="fas fa-list-check"></i> บทเรียน/แบบทดสอบในคอร์ส ({form.items.length} รายการ)
               </label>
               <div className="form-hint" style={{ marginBottom: 8 }}>
-                เลือกจากแบบทดสอบที่เผยแพร่แล้วและยังไม่ได้อยู่ในคอร์สอื่น — เมื่ออยู่ในคอร์สแล้วจะเข้าเรียนได้เฉพาะผู้ที่ลงทะเบียน
+                เลือกแบบทดสอบที่จะรวมในคอร์ส แล้วกำหนดบทบาท — นักเรียนต้องทำ <strong>Pretest</strong> ก่อน จากนั้นเรียน{' '}
+                <strong>บทเรียน</strong> (ดูวีดีโอ + ทำแบบทดสอบ) ให้ครบ จึงจะทำ <strong>Posttest</strong> ได้
               </div>
               {availableQuizzes.length === 0 ? (
                 <div className="form-hint">
                   ยังไม่มีแบบทดสอบที่เพิ่มได้ — สร้างและเผยแพร่แบบทดสอบก่อนที่หน้า "แบบทดสอบออนไลน์"
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflow: 'auto' }}>
-                  {availableQuizzes.map((q) => (
-                    <label
-                      key={q.id}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid var(--border, #e5e7eb)', borderRadius: 8, fontWeight: 400 }}
-                    >
-                      <input type="checkbox" checked={form.quizIds.includes(q.id)} onChange={() => toggleQuiz(q.id)} />
-                      <span>{q.titleTh || q.title}</span>
-                    </label>
-                  ))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflow: 'auto' }}>
+                  {availableQuizzes.map((q) => {
+                    const item = form.items.find((it) => it.quizId === q.id);
+                    return (
+                      <div
+                        key={q.id}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid var(--border, #e5e7eb)', borderRadius: 8, flexWrap: 'wrap' }}
+                      >
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 400, flex: 1, minWidth: 160 }}>
+                          <input type="checkbox" checked={!!item} onChange={() => toggleQuiz(q.id)} />
+                          <span>{q.titleTh || q.title}</span>
+                        </label>
+                        {item && (
+                          <select
+                            value={item.kind}
+                            style={{ maxWidth: 240 }}
+                            onChange={(e) => setItemKind(q.id, e.target.value as CourseItemKind)}
+                          >
+                            {(Object.keys(KIND_LABEL) as CourseItemKind[]).map((k) => (
+                              <option key={k} value={k}>
+                                {KIND_LABEL[k]}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

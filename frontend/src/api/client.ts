@@ -1157,6 +1157,7 @@ export interface QuizPayload {
   descriptionTh?: string;
   lesson?: string;
   lessonTh?: string;
+  videoUrl?: string;
   category?: string;
   timeLimitMin?: number | null;
   passScore?: number;
@@ -1168,6 +1169,7 @@ export interface QuizPayload {
 export interface QuizDetail extends QuizSummary {
   lesson: string | null;
   lessonTh: string | null;
+  videoUrl: string | null;
 }
 
 export interface QuizAttemptRow {
@@ -1244,8 +1246,11 @@ export interface CourseDetail extends CourseSummary {
   overviewTh: string | null;
 }
 
+export type CourseItemKind = 'pretest' | 'lesson' | 'posttest';
+
 export interface CourseItem {
   quizId: number;
+  kind: CourseItemKind;
   title: string;
   titleTh: string | null;
 }
@@ -1278,7 +1283,7 @@ export interface CoursePayload {
   category?: string;
   priceSatang?: number;
   currency?: string;
-  quizIds?: number[];
+  items?: { quizId: number; kind: CourseItemKind }[];
 }
 
 export async function fetchCourses(getToken: GetTokenFn) {

@@ -39,6 +39,7 @@ interface QuizForm {
   descriptionTh: string;
   lesson: string;
   lessonTh: string;
+  videoUrl: string;
   category: string;
   timeLimitMin: string;
   passScore: string;
@@ -53,6 +54,7 @@ const EMPTY_FORM: QuizForm = {
   descriptionTh: '',
   lesson: '',
   lessonTh: '',
+  videoUrl: '',
   category: '',
   timeLimitMin: '',
   passScore: '0',
@@ -439,6 +441,7 @@ export default function QuizzesScreen() {
         descriptionTh: quiz.descriptionTh ?? '',
         lesson: quiz.lesson ?? '',
         lessonTh: quiz.lessonTh ?? '',
+        videoUrl: quiz.videoUrl ?? '',
         category: quiz.category ?? '',
         timeLimitMin: quiz.timeLimitMin != null ? String(quiz.timeLimitMin) : '',
         passScore: String(quiz.passScore ?? 0),
@@ -500,6 +503,7 @@ export default function QuizzesScreen() {
         descriptionTh: form.descriptionTh.trim() || undefined,
         lesson: form.lesson || undefined,
         lessonTh: form.lessonTh || undefined,
+        videoUrl: form.videoUrl.trim() || undefined,
         category: form.category.trim() || undefined,
         timeLimitMin: form.timeLimitMin.trim() ? Number(form.timeLimitMin) : null,
         passScore: Number(form.passScore) || 0,
@@ -644,6 +648,19 @@ export default function QuizzesScreen() {
                 placeholder="อธิบายสั้น ๆ ว่าแบบทดสอบนี้เกี่ยวกับอะไร"
                 onChange={(e) => setForm({ ...form, descriptionTh: e.target.value })}
               />
+            </div>
+
+            <div className="form-group">
+              <label>
+                <i className="fas fa-video"></i> วีดีโอการสอน (ลิงก์ · ไม่บังคับ)
+              </label>
+              <input
+                type="url"
+                value={form.videoUrl}
+                placeholder="เช่น https://youtu.be/xxxx หรือ https://vimeo.com/xxxx หรือลิงก์ไฟล์ .mp4"
+                onChange={(e) => setForm({ ...form, videoUrl: e.target.value })}
+              />
+              <div className="form-hint">นักเรียนจะดูวีดีโอนี้ก่อนทำแบบทดสอบ · รองรับ YouTube, Vimeo และไฟล์วีดีโอโดยตรง</div>
             </div>
 
             <div className="form-group">

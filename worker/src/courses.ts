@@ -50,8 +50,11 @@ interface CourseBody {
   category?: string;
   priceSatang?: number;
   currency?: string;
-  quizIds?: number[];
+  // Each item is a quiz plus its role in the course path.
+  items?: { quizId: number; kind?: string }[];
 }
+
+const ITEM_KINDS = new Set(['pretest', 'lesson', 'posttest']);
 
 const AUTHOR_JOIN = `LEFT JOIN staff st ON st.identity = c.author_identity COLLATE NOCASE`;
 const AUTHOR_NAME_FIELD = `COALESCE(st.name, c.author_name) AS authorName`;
@@ -80,12 +83,95 @@ export async function isEnrolled(db: D1Database, courseId: number, studentId: st
   return !!row;
 }
 
-// True when the student may open this quiz: either it's free (no course) or
-// they're enrolled in the course that owns it. Central gate for quizzes.ts.
-export async function canAccessQuiz(db: D1Database, quizId: number, studentId: string): Promise<boolean> {
-  const courseId = await courseIdForQuiz(db, quizId);
-  if (courseId == null) return true;
-  return isEnrolled(db, courseId, studentId);
+// One course item joined with this student's progress on its quiz.
+interface ProgressRow {
+  quizId: number;
+  kind: string;
+  position: number;
+  title: string;
+  titleTh: string | null;
+  description: string | null;
+  descriptionTh: string | null;
+  videoUrl: string | null;
+  passScore: number;
+  questionCount: number;
+  hasLesson: number;
+  attempts: number;
+  passed: number | null;
+  bestScore: number | null;
+}
+
+// All of a course's items with the caller's attempt/pass state, in order.
+export async function loadItemsWithProgress(db: D1Database, courseId: number, studentId: string): Promise<ProgressRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT ci.quiz_id AS quizId, ci.kind AS kind, ci.position AS position,
+              q.title, q.title_th AS titleTh, q.description, q.description_th AS descriptionTh,
+              q.video_url AS videoUrl, q.pass_score AS passScore,
+              (SELECT COUNT(*) FROM quiz_questions qq WHERE qq.quiz_id = q.id) AS questionCount,
+              (q.lesson IS NOT NULL AND q.lesson != '') AS hasLesson,
+              (SELECT COUNT(*) FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS attempts,
+              (SELECT MAX(qa.passed) FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS passed,
+              (SELECT MAX(qa.score) FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS bestScore
+       FROM course_items ci JOIN quizzes q ON q.id = ci.quiz_id
+       WHERE ci.course_id = ? ORDER BY ci.position, ci.id`,
+    )
+    .bind(studentId, studentId, studentId, courseId)
+    .all<ProgressRow>();
+  return results ?? [];
+}
+
+// "Attempted" is enough for a pretest/posttest (and for a quiz with no
+// questions, which can never be submitted — treat it as satisfied so it can't
+// dead-end the sequence).
+function attempted(r: ProgressRow): boolean {
+  return (r.questionCount ?? 0) === 0 || (r.attempts ?? 0) > 0;
+}
+
+// A lesson is "done" once passed — or, when it carries no pass mark (or no
+// questions at all), once any attempt has been submitted.
+function lessonDone(r: ProgressRow): boolean {
+  if ((r.questionCount ?? 0) === 0) return true;
+  if ((r.attempts ?? 0) === 0) return false;
+  return r.passed === 1 || (r.passScore ?? 0) === 0;
+}
+
+export interface CourseGate {
+  allowed: boolean;
+  courseId?: number;
+  reason?: 'enroll' | 'pretest' | 'lessons';
+  message?: string;
+}
+
+// The single sequencing gate quizzes.ts consults before letting a student open
+// or submit a course quiz: enrollment first, then Pretest → Lessons → Posttest.
+export async function courseGateForQuiz(db: D1Database, quizId: number, studentId: string): Promise<CourseGate> {
+  const item = await db
+    .prepare(`SELECT course_id AS courseId, kind FROM course_items WHERE quiz_id = ?`)
+    .bind(quizId)
+    .first<{ courseId: number; kind: string }>();
+  if (!item) return { allowed: true }; // free standalone quiz
+
+  const courseId = item.courseId;
+  if (!(await isEnrolled(db, courseId, studentId))) {
+    return { allowed: false, courseId, reason: 'enroll', message: 'ต้องลงทะเบียนคอร์สนี้ก่อนจึงจะเข้าเรียนได้' };
+  }
+  if (item.kind === 'pretest') return { allowed: true, courseId };
+
+  const progress = await loadItemsWithProgress(db, courseId, studentId);
+  const pretest = progress.find((p) => p.kind === 'pretest');
+  const pretestDone = !pretest || attempted(pretest);
+  if (!pretestDone) {
+    return { allowed: false, courseId, reason: 'pretest', message: 'กรุณาทำแบบทดสอบก่อนเรียน (Pretest) ก่อน' };
+  }
+  if (item.kind === 'lesson') return { allowed: true, courseId };
+
+  // posttest — needs every lesson completed.
+  const lessons = progress.filter((p) => p.kind === 'lesson');
+  if (!lessons.every(lessonDone)) {
+    return { allowed: false, courseId, reason: 'lessons', message: 'กรุณาเรียนและผ่านทุกบทเรียนก่อนทำ Posttest' };
+  }
+  return { allowed: true, courseId };
 }
 
 // Grant (or re-affirm) enrollment. Idempotent via UNIQUE(course_id, student_id)
@@ -124,18 +210,33 @@ function validateCourse(body: CourseBody): string | null {
   return null;
 }
 
-// Replace a course's quiz set. Only quizzes not already claimed by another
-// course may be attached (UNIQUE(quiz_id) enforces it too, but we filter here
-// for a clean error rather than a constraint failure).
-async function replaceItems(db: D1Database, courseId: number, quizIds: number[]): Promise<string | null> {
-  const ids = [...new Set(quizIds.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n > 0))];
-  if (ids.length > MAX_ITEMS) return 'บทเรียนในคอร์สมากเกินไป';
+// Replace a course's item set (quiz + role). Dedupes quizzes, clamps to at
+// most one pretest and one posttest (extras fall back to 'lesson'), and stores
+// them in the given order. UNIQUE(quiz_id) also guards a quiz being in two
+// courses at once.
+async function replaceItems(db: D1Database, courseId: number, items: { quizId: number; kind?: string }[]): Promise<string | null> {
+  const seen = new Set<number>();
+  const clean: { quizId: number; kind: string }[] = [];
+  let hasPretest = false;
+  let hasPosttest = false;
+  for (const it of items) {
+    const quizId = Number(it.quizId);
+    if (!Number.isInteger(quizId) || quizId <= 0 || seen.has(quizId)) continue;
+    let kind = ITEM_KINDS.has(it.kind ?? '') ? (it.kind as string) : 'lesson';
+    if (kind === 'pretest' && hasPretest) kind = 'lesson';
+    if (kind === 'posttest' && hasPosttest) kind = 'lesson';
+    if (kind === 'pretest') hasPretest = true;
+    if (kind === 'posttest') hasPosttest = true;
+    seen.add(quizId);
+    clean.push({ quizId, kind });
+  }
+  if (clean.length > MAX_ITEMS) return 'บทเรียนในคอร์สมากเกินไป';
   const stmts: D1PreparedStatement[] = [db.prepare(`DELETE FROM course_items WHERE course_id = ?`).bind(courseId)];
-  ids.forEach((quizId, i) => {
+  clean.forEach((it, i) => {
     stmts.push(
       db
-        .prepare(`INSERT OR IGNORE INTO course_items (course_id, quiz_id, position) VALUES (?, ?, ?)`)
-        .bind(courseId, quizId, i),
+        .prepare(`INSERT OR IGNORE INTO course_items (course_id, quiz_id, position, kind) VALUES (?, ?, ?, ?)`)
+        .bind(courseId, it.quizId, i, it.kind),
     );
   });
   await db.batch(stmts);
@@ -169,7 +270,7 @@ courses.get('/courses/:id', async (c) => {
   if (!course) return c.json({ error: 'ไม่พบคอร์ส' }, 404);
   if (!canEdit(user, course)) return c.json({ error: 'Forbidden' }, 403);
   const { results } = await c.env.DB.prepare(
-    `SELECT ci.quiz_id AS quizId, q.title, q.title_th AS titleTh FROM course_items ci
+    `SELECT ci.quiz_id AS quizId, ci.kind AS kind, q.title, q.title_th AS titleTh FROM course_items ci
      JOIN quizzes q ON q.id = ci.quiz_id WHERE ci.course_id = ? ORDER BY ci.position, ci.id`,
   )
     .bind(id)
@@ -222,8 +323,8 @@ courses.post('/courses', async (c) => {
     )
     .run();
   const id = Number(result.meta.last_row_id);
-  if (Array.isArray(body.quizIds)) {
-    const err = await replaceItems(c.env.DB, id, body.quizIds);
+  if (Array.isArray(body.items)) {
+    const err = await replaceItems(c.env.DB, id, body.items);
     if (err) {
       await c.env.DB.prepare(`DELETE FROM courses WHERE id = ?`).bind(id).run();
       return c.json({ error: err }, 400);
@@ -246,8 +347,8 @@ courses.patch('/courses/:id', async (c) => {
   const invalid = validateCourse(body);
   if (invalid) return c.json({ error: invalid }, 400);
 
-  if (Array.isArray(body.quizIds)) {
-    const err = await replaceItems(c.env.DB, id, body.quizIds);
+  if (Array.isArray(body.items)) {
+    const err = await replaceItems(c.env.DB, id, body.items);
     if (err) return c.json({ error: err }, 400);
   }
   await c.env.DB.prepare(
@@ -363,17 +464,42 @@ coursesPortal.get('/portal/:studentId/courses/:courseId', async (c) => {
     .first<CourseRow>();
   if (!course) return c.json({ status: 'error', message: 'ไม่พบคอร์ส' }, 404);
   const enrolled = await isEnrolled(c.env.DB, courseId, studentId);
-  const { results } = await c.env.DB.prepare(
-    `SELECT q.id, q.title, q.title_th AS titleTh, q.description, q.description_th AS descriptionTh,
-            (SELECT COUNT(*) FROM quiz_questions qq WHERE qq.quiz_id = q.id) AS questionCount,
-            (q.lesson IS NOT NULL AND q.lesson != '') AS hasLesson,
-            (SELECT MAX(qa.passed) FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS passed
-     FROM course_items ci JOIN quizzes q ON q.id = ci.quiz_id
-     WHERE ci.course_id = ? ORDER BY ci.position, ci.id`,
-  )
-    .bind(studentId, courseId)
-    .all();
-  return c.json({ status: 'success', course, enrolled, items: results ?? [] });
+
+  const progress = await loadItemsWithProgress(c.env.DB, courseId, studentId);
+  const pretestRow = progress.find((p) => p.kind === 'pretest') ?? null;
+  const lessonRows = progress.filter((p) => p.kind === 'lesson');
+  const posttestRow = progress.find((p) => p.kind === 'posttest') ?? null;
+
+  const pretestDone = !pretestRow || attempted(pretestRow);
+  const lessonsAllDone = lessonRows.length === 0 || lessonRows.every(lessonDone);
+
+  // Shape one item for the portal, with its done/locked state resolved so the
+  // client just renders — the same rules the access gate enforces.
+  const toItem = (p: ProgressRow, locked: boolean) => ({
+    id: p.quizId,
+    title: p.title,
+    titleTh: p.titleTh,
+    description: p.description,
+    descriptionTh: p.descriptionTh,
+    questionCount: p.questionCount,
+    hasLesson: p.hasLesson,
+    hasVideo: p.videoUrl ? 1 : 0,
+    attempts: p.attempts,
+    passed: p.passed === 1 ? 1 : 0,
+    bestScore: p.bestScore,
+    done: p.kind === 'lesson' ? lessonDone(p) : (p.attempts ?? 0) > 0,
+    locked,
+  });
+
+  return c.json({
+    status: 'success',
+    course,
+    enrolled,
+    gates: { pretestDone, lessonsAllDone, hasPretest: !!pretestRow, hasPosttest: !!posttestRow },
+    pretest: pretestRow ? toItem(pretestRow, false) : null,
+    lessons: lessonRows.map((p) => toItem(p, !pretestDone)),
+    posttest: posttestRow ? toItem(posttestRow, !(pretestDone && lessonsAllDone)) : null,
+  });
 });
 
 // Start a purchase. Free courses enroll immediately; paid courses return a
