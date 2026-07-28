@@ -16,8 +16,14 @@ import {
   type QuizQuestion,
   type QuizStatus,
   type QuestionType,
+  type QuizAudience,
   type QuizAttemptRow,
 } from '../api/client';
+
+const AUDIENCE_LABEL: Record<QuizAudience, string> = {
+  on_demand: 'เรียน On Demand',
+  tutored: 'เรียนตัวต่อตัวกับครู',
+};
 
 const STATUS_LABEL: Record<QuizStatus, string> = {
   draft: 'ฉบับร่าง',
@@ -41,6 +47,7 @@ interface QuizForm {
   lessonTh: string;
   videoUrl: string;
   category: string;
+  audience: QuizAudience;
   timeLimitMin: string;
   passScore: string;
   allowRetake: boolean;
@@ -56,6 +63,7 @@ const EMPTY_FORM: QuizForm = {
   lessonTh: '',
   videoUrl: '',
   category: '',
+  audience: 'on_demand',
   timeLimitMin: '',
   passScore: '0',
   allowRetake: true,
@@ -344,6 +352,7 @@ export default function QuizzesScreen() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [audienceFilter, setAudienceFilter] = useState('');
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -387,10 +396,11 @@ export default function QuizzesScreen() {
     const term = search.trim().toLowerCase();
     return quizzes.filter((q) => {
       if (statusFilter && q.status !== statusFilter) return false;
+      if (audienceFilter && q.audience !== audienceFilter) return false;
       if (!term) return true;
       return `${q.title} ${q.titleTh ?? ''} ${q.category ?? ''}`.toLowerCase().includes(term);
     });
-  }, [quizzes, search, statusFilter]);
+  }, [quizzes, search, statusFilter, audienceFilter]);
 
   const openNew = async () => {
     const draft = readEditorDraft(null);
@@ -443,6 +453,7 @@ export default function QuizzesScreen() {
         lessonTh: quiz.lessonTh ?? '',
         videoUrl: quiz.videoUrl ?? '',
         category: quiz.category ?? '',
+        audience: (quiz.audience as QuizAudience) ?? 'on_demand',
         timeLimitMin: quiz.timeLimitMin != null ? String(quiz.timeLimitMin) : '',
         passScore: String(quiz.passScore ?? 0),
         allowRetake: quiz.allowRetake === 1,
@@ -505,6 +516,7 @@ export default function QuizzesScreen() {
         lessonTh: form.lessonTh || undefined,
         videoUrl: form.videoUrl.trim() || undefined,
         category: form.category.trim() || undefined,
+        audience: form.audience,
         timeLimitMin: form.timeLimitMin.trim() ? Number(form.timeLimitMin) : null,
         passScore: Number(form.passScore) || 0,
         allowRetake: form.allowRetake,
@@ -652,6 +664,22 @@ export default function QuizzesScreen() {
 
             <div className="form-group">
               <label>
+                <i className="fas fa-user-group"></i> สำหรับผู้เรียน
+              </label>
+              <select value={form.audience} onChange={(e) => setForm({ ...form, audience: e.target.value as QuizAudience })}>
+                {(Object.keys(AUDIENCE_LABEL) as QuizAudience[]).map((a) => (
+                  <option key={a} value={a}>
+                    {AUDIENCE_LABEL[a]}
+                  </option>
+                ))}
+              </select>
+              <div className="form-hint">
+                แยกแบบทดสอบสำหรับนักเรียนที่เรียนตัวต่อตัวกับครู ออกจากแบบทดสอบที่เปิดให้เรียนแบบ On Demand
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>
                 <i className="fas fa-video"></i> วีดีโอการสอน (ลิงก์ · ไม่บังคับ)
               </label>
               <input
@@ -790,6 +818,11 @@ export default function QuizzesScreen() {
               style={{ flex: '1 1 220px' }}
               onChange={(e) => setSearch(e.target.value)}
             />
+            <select value={audienceFilter} onChange={(e) => setAudienceFilter(e.target.value)} aria-label="กรองตามผู้เรียน">
+              <option value="">ทุกผู้เรียน</option>
+              <option value="on_demand">{AUDIENCE_LABEL.on_demand}</option>
+              <option value="tutored">{AUDIENCE_LABEL.tutored}</option>
+            </select>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="กรองตามสถานะ">
               <option value="">ทุกสถานะ</option>
               <option value="draft">ฉบับร่าง</option>
@@ -815,6 +848,18 @@ export default function QuizzesScreen() {
                     {quiz.titleTh || quiz.title}
                     <span className={`badge badge-${quiz.status}`} style={{ fontSize: 12, padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2, #f1f5f9)' }}>
                       {STATUS_LABEL[quiz.status]}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        background: quiz.audience === 'tutored' ? 'rgba(99,102,241,.12)' : 'rgba(16,185,129,.12)',
+                        color: quiz.audience === 'tutored' ? '#4f46e5' : '#059669',
+                      }}
+                    >
+                      <i className={`fas ${quiz.audience === 'tutored' ? 'fa-chalkboard-user' : 'fa-globe'}`}></i>{' '}
+                      {AUDIENCE_LABEL[quiz.audience ?? 'on_demand']}
                     </span>
                   </div>
                   <div className="form-hint" style={{ marginTop: 2 }}>

@@ -1118,6 +1118,7 @@ export async function restoreService(getToken: GetTokenFn) {
 
 export type QuizStatus = 'draft' | 'published' | 'archived';
 export type QuestionType = 'single' | 'multiple' | 'truefalse' | 'short';
+export type QuizAudience = 'on_demand' | 'tutored';
 
 export interface QuizSummary {
   id: number;
@@ -1126,6 +1127,7 @@ export interface QuizSummary {
   description: string | null;
   descriptionTh: string | null;
   category: string | null;
+  audience: QuizAudience;
   status: QuizStatus;
   timeLimitMin: number | null;
   passScore: number;
@@ -1159,6 +1161,7 @@ export interface QuizPayload {
   lessonTh?: string;
   videoUrl?: string;
   category?: string;
+  audience?: QuizAudience;
   timeLimitMin?: number | null;
   passScore?: number;
   allowRetake?: boolean;

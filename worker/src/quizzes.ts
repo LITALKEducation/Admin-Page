@@ -26,6 +26,8 @@ const MAX_PROMPT = 4_000;
 const MAX_QUESTIONS = 100;
 const MAX_OPTIONS = 10;
 const QUESTION_TYPES = new Set(['single', 'multiple', 'truefalse', 'short']);
+const AUDIENCES = new Set(['on_demand', 'tutored']);
+const normAudience = (a: string | undefined): string => (AUDIENCES.has(a ?? '') ? (a as string) : 'on_demand');
 
 /* ===================== Types ===================== */
 
@@ -41,6 +43,7 @@ interface QuizRow {
   lessonTh: string | null;
   videoUrl: string | null;
   category: string | null;
+  audience: string;
   status: string;
   timeLimitMin: number | null;
   passScore: number;
@@ -84,6 +87,7 @@ interface QuizBody {
   lessonTh?: string;
   videoUrl?: string;
   category?: string;
+  audience?: string;
   timeLimitMin?: number | null;
   passScore?: number;
   allowRetake?: boolean;
@@ -99,7 +103,7 @@ const REVIEWER_JOIN = `LEFT JOIN staff rst ON rst.identity = q.reviewed_by COLLA
 const REVIEWED_BY_FIELD = `COALESCE(rst.name, q.reviewed_by) AS reviewedBy`;
 
 const QUIZ_FIELDS = `q.id, q.title, q.title_th AS titleTh, q.description, q.description_th AS descriptionTh,
-  q.lesson, q.lesson_th AS lessonTh, q.video_url AS videoUrl, q.category, q.status, q.time_limit_min AS timeLimitMin,
+  q.lesson, q.lesson_th AS lessonTh, q.video_url AS videoUrl, q.category, q.audience, q.status, q.time_limit_min AS timeLimitMin,
   q.pass_score AS passScore, q.allow_retake AS allowRetake, q.show_answers AS showAnswers,
   q.author_identity AS authorIdentity, ${AUTHOR_NAME_FIELD}, ${REVIEWED_BY_FIELD},
   q.created_at AS createdAt, q.updated_at AS updatedAt, q.published_at AS publishedAt`;
@@ -298,9 +302,9 @@ quizzes.post('/quizzes', async (c) => {
 
   const result = await c.env.DB.prepare(
     `INSERT INTO quizzes
-       (title, title_th, description, description_th, lesson, lesson_th, video_url, category,
+       (title, title_th, description, description_th, lesson, lesson_th, video_url, category, audience,
         status, time_limit_min, pass_score, allow_retake, show_answers, author_identity, author_name)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       body.title!.trim(),
@@ -311,6 +315,7 @@ quizzes.post('/quizzes', async (c) => {
       body.lessonTh ?? null,
       body.videoUrl?.trim() || null,
       body.category?.trim() || null,
+      normAudience(body.audience),
       body.timeLimitMin ?? null,
       Math.max(0, Math.min(100, Math.round(body.passScore ?? 0))),
       body.allowRetake === false ? 0 : 1,
@@ -357,7 +362,7 @@ quizzes.patch('/quizzes/:id', async (c) => {
   await c.env.DB.prepare(
     `UPDATE quizzes SET
        title = ?, title_th = ?, description = ?, description_th = ?, lesson = ?, lesson_th = ?, video_url = ?, category = ?,
-       time_limit_min = ?, pass_score = ?, allow_retake = ?, show_answers = ?, updated_at = CURRENT_TIMESTAMP
+       audience = ?, time_limit_min = ?, pass_score = ?, allow_retake = ?, show_answers = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
   )
     .bind(
@@ -369,6 +374,7 @@ quizzes.patch('/quizzes/:id', async (c) => {
       body.lessonTh ?? null,
       body.videoUrl?.trim() || null,
       body.category?.trim() || null,
+      normAudience(body.audience),
       body.timeLimitMin ?? null,
       Math.max(0, Math.min(100, Math.round(body.passScore ?? 0))),
       body.allowRetake === false ? 0 : 1,
@@ -460,7 +466,7 @@ quizzesPortal.get('/portal/:studentId/quizzes', async (c) => {
   }
   const { results } = await c.env.DB.prepare(
     `SELECT q.id, q.title, q.title_th AS titleTh, q.description, q.description_th AS descriptionTh,
-            q.category, q.time_limit_min AS timeLimitMin, q.pass_score AS passScore,
+            q.category, q.audience, q.time_limit_min AS timeLimitMin, q.pass_score AS passScore,
             q.allow_retake AS allowRetake, q.published_at AS publishedAt,
             (SELECT COUNT(*) FROM quiz_questions qq WHERE qq.quiz_id = q.id) AS questionCount,
             (q.lesson IS NOT NULL AND q.lesson != '') AS hasLesson,
