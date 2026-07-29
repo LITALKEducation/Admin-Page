@@ -13,6 +13,7 @@ export const SCREEN_ROUTES: Record<string, string> = {
   logs: '/logs',
   quizzes: '/quizzes',
   courses: '/courses',
+  learners: '/learners',
   payments: '/payments',
   finance: '/finance',
   blog: '/blog',

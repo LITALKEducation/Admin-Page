@@ -439,6 +439,26 @@ courses.get('/courses/:id/enrollments', async (c) => {
   return c.json({ status: 'success', enrollments: results ?? [] });
 });
 
+// System-wide list of course enrollees (registrants). Admin sees every
+// enrollment; other staff see enrollees of the courses they authored.
+courses.get('/enrollments', async (c) => {
+  const user = c.get('user');
+  const admin = isAdmin(user);
+  const base = `SELECT ce.id, ce.student_id AS studentId, s.name AS studentName, s.nickname AS studentNickname,
+       s.email AS studentEmail, s.account_type AS accountType,
+       ce.course_id AS courseId, c.title AS courseTitle, c.title_th AS courseTitleTh,
+       ce.amount, ce.status, ce.enrolled_at AS enrolledAt
+     FROM course_enrollments ce
+     JOIN courses c ON c.id = ce.course_id
+     LEFT JOIN students s ON s.id = ce.student_id COLLATE NOCASE
+     WHERE ce.status = 'active'`;
+  const stmt = admin
+    ? c.env.DB.prepare(`${base} ORDER BY ce.enrolled_at DESC, ce.id DESC LIMIT 2000`)
+    : c.env.DB.prepare(`${base} AND c.author_identity = ? COLLATE NOCASE ORDER BY ce.enrolled_at DESC, ce.id DESC LIMIT 2000`).bind(user.email);
+  const { results } = await stmt.all();
+  return c.json({ status: 'success', enrollments: results ?? [] });
+});
+
 // Upload / replace a course cover image (multipart form, field "file").
 courses.post('/courses/:id/cover', async (c) => {
   const user = c.get('user');

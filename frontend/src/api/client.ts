@@ -1341,3 +1341,43 @@ export async function uploadCourseCover(getToken: GetTokenFn, id: number, file: 
 export async function fetchCourseCoverBlob(getToken: GetTokenFn, id: number) {
   return apiFetchBlob(getToken, `/courses/${id}/cover`);
 }
+
+/* ===================== System-wide learners overview ===================== */
+
+export interface EnrollmentRow {
+  id: number;
+  studentId: string;
+  studentName: string | null;
+  studentNickname: string | null;
+  studentEmail: string | null;
+  accountType: string | null;
+  courseId: number;
+  courseTitle: string;
+  courseTitleTh: string | null;
+  amount: number;
+  status: string;
+  enrolledAt: string;
+}
+
+export interface QuizAttemptOverviewRow {
+  id: number;
+  studentId: string;
+  studentName: string | null;
+  studentNickname: string | null;
+  accountType: string | null;
+  quizId: number;
+  quizTitle: string;
+  quizTitleTh: string | null;
+  score: number;
+  maxScore: number;
+  passed: number;
+  submittedAt: string;
+}
+
+export async function fetchAllEnrollments(getToken: GetTokenFn) {
+  return apiJson<{ enrollments: EnrollmentRow[] }>(getToken, '/enrollments');
+}
+
+export async function fetchAllQuizAttempts(getToken: GetTokenFn) {
+  return apiJson<{ attempts: QuizAttemptOverviewRow[] }>(getToken, '/quiz-attempts');
+}

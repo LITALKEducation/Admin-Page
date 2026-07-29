@@ -453,6 +453,24 @@ quizzes.get('/quizzes/:id/attempts', async (c) => {
   return c.json({ status: 'success', attempts: results ?? [] });
 });
 
+// System-wide list of test-takers (quiz attempts). Admin sees every attempt;
+// other staff see attempts on the quizzes they authored.
+quizzes.get('/quiz-attempts', async (c) => {
+  const user = c.get('user');
+  const admin = isAdmin(user);
+  const base = `SELECT qa.id, qa.student_id AS studentId, s.name AS studentName, s.nickname AS studentNickname,
+       s.account_type AS accountType, qa.quiz_id AS quizId, q.title AS quizTitle, q.title_th AS quizTitleTh,
+       qa.score, qa.max_score AS maxScore, qa.passed, qa.submitted_at AS submittedAt
+     FROM quiz_attempts qa
+     JOIN quizzes q ON q.id = qa.quiz_id
+     LEFT JOIN students s ON s.id = qa.student_id COLLATE NOCASE`;
+  const stmt = admin
+    ? c.env.DB.prepare(`${base} ORDER BY qa.submitted_at DESC, qa.id DESC LIMIT 2000`)
+    : c.env.DB.prepare(`${base} WHERE q.author_identity = ? COLLATE NOCASE ORDER BY qa.submitted_at DESC, qa.id DESC LIMIT 2000`).bind(user.email);
+  const { results } = await stmt.all();
+  return c.json({ status: 'success', attempts: results ?? [] });
+});
+
 /* ===================== Portal routes (before verifyAuth) ===================== */
 
 export const quizzesPortal = new Hono<AppBindings>();
