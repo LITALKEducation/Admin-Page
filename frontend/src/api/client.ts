@@ -1236,6 +1236,8 @@ export interface CourseSummary {
   descriptionTh: string | null;
   category: string | null;
   priceSatang: number;
+  discountSatang: number | null;
+  includedInPlus: number;
   currency: string;
   status: CourseStatus;
   authorName: string | null;
@@ -1287,6 +1289,8 @@ export interface CoursePayload {
   overviewTh?: string;
   category?: string;
   priceSatang?: number;
+  discountSatang?: number | null;
+  includedInPlus?: number;
   currency?: string;
   items?: { quizId: number; kind: CourseItemKind }[];
 }
