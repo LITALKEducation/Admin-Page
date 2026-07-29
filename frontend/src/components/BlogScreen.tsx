@@ -17,6 +17,7 @@ import {
   type BlogPost,
   type BlogStatus,
 } from '../api/client';
+import { formatFileSize } from '../utils/format';
 
 const BLOG_STATUS_LABEL: Record<string, string> = {
   pending: 'รออนุมัติ',
@@ -33,12 +34,6 @@ function blogPostUrl(slug: string): string {
 
 function shortBlogPostUrl(slug: string): string {
   return 'https://go.litalkeducation.com/' + encodeURIComponent(slug);
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 function readVideoDuration(file: File): Promise<number | null> {

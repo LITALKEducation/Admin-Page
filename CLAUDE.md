@@ -149,6 +149,27 @@ When adding a surface, add it to `SERVICE_SURFACES` **and** to `SURFACES` in
 `ServiceScreen.tsx` — the whole-system switch derives its list from the latter
 so a new surface is included by default.
 
+## Lesson videos in R2
+
+`worker/src/video.ts`. A quiz's video is either a link (`video_url`) or a file
+in the bucket (`video_key`); the file wins when both are set. Two constraints
+shape the module, and both are easy to trip over:
+
+- **A Worker request body is capped at ~100 MB.** A lesson recording is
+  routinely bigger, so upload is an R2 *multipart* sequence driven by the
+  panel — start → part × N → complete, with abort on cancel or failure
+  (R2 keeps and bills for the parts of an upload that is never sealed).
+  Parts are buffered with `arrayBuffer()` rather than streamed: R2 needs a
+  part's length up front.
+- **A `<video src>` cannot send an `Authorization` header.** The portal mints
+  a short-lived ticket over the normal authenticated API — that call is where
+  `portalTokenMatchesStudent` and `courseGateForQuiz` run — and plays a URL
+  carrying it. The stream endpoint only checks the ticket; re-running the gate
+  there would put four D1 queries on every Range request.
+
+Serving honours `Range` and answers 206. Without it Safari will not play the
+video at all, and nothing can seek. `bytes=-500` is the *last* 500 bytes.
+
 ## Migrations
 
 Numbered SQL in `worker/migrations/`, applied automatically on deploy. They run
