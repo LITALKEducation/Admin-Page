@@ -144,7 +144,7 @@ export default function App() {
 
   if (isLoading) {
     return (
-      <div className="modal-overlay" style={{ display: 'flex' }}>
+      <div className="modal-overlay active">
         <div className="loader"></div>
       </div>
     );

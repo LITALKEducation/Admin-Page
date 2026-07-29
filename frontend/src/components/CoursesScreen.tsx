@@ -780,7 +780,7 @@ export default function CoursesScreen() {
       </div>
 
       {enrollFor && (
-        <div className="modal-overlay" style={{ display: 'flex' }} onClick={() => setEnrollFor(null)}>
+        <div className="modal-overlay active" onClick={() => setEnrollFor(null)}>
           <div className="admin-card" style={{ maxWidth: 720, width: '92%', maxHeight: '82vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <div className="card-title-bar">
               <span className="card-icon">
