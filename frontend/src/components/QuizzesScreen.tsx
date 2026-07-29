@@ -896,7 +896,7 @@ export default function QuizzesScreen() {
       </div>
 
       {resultsFor && (
-        <div className="modal-overlay" style={{ display: 'flex' }} onClick={() => setResultsFor(null)}>
+        <div className="modal-overlay active" onClick={() => setResultsFor(null)}>
           <div className="admin-card" style={{ maxWidth: 720, width: '92%', maxHeight: '82vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <div className="card-title-bar">
               <span className="card-icon">
