@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { AppBindings } from './types';
-import { verifyAuth, requirePermission, requireAdmin, isAdmin, portalTokenMatchesStudent, verifyPortalToken, resolveStudentIdFromIdent, debugPortalAuth } from './auth';
+import { verifyAuth, requirePermission, requireAdmin, isAdmin, portalTokenMatchesStudent, verifyPortalToken, resolveStudentIdFromIdent, resolveOrProvisionStudent, debugPortalAuth } from './auth';
 import { DOCUMENT_TYPES, extname, insertFileWithUniqueName, logAudit, todayCode } from './db';
 import core, { bangkokToday, generateCheckinCode } from './core';
 import manage, {
@@ -45,7 +45,7 @@ import { verifyStripeSignature, retrievePaymentReceiptUrl, deactivateStripePayme
 import type { Env } from './types';
 import blog, { blogPublic } from './blog';
 import quizzes, { quizzesPortal } from './quizzes';
-import courses, { coursesPortal, grantEnrollment } from './courses';
+import courses, { coursesPortal, coursesPublic, grantEnrollment } from './courses';
 import shortLinks, { shortLinkRedirect } from './shortlinks';
 
 const app = new Hono<AppBindings>();
@@ -68,6 +68,9 @@ app.use('*', async (c, next) => cors({
 
 // Published blog posts for the public website (litalkeducation.com/blog).
 app.route('/', blogPublic);
+
+// Public on-demand course catalogue for the marketing site (no login).
+app.route('/', coursesPublic);
 
 // What the popup on every public page polls: the notices visible right now,
 // already filtered by phase so the client never has to reason about times.
@@ -299,8 +302,12 @@ app.get('/portal/whoami', async (c) => {
   const ident = await verifyPortalToken(c);
   if (!ident) return c.json({ status: 'error', message: 'Unauthorized' }, 401);
 
-  const studentId = await resolveStudentIdFromIdent(c, ident);
-  if (studentId) return c.json({ status: 'success', studentId });
+  // Resolves tutored students, and auto-provisions a self-registered
+  // (arbitrary-email) learner as an on_demand student on first sign-in.
+  const resolved = await resolveOrProvisionStudent(c, ident);
+  if (resolved) {
+    return c.json({ status: 'success', studentId: resolved.studentId, accountType: resolved.accountType });
+  }
 
   return c.json({ status: 'error', message: 'ไม่พบบัญชีนักเรียนที่ผูกกับผู้ใช้นี้ในระบบ กรุณาติดต่อเจ้าหน้าที่' }, 404);
 });

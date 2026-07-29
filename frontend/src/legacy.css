@@ -1980,6 +1980,17 @@
             appearance: none;
         }
 
+        /* The width:100% above is meant for text-like fields only. Checkboxes
+           and radios must keep their intrinsic size — otherwise a checkbox
+           sitting next to a text input in a flex row (e.g. the quiz option
+           editor) stretches to fill the row and squashes the text field so it
+           can't be typed into. */
+        .form-group input[type="checkbox"],
+        .form-group input[type="radio"] {
+            width: auto;
+            flex: none;
+        }
+
         /* Safari gives type=date/time a taller intrinsic line-box and its own
            font metrics than a text input, so the two end up misaligned side
            by side; pin both to the same box model as everything else. */

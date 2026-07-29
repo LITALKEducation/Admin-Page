@@ -17,7 +17,7 @@ import { Hono } from 'hono';
 import type { AppBindings, AuthUser } from './types';
 import { isAdmin, requireAdmin, portalTokenMatchesStudent } from './auth';
 import { logAudit } from './db';
-import { canAccessQuiz, courseIdForQuiz } from './courses';
+import { courseGateForQuiz } from './courses';
 
 const MAX_TITLE = 300;
 const MAX_TEXT = 2_000;
@@ -26,6 +26,8 @@ const MAX_PROMPT = 4_000;
 const MAX_QUESTIONS = 100;
 const MAX_OPTIONS = 10;
 const QUESTION_TYPES = new Set(['single', 'multiple', 'truefalse', 'short']);
+const AUDIENCES = new Set(['on_demand', 'tutored']);
+const normAudience = (a: string | undefined): string => (AUDIENCES.has(a ?? '') ? (a as string) : 'on_demand');
 
 /* ===================== Types ===================== */
 
@@ -39,7 +41,9 @@ interface QuizRow {
   descriptionTh: string | null;
   lesson: string | null;
   lessonTh: string | null;
+  videoUrl: string | null;
   category: string | null;
+  audience: string;
   status: string;
   timeLimitMin: number | null;
   passScore: number;
@@ -81,7 +85,9 @@ interface QuizBody {
   descriptionTh?: string;
   lesson?: string;
   lessonTh?: string;
+  videoUrl?: string;
   category?: string;
+  audience?: string;
   timeLimitMin?: number | null;
   passScore?: number;
   allowRetake?: boolean;
@@ -97,7 +103,7 @@ const REVIEWER_JOIN = `LEFT JOIN staff rst ON rst.identity = q.reviewed_by COLLA
 const REVIEWED_BY_FIELD = `COALESCE(rst.name, q.reviewed_by) AS reviewedBy`;
 
 const QUIZ_FIELDS = `q.id, q.title, q.title_th AS titleTh, q.description, q.description_th AS descriptionTh,
-  q.lesson, q.lesson_th AS lessonTh, q.category, q.status, q.time_limit_min AS timeLimitMin,
+  q.lesson, q.lesson_th AS lessonTh, q.video_url AS videoUrl, q.category, q.audience, q.status, q.time_limit_min AS timeLimitMin,
   q.pass_score AS passScore, q.allow_retake AS allowRetake, q.show_answers AS showAnswers,
   q.author_identity AS authorIdentity, ${AUTHOR_NAME_FIELD}, ${REVIEWED_BY_FIELD},
   q.created_at AS createdAt, q.updated_at AS updatedAt, q.published_at AS publishedAt`;
@@ -233,6 +239,7 @@ function validateQuizBody(body: QuizBody): string | null {
   if (body.title.length > MAX_TITLE || (body.titleTh ?? '').length > MAX_TITLE) return 'ชื่อยาวเกินไป';
   if ((body.description ?? '').length > MAX_TEXT || (body.descriptionTh ?? '').length > MAX_TEXT) return 'คำอธิบายยาวเกินไป';
   if ((body.lesson ?? '').length > MAX_LESSON || (body.lessonTh ?? '').length > MAX_LESSON) return 'บทเรียนยาวเกินไป';
+  if ((body.videoUrl ?? '').length > 2_000) return 'ลิงก์วีดีโอยาวเกินไป';
   if (body.passScore != null && (body.passScore < 0 || body.passScore > 100)) return 'เกณฑ์ผ่านต้องอยู่ระหว่าง 0-100';
   if (body.timeLimitMin != null && body.timeLimitMin !== null && (body.timeLimitMin < 0 || body.timeLimitMin > 600)) {
     return 'เวลาจำกัดไม่ถูกต้อง';
@@ -295,9 +302,9 @@ quizzes.post('/quizzes', async (c) => {
 
   const result = await c.env.DB.prepare(
     `INSERT INTO quizzes
-       (title, title_th, description, description_th, lesson, lesson_th, category,
+       (title, title_th, description, description_th, lesson, lesson_th, video_url, category, audience,
         status, time_limit_min, pass_score, allow_retake, show_answers, author_identity, author_name)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       body.title!.trim(),
@@ -306,7 +313,9 @@ quizzes.post('/quizzes', async (c) => {
       body.descriptionTh?.trim() || null,
       body.lesson ?? null,
       body.lessonTh ?? null,
+      body.videoUrl?.trim() || null,
       body.category?.trim() || null,
+      normAudience(body.audience),
       body.timeLimitMin ?? null,
       Math.max(0, Math.min(100, Math.round(body.passScore ?? 0))),
       body.allowRetake === false ? 0 : 1,
@@ -352,8 +361,8 @@ quizzes.patch('/quizzes/:id', async (c) => {
 
   await c.env.DB.prepare(
     `UPDATE quizzes SET
-       title = ?, title_th = ?, description = ?, description_th = ?, lesson = ?, lesson_th = ?, category = ?,
-       time_limit_min = ?, pass_score = ?, allow_retake = ?, show_answers = ?, updated_at = CURRENT_TIMESTAMP
+       title = ?, title_th = ?, description = ?, description_th = ?, lesson = ?, lesson_th = ?, video_url = ?, category = ?,
+       audience = ?, time_limit_min = ?, pass_score = ?, allow_retake = ?, show_answers = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
   )
     .bind(
@@ -363,7 +372,9 @@ quizzes.patch('/quizzes/:id', async (c) => {
       body.descriptionTh?.trim() || null,
       body.lesson ?? null,
       body.lessonTh ?? null,
+      body.videoUrl?.trim() || null,
       body.category?.trim() || null,
+      normAudience(body.audience),
       body.timeLimitMin ?? null,
       Math.max(0, Math.min(100, Math.round(body.passScore ?? 0))),
       body.allowRetake === false ? 0 : 1,
@@ -455,7 +466,7 @@ quizzesPortal.get('/portal/:studentId/quizzes', async (c) => {
   }
   const { results } = await c.env.DB.prepare(
     `SELECT q.id, q.title, q.title_th AS titleTh, q.description, q.description_th AS descriptionTh,
-            q.category, q.time_limit_min AS timeLimitMin, q.pass_score AS passScore,
+            q.category, q.audience, q.time_limit_min AS timeLimitMin, q.pass_score AS passScore,
             q.allow_retake AS allowRetake, q.published_at AS publishedAt,
             (SELECT COUNT(*) FROM quiz_questions qq WHERE qq.quiz_id = q.id) AS questionCount,
             (q.lesson IS NOT NULL AND q.lesson != '') AS hasLesson,
@@ -483,7 +494,7 @@ quizzesPortal.get('/portal/:studentId/quizzes/:quizId', async (c) => {
   }
   const quiz = await c.env.DB.prepare(
     `SELECT id, title, title_th AS titleTh, description, description_th AS descriptionTh,
-            lesson, lesson_th AS lessonTh, category, time_limit_min AS timeLimitMin,
+            lesson, lesson_th AS lessonTh, video_url AS videoUrl, category, time_limit_min AS timeLimitMin,
             pass_score AS passScore, allow_retake AS allowRetake, show_answers AS showAnswers
      FROM quizzes WHERE id = ? AND status = 'published'`,
   )
@@ -491,11 +502,11 @@ quizzesPortal.get('/portal/:studentId/quizzes/:quizId', async (c) => {
     .first<QuizRow>();
   if (!quiz) return c.json({ status: 'error', message: 'ไม่พบแบบทดสอบ' }, 404);
 
-  // A quiz that belongs to a paid course requires enrollment. Report the
-  // course id so the portal can send the student to buy it.
-  if (!(await canAccessQuiz(c.env.DB, quizId, studentId))) {
-    const courseId = await courseIdForQuiz(c.env.DB, quizId);
-    return c.json({ status: 'error', message: 'ต้องลงทะเบียนคอร์สนี้ก่อนจึงจะเข้าเรียนได้', courseId, locked: true }, 403);
+  // Course sequencing gate: enrollment, then Pretest → Lessons → Posttest.
+  // Reports the course id + reason so the portal can steer the student.
+  const gate = await courseGateForQuiz(c.env.DB, quizId, studentId);
+  if (!gate.allowed) {
+    return c.json({ status: 'error', message: gate.message, courseId: gate.courseId, reason: gate.reason, locked: true }, 403);
   }
 
   const { results } = await c.env.DB.prepare(
@@ -540,9 +551,10 @@ quizzesPortal.post('/portal/:studentId/quizzes/:quizId/attempts', async (c) => {
     .first<{ id: number; passScore: number; allowRetake: number; showAnswers: number }>();
   if (!quiz) return c.json({ status: 'error', message: 'ไม่พบแบบทดสอบ' }, 404);
 
-  // A paid-course quiz can't be submitted without enrollment either.
-  if (!(await canAccessQuiz(c.env.DB, quizId, studentId))) {
-    return c.json({ status: 'error', message: 'ต้องลงทะเบียนคอร์สนี้ก่อน', locked: true }, 403);
+  // A course quiz can't be submitted out of sequence either.
+  const gate = await courseGateForQuiz(c.env.DB, quizId, studentId);
+  if (!gate.allowed) {
+    return c.json({ status: 'error', message: gate.message, courseId: gate.courseId, reason: gate.reason, locked: true }, 403);
   }
 
   // Enforce single-attempt quizzes server-side, not just in the UI.

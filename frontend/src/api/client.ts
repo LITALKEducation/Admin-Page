@@ -1048,6 +1048,7 @@ export type ServiceSurface =
   | 'chat_portal'
   | 'checkin'
   | 'booking'
+  | 'learning'
   /** This panel. The Admin role passes through it — see the middleware in worker/src/index.ts. */
   | 'admin';
 
@@ -1118,6 +1119,7 @@ export async function restoreService(getToken: GetTokenFn) {
 
 export type QuizStatus = 'draft' | 'published' | 'archived';
 export type QuestionType = 'single' | 'multiple' | 'truefalse' | 'short';
+export type QuizAudience = 'on_demand' | 'tutored';
 
 export interface QuizSummary {
   id: number;
@@ -1126,6 +1128,7 @@ export interface QuizSummary {
   description: string | null;
   descriptionTh: string | null;
   category: string | null;
+  audience: QuizAudience;
   status: QuizStatus;
   timeLimitMin: number | null;
   passScore: number;
@@ -1157,7 +1160,9 @@ export interface QuizPayload {
   descriptionTh?: string;
   lesson?: string;
   lessonTh?: string;
+  videoUrl?: string;
   category?: string;
+  audience?: QuizAudience;
   timeLimitMin?: number | null;
   passScore?: number;
   allowRetake?: boolean;
@@ -1168,6 +1173,7 @@ export interface QuizPayload {
 export interface QuizDetail extends QuizSummary {
   lesson: string | null;
   lessonTh: string | null;
+  videoUrl: string | null;
 }
 
 export interface QuizAttemptRow {
@@ -1237,6 +1243,7 @@ export interface CourseSummary {
   publishedAt: string | null;
   itemCount: number;
   enrollCount: number;
+  hasCover: number;
 }
 
 export interface CourseDetail extends CourseSummary {
@@ -1244,8 +1251,11 @@ export interface CourseDetail extends CourseSummary {
   overviewTh: string | null;
 }
 
+export type CourseItemKind = 'pretest' | 'lesson' | 'posttest';
+
 export interface CourseItem {
   quizId: number;
+  kind: CourseItemKind;
   title: string;
   titleTh: string | null;
 }
@@ -1278,7 +1288,7 @@ export interface CoursePayload {
   category?: string;
   priceSatang?: number;
   currency?: string;
-  quizIds?: number[];
+  items?: { quizId: number; kind: CourseItemKind }[];
 }
 
 export async function fetchCourses(getToken: GetTokenFn) {
@@ -1320,4 +1330,14 @@ export async function deleteCourseApi(getToken: GetTokenFn, id: number) {
 
 export async function fetchCourseEnrollments(getToken: GetTokenFn, id: number) {
   return apiJson<{ enrollments: CourseEnrollmentRow[] }>(getToken, `/courses/${id}/enrollments`);
+}
+
+export async function uploadCourseCover(getToken: GetTokenFn, id: number, file: File) {
+  const form = new FormData();
+  form.append('file', file);
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/courses/${id}/cover`, { method: 'POST', body: form });
+}
+
+export async function fetchCourseCoverBlob(getToken: GetTokenFn, id: number) {
+  return apiFetchBlob(getToken, `/courses/${id}/cover`);
 }

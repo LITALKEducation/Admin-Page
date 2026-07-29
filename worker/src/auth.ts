@@ -77,7 +77,7 @@ export async function verifyAuth(c: Context<AppBindings>, next: Next) {
 // place). AUTH0_PORTAL_DOMAIN carries the domain the student site actually
 // authenticates through; falls back to AUTH0_DOMAIN if unset so a missing
 // var doesn't silently break this differently.
-export async function verifyPortalToken(c: Context<AppBindings>): Promise<{ email: string; sub: string } | null> {
+export async function verifyPortalToken(c: Context<AppBindings>): Promise<{ email: string; sub: string; name: string } | null> {
   const authHeader = c.req.header('Authorization') || '';
   const [scheme, token] = authHeader.split(' ');
   if (scheme !== 'Bearer' || !token) return null;
@@ -91,7 +91,15 @@ export async function verifyPortalToken(c: Context<AppBindings>): Promise<{ emai
       (payload[c.env.AUTH0_EMAIL_CLAIM] as string | undefined) ??
       (payload.email as string | undefined) ??
       '';
-    return { email, sub: payload.sub as string };
+    // Friendly display name, used when auto-provisioning an on-demand learner
+    // (falls back to the email local part, then a generic label).
+    const name =
+      (payload[c.env.AUTH0_NAME_CLAIM] as string | undefined) ??
+      (payload.name as string | undefined) ??
+      (payload.nickname as string | undefined) ??
+      email.split('@')[0] ??
+      '';
+    return { email, sub: payload.sub as string, name };
   } catch {
     return null;
   }
@@ -108,8 +116,16 @@ export async function resolveStudentIdFromIdent(
   c: Context<AppBindings>,
   ident: { email: string; sub: string },
 ): Promise<string | null> {
+  // The email-local-part → student-id shortcut is ONLY safe for accounts on
+  // the school's own login domain (<id>@litalkeducation.com), which is how
+  // tutored students are provisioned. Since on-demand learners can sign up
+  // with ANY email, applying it to them would let someone register
+  // "<realstudentid>@gmail.com" and resolve to that real student — so we gate
+  // it on the domain and let arbitrary-email users resolve by Auth0 sub only.
+  const domain = (c.env.STUDENT_EMAIL_DOMAIN || '').toLowerCase();
   const localPart = ident.email.split('@')[0];
-  if (localPart) {
+  const onSchoolDomain = !!domain && ident.email.toLowerCase().endsWith(`@${domain}`);
+  if (localPart && onSchoolDomain) {
     const byEmail = await c.env.DB.prepare(
       `SELECT id FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`,
     )
@@ -124,6 +140,41 @@ export async function resolveStudentIdFromIdent(
     .bind(ident.sub)
     .first<{ id: string }>();
   return bySub?.id ?? null;
+}
+
+// Resolve the caller's student id AND account type, auto-provisioning an
+// on-demand learner the first time a self-registered (non-school-domain)
+// account signs in. Tutored students always resolve via
+// resolveStudentIdFromIdent and are never provisioned here. Returns null only
+// when a school-domain login has no matching roster row (a real "unknown
+// student" that staff must fix).
+export async function resolveOrProvisionStudent(
+  c: Context<AppBindings>,
+  ident: { email: string; sub: string; name: string },
+): Promise<{ studentId: string; accountType: string; created: boolean } | null> {
+  const existingId = await resolveStudentIdFromIdent(c, ident);
+  if (existingId) {
+    const row = await c.env.DB.prepare(`SELECT account_type AS accountType FROM students WHERE id = ?`)
+      .bind(existingId)
+      .first<{ accountType: string }>();
+    return { studentId: existingId, accountType: row?.accountType || 'tutored', created: false };
+  }
+
+  const domain = (c.env.STUDENT_EMAIL_DOMAIN || '').toLowerCase();
+  const onSchoolDomain = !!domain && ident.email.toLowerCase().endsWith(`@${domain}`);
+  // A school-domain login with no roster row is a genuine "not found" — do NOT
+  // silently create an on-demand account for it; staff needs to look into it.
+  if (onSchoolDomain || !ident.email) return null;
+
+  const id = `od_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
+  const name = (ident.name || ident.email.split('@')[0] || 'Learner').slice(0, 120);
+  await c.env.DB.prepare(
+    `INSERT INTO students (id, name, email, auth0_user_id, account_type, created_by)
+     VALUES (?, ?, ?, ?, 'on_demand', 'self-signup')`,
+  )
+    .bind(id, name, ident.email, ident.sub)
+    .run();
+  return { studentId: id, accountType: 'on_demand', created: true };
 }
 
 // Ownership check for the student portal — returns whether the caller
