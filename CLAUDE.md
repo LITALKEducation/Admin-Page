@@ -66,6 +66,19 @@ Screens are lazily loaded (`lazy()` + `Suspense`) — with 20-odd of them there
 is no reason to ship the blog editor or the course builder to someone who
 opens the dashboard.
 
+## Segmented controls
+
+Use `components/TabMenu.tsx` rather than hand-rolling a `.tab-menu`. It renders
+the sliding pill and owns the measurement; `.tab-menu-pill` had been in
+`legacy.css` for a while with no screen rendering the element, so the tabs only
+changed colour.
+
+One trap it exists to contain: a `ResizeObserver` on the bar also fires on the
+layout pass that follows a tab change. Re-snapping the pill there — the
+deliberately un-transitioned path used for first paint — runs straight over the
+tween that just started and the pill teleports. It re-snaps only when the bar's
+width has actually changed.
+
 ## Styling
 
 `src/legacy.css` is kept **unlayered** so it wins the cascade over Tailwind's

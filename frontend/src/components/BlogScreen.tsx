@@ -3,6 +3,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { useMe } from '../hooks/useMe';
 import { useToast } from '../ui/ToastContext';
 import { useConfirm } from '../ui/ConfirmContext';
+import Checkbox from './Checkbox';
 import {
   makeTokenGetter,
   fetchBlogPosts,
@@ -715,9 +716,9 @@ export default function BlogScreen() {
                   )}
                 </div>
                 {isAdmin && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginTop: 4 }}>
-                    <input type="checkbox" checked={publishNow} onChange={(e) => setPublishNow(e.target.checked)} /> เผยแพร่ทันทีเมื่อบันทึก
-                  </label>
+                  <Checkbox checked={publishNow} onChange={setPublishNow}>
+                    เผยแพร่ทันทีเมื่อบันทึก
+                  </Checkbox>
                 )}
               </div>
             )}

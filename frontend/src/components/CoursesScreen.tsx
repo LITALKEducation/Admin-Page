@@ -3,6 +3,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { useMe } from '../hooks/useMe';
 import { useToast } from '../ui/ToastContext';
 import { useConfirm } from '../ui/ConfirmContext';
+import Checkbox from './Checkbox';
 import {
   makeTokenGetter,
   fetchCourses,
@@ -577,16 +578,14 @@ export default function CoursesScreen() {
             </div>
 
             <div className="form-group">
-              <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 400 }}>
-                <input
-                  type="checkbox"
-                  checked={form.includedInPlus}
-                  onChange={(e) => setForm({ ...form, includedInPlus: e.target.checked })}
-                />
+              <Checkbox
+                checked={form.includedInPlus}
+                onChange={(v) => setForm({ ...form, includedInPlus: v })}
+              >
                 <span>
                   รวมอยู่ในแพ็กเกจ <strong>LITALK+</strong> (สมาชิกรายเดือน — เร็ว ๆ นี้)
                 </span>
-              </label>
+              </Checkbox>
               <div className="form-hint">เตรียมไว้สำหรับระบบสมัครสมาชิก LITALK+ ในอนาคต ยังไม่มีผลต่อการซื้อคอร์สตอนนี้</div>
             </div>
 
@@ -635,10 +634,9 @@ export default function CoursesScreen() {
                         key={q.id}
                         style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid var(--border-color, #e5e7eb)', borderRadius: 8, flexWrap: 'wrap' }}
                       >
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 400, flex: 1, minWidth: 160 }}>
-                          <input type="checkbox" checked={!!item} onChange={() => toggleQuiz(q.id)} />
-                          <span>{q.titleTh || q.title}</span>
-                        </label>
+                        <Checkbox checked={!!item} onChange={() => toggleQuiz(q.id)}>
+                          {q.titleTh || q.title}
+                        </Checkbox>
                         {item && (
                           <select
                             value={item.kind}

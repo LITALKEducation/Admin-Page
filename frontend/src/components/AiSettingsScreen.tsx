@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useToast } from '../ui/ToastContext';
 import AiChatLogs from './AiChatLogs';
+import TabMenu from './TabMenu';
 import {
   makeTokenGetter,
   fetchAiChatSettings,
@@ -235,21 +236,18 @@ export default function AiSettingsScreen() {
         </p>
       </div>
 
-      <div className="tab-menu" role="tablist" style={{ marginBottom: 20 }}>
-        {SURFACES.map((s) => (
-          <button
-            key={s.id}
-            className="tab-btn"
-            role="tab"
-            aria-selected={surface === s.id}
-            onClick={() => setSurface(s.id)}
-          >
-            <i className={`fas ${s.icon}`}></i>
-            {s.label}
-            {dirty.has(s.id) && <span className="ai-dirty-dot" title="มีการแก้ไขที่ยังไม่บันทึก"></span>}
-          </button>
-        ))}
-      </div>
+      <TabMenu
+        items={SURFACES.map((s) => ({
+          id: s.id,
+          label: s.label,
+          icon: s.icon,
+          dot: dirty.has(s.id),
+          dotTitle: 'มีการแก้ไขที่ยังไม่บันทึก',
+        }))}
+        active={surface}
+        onChange={setSurface}
+        ariaLabel="ส่วนของ AI Chat"
+      />
 
       {failed && (
         <div className="admin-card">

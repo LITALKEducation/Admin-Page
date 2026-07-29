@@ -5,6 +5,7 @@ import { useToast } from '../ui/ToastContext';
 import { useConfirm, usePrompt } from '../ui/ConfirmContext';
 import { formatBaht, formatClassTimeLocal, formatShortThaiDate } from '../utils/format';
 import { buildParentSummaryMessage } from '../utils/parentSummary';
+import Checkbox from './Checkbox';
 import {
   makeTokenGetter,
   fetchSchedules,
@@ -314,14 +315,13 @@ export default function HoursScreen() {
                   <div className="form-hint">เลือกตารางเรียนก่อน</div>
                 ) : (
                   selectedSchedule.sessions.map((s, i) => (
-                    <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={removeSet.has(`${s.date}|${s.time}`)}
-                        onChange={() => toggleRemove(s.date, s.time)}
-                      />
+                    <Checkbox
+                      key={i}
+                      checked={removeSet.has(`${s.date}|${s.time}`)}
+                      onChange={() => toggleRemove(s.date, s.time)}
+                    >
                       {formatShortThaiDate(s.date)} {formatClassTimeLocal(s.date, s.time)}
-                    </label>
+                    </Checkbox>
                   ))
                 )}
               </div>
