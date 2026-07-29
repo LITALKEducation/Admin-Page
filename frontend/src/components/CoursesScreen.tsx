@@ -554,7 +554,7 @@ export default function CoursesScreen() {
                   onChange={(e) => setForm({ ...form, includedInPlus: e.target.checked })}
                 />
                 <span>
-                  <i className="fas fa-crown" style={{ color: '#e0a100' }}></i> รวมอยู่ในแพ็กเกจ <strong>LITALK+</strong> (สมาชิกรายเดือน — เร็ว ๆ นี้)
+                  รวมอยู่ในแพ็กเกจ <strong>LITALK+</strong> (สมาชิกรายเดือน — เร็ว ๆ นี้)
                 </span>
               </label>
               <div className="form-hint">เตรียมไว้สำหรับระบบสมัครสมาชิก LITALK+ ในอนาคต ยังไม่มีผลต่อการซื้อคอร์สตอนนี้</div>
@@ -674,7 +674,7 @@ export default function CoursesScreen() {
                     )}
                     {course.includedInPlus ? (
                       <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 999, background: '#fff4d6', color: '#a97400' }}>
-                        <i className="fas fa-crown"></i> LITALK+
+                        LITALK+
                       </span>
                     ) : null}
                   </div>
