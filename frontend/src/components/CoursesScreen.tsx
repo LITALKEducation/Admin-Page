@@ -36,6 +36,9 @@ interface CourseForm {
   overviewTh: string;
   category: string;
   priceBaht: string;
+  // Blank = no promotion. When set below the price it's an active sale.
+  discountBaht: string;
+  includedInPlus: boolean;
   items: { quizId: number; kind: CourseItemKind }[];
 }
 
@@ -53,6 +56,8 @@ const EMPTY_FORM: CourseForm = {
   overviewTh: '',
   category: '',
   priceBaht: '0',
+  discountBaht: '',
+  includedInPlus: false,
   items: [],
 };
 
@@ -225,6 +230,8 @@ export default function CoursesScreen() {
         overviewTh: course.overviewTh ?? '',
         category: course.category ?? '',
         priceBaht: String((course.priceSatang ?? 0) / 100),
+        discountBaht: course.discountSatang == null ? '' : String(course.discountSatang / 100),
+        includedInPlus: !!course.includedInPlus,
         items: items.map((it) => ({ quizId: it.quizId, kind: it.kind })),
       };
       const draft = readDraft(id);
@@ -286,6 +293,16 @@ export default function CoursesScreen() {
       showToast('ตรวจสอบข้อมูล', 'ราคาไม่ถูกต้อง', 'error');
       return;
     }
+    const hasDiscount = form.discountBaht.trim() !== '';
+    const discountBaht = Number(form.discountBaht);
+    if (hasDiscount && (!Number.isFinite(discountBaht) || discountBaht < 0)) {
+      showToast('ตรวจสอบข้อมูล', 'ราคาโปรโมชันไม่ถูกต้อง', 'error');
+      return;
+    }
+    if (hasDiscount && discountBaht >= priceBaht) {
+      showToast('ตรวจสอบข้อมูล', 'ราคาโปรโมชันต้องน้อยกว่าราคาปกติ', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const getToken = makeTokenGetter(getAccessTokenSilently);
@@ -297,6 +314,8 @@ export default function CoursesScreen() {
         overviewTh: form.overviewTh || undefined,
         category: form.category.trim() || undefined,
         priceSatang: Math.round(priceBaht * 100),
+        discountSatang: hasDiscount ? Math.round(discountBaht * 100) : null,
+        includedInPlus: form.includedInPlus ? 1 : 0,
         currency: 'thb',
         items: form.items,
       };
@@ -494,9 +513,9 @@ export default function CoursesScreen() {
                 </label>
                 <input type="text" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
               </div>
-              <div className="form-group" style={{ flex: '0 0 200px' }}>
+              <div className="form-group" style={{ flex: '0 0 160px' }}>
                 <label>
-                  <i className="fas fa-baht-sign"></i> ราคา (บาท)
+                  <i className="fas fa-baht-sign"></i> ราคาปกติ (บาท)
                 </label>
                 <input
                   type="number"
@@ -505,8 +524,40 @@ export default function CoursesScreen() {
                   value={form.priceBaht}
                   onChange={(e) => setForm({ ...form, priceBaht: e.target.value })}
                 />
-                <div className="form-hint">ใส่ 0 = คอร์สฟรี (ลงทะเบียนได้ทันทีโดยไม่ต้องชำระเงิน)</div>
+                <div className="form-hint">ใส่ 0 = คอร์สฟรี</div>
               </div>
+              <div className="form-group" style={{ flex: '0 0 180px' }}>
+                <label>
+                  <i className="fas fa-tags"></i> ราคาโปรโมชัน (บาท)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={form.discountBaht}
+                  placeholder="เว้นว่าง = ไม่มีโปร"
+                  onChange={(e) => setForm({ ...form, discountBaht: e.target.value })}
+                />
+                <div className="form-hint">
+                  {form.discountBaht.trim() !== '' && Number(form.discountBaht) < Number(form.priceBaht)
+                    ? `ลด ${Math.round((1 - Number(form.discountBaht) / Number(form.priceBaht)) * 100)}% · โปรโมทหน้าแรก`
+                    : 'ต่ำกว่าราคาปกติ เพื่อดึงขึ้นโปรหน้าแรก'}
+                </div>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 400 }}>
+                <input
+                  type="checkbox"
+                  checked={form.includedInPlus}
+                  onChange={(e) => setForm({ ...form, includedInPlus: e.target.checked })}
+                />
+                <span>
+                  <i className="fas fa-crown" style={{ color: '#e0a100' }}></i> รวมอยู่ในแพ็กเกจ <strong>LITALK+</strong> (สมาชิกรายเดือน — เร็ว ๆ นี้)
+                </span>
+              </label>
+              <div className="form-hint">เตรียมไว้สำหรับระบบสมัครสมาชิก LITALK+ ในอนาคต ยังไม่มีผลต่อการซื้อคอร์สตอนนี้</div>
             </div>
 
             <div className="form-group">
@@ -616,9 +667,29 @@ export default function CoursesScreen() {
                     <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 999, background: 'var(--bg-tertiary, #f1f5f9)' }}>
                       {STATUS_LABEL[course.status]}
                     </span>
+                    {course.discountSatang != null && course.discountSatang < course.priceSatang && (
+                      <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 999, background: '#fde8e8', color: '#c81e1e' }}>
+                        <i className="fas fa-tags"></i> ลดราคา
+                      </span>
+                    )}
+                    {course.includedInPlus ? (
+                      <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 999, background: '#fff4d6', color: '#a97400' }}>
+                        <i className="fas fa-crown"></i> LITALK+
+                      </span>
+                    ) : null}
                   </div>
                   <div className="form-hint" style={{ marginTop: 2 }}>
-                    {course.priceSatang > 0 ? `฿${formatBaht(course.priceSatang)}` : 'ฟรี'} · {course.itemCount} บทเรียน · ลงทะเบียน {course.enrollCount} คน
+                    {course.discountSatang != null && course.discountSatang < course.priceSatang ? (
+                      <>
+                        <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>฿{formatBaht(course.priceSatang)}</span>{' '}
+                        <strong>{course.discountSatang > 0 ? `฿${formatBaht(course.discountSatang)}` : 'ฟรี'}</strong>
+                      </>
+                    ) : course.priceSatang > 0 ? (
+                      `฿${formatBaht(course.priceSatang)}`
+                    ) : (
+                      'ฟรี'
+                    )}{' '}
+                    · {course.itemCount} บทเรียน · ลงทะเบียน {course.enrollCount} คน
                     {course.category ? ` · ${course.category}` : ''}
                   </div>
                 </div>

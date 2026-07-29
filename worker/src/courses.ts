@@ -31,6 +31,8 @@ interface CourseRow {
   overviewTh: string | null;
   category: string | null;
   priceSatang: number;
+  discountSatang: number | null;
+  includedInPlus?: number;
   currency: string;
   status: string;
   authorIdentity?: string;
@@ -50,9 +52,28 @@ interface CourseBody {
   overviewTh?: string;
   category?: string;
   priceSatang?: number;
+  discountSatang?: number | null;
+  includedInPlus?: number | boolean;
   currency?: string;
   // Each item is a quiz plus its role in the course path.
   items?: { quizId: number; kind?: string }[];
+}
+
+// The price a student actually pays: the discount when one is set and lower
+// than the list price, otherwise the list price. Mirrors the SQL EFFECTIVE_PRICE
+// expression so the server charges what the catalogue advertises.
+function effectivePriceSatang(priceSatang: number, discountSatang: number | null | undefined): number {
+  const price = Math.max(0, Math.round(priceSatang || 0));
+  if (discountSatang == null) return price;
+  const disc = Math.round(discountSatang);
+  return disc >= 0 && disc < price ? disc : price;
+}
+
+// Coerce an incoming discount to what we store: NULL when omitted/blank,
+// otherwise a clamped integer satang. Zero is kept (an on-sale-for-free deal).
+function normalizeDiscount(discountSatang: number | null | undefined): number | null {
+  if (discountSatang == null) return null;
+  return Math.min(100_000_000, Math.max(0, Math.round(discountSatang)));
 }
 
 const ITEM_KINDS = new Set(['pretest', 'lesson', 'posttest']);
@@ -63,7 +84,8 @@ const REVIEWER_JOIN = `LEFT JOIN staff rst ON rst.identity = c.reviewed_by COLLA
 const REVIEWED_BY_FIELD = `COALESCE(rst.name, c.reviewed_by) AS reviewedBy`;
 
 const COURSE_FIELDS = `c.id, c.title, c.title_th AS titleTh, c.description, c.description_th AS descriptionTh,
-  c.overview, c.overview_th AS overviewTh, c.category, c.price_satang AS priceSatang, c.currency, c.status,
+  c.overview, c.overview_th AS overviewTh, c.category, c.price_satang AS priceSatang,
+  c.discount_satang AS discountSatang, c.included_in_plus AS includedInPlus, c.currency, c.status,
   c.author_identity AS authorIdentity, ${AUTHOR_NAME_FIELD}, ${REVIEWED_BY_FIELD},
   c.created_at AS createdAt, c.updated_at AS updatedAt, c.published_at AS publishedAt`;
 
@@ -218,6 +240,11 @@ function validateCourse(body: CourseBody): string | null {
   if ((body.overview ?? '').length > MAX_OVERVIEW || (body.overviewTh ?? '').length > MAX_OVERVIEW) return 'เนื้อหายาวเกินไป';
   if (body.priceSatang != null && (!Number.isInteger(body.priceSatang) || body.priceSatang < 0 || body.priceSatang > 100_000_000))
     return 'ราคาไม่ถูกต้อง';
+  if (
+    body.discountSatang != null &&
+    (!Number.isInteger(body.discountSatang) || body.discountSatang < 0 || body.discountSatang > 100_000_000)
+  )
+    return 'ราคาโปรโมชันไม่ถูกต้อง';
   return null;
 }
 
@@ -316,8 +343,8 @@ courses.post('/courses', async (c) => {
   const result = await c.env.DB.prepare(
     `INSERT INTO courses
        (title, title_th, description, description_th, overview, overview_th, category,
-        price_satang, currency, status, author_identity, author_name)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+        price_satang, discount_satang, included_in_plus, currency, status, author_identity, author_name)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
   )
     .bind(
       (body.title || body.titleTh)!.trim(),
@@ -328,6 +355,8 @@ courses.post('/courses', async (c) => {
       body.overviewTh ?? null,
       body.category?.trim() || null,
       Math.max(0, Math.round(body.priceSatang ?? 0)),
+      normalizeDiscount(body.discountSatang),
+      body.includedInPlus ? 1 : 0,
       (body.currency || 'thb').toLowerCase(),
       user.email,
       user.name || user.email,
@@ -364,7 +393,8 @@ courses.patch('/courses/:id', async (c) => {
   }
   await c.env.DB.prepare(
     `UPDATE courses SET title = ?, title_th = ?, description = ?, description_th = ?, overview = ?, overview_th = ?,
-       category = ?, price_satang = ?, currency = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+       category = ?, price_satang = ?, discount_satang = ?, included_in_plus = ?, currency = ?,
+       updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
   )
     .bind(
       (body.title || body.titleTh)!.trim(),
@@ -375,6 +405,8 @@ courses.patch('/courses/:id', async (c) => {
       body.overviewTh ?? null,
       body.category?.trim() || null,
       Math.max(0, Math.round(body.priceSatang ?? 0)),
+      normalizeDiscount(body.discountSatang),
+      body.includedInPlus ? 1 : 0,
       (body.currency || 'thb').toLowerCase(),
       id,
     )
@@ -517,10 +549,13 @@ export const coursesPublic = new Hono<AppBindings>();
 coursesPublic.get('/courses/public', async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT c.id, c.title, c.title_th AS titleTh, c.description, c.description_th AS descriptionTh,
-            c.category, c.price_satang AS priceSatang, c.currency, c.published_at AS publishedAt,
+            c.category, c.price_satang AS priceSatang, c.discount_satang AS discountSatang,
+            c.included_in_plus AS includedInPlus, c.currency, c.published_at AS publishedAt,
             (c.cover_key IS NOT NULL) AS hasCover,
             (SELECT COUNT(*) FROM course_items ci WHERE ci.course_id = c.id) AS itemCount
-     FROM courses c WHERE c.status = 'published' ORDER BY c.published_at DESC, c.id DESC LIMIT 200`,
+     FROM courses c WHERE c.status = 'published'
+     ORDER BY (c.discount_satang IS NOT NULL AND c.discount_satang < c.price_satang) DESC,
+              c.published_at DESC, c.id DESC LIMIT 200`,
   ).all();
   return c.json({ status: 'success', courses: results ?? [] });
 });
@@ -548,7 +583,8 @@ coursesPublic.get('/courses/public/:id', async (c) => {
   const id = Number(c.req.param('id'));
   const course = await c.env.DB.prepare(
     `SELECT id, title, title_th AS titleTh, description, description_th AS descriptionTh,
-            overview, overview_th AS overviewTh, category, price_satang AS priceSatang, currency,
+            overview, overview_th AS overviewTh, category, price_satang AS priceSatang,
+            discount_satang AS discountSatang, included_in_plus AS includedInPlus, currency,
             (cover_key IS NOT NULL) AS hasCover
      FROM courses WHERE id = ? AND status = 'published'`,
   )
@@ -578,11 +614,14 @@ coursesPortal.get('/portal/:studentId/courses', async (c) => {
   if (!(await portalTokenMatchesStudent(c, studentId))) return c.json({ status: 'error', message: 'Unauthorized' }, 401);
   const { results } = await c.env.DB.prepare(
     `SELECT c.id, c.title, c.title_th AS titleTh, c.description, c.description_th AS descriptionTh,
-            c.category, c.price_satang AS priceSatang, c.currency, c.published_at AS publishedAt,
+            c.category, c.price_satang AS priceSatang, c.discount_satang AS discountSatang,
+            c.included_in_plus AS includedInPlus, c.currency, c.published_at AS publishedAt,
             (c.cover_key IS NOT NULL) AS hasCover,
             (SELECT COUNT(*) FROM course_items ci WHERE ci.course_id = c.id) AS itemCount,
             (SELECT COUNT(*) FROM course_enrollments ce WHERE ce.course_id = c.id AND ce.student_id = ? COLLATE NOCASE AND ce.status = 'active') AS enrolled
-     FROM courses c WHERE c.status = 'published' ORDER BY c.published_at DESC, c.id DESC LIMIT 200`,
+     FROM courses c WHERE c.status = 'published'
+     ORDER BY (c.discount_satang IS NOT NULL AND c.discount_satang < c.price_satang) DESC,
+              c.published_at DESC, c.id DESC LIMIT 200`,
   )
     .bind(studentId)
     .all();
@@ -598,7 +637,8 @@ coursesPortal.get('/portal/:studentId/courses/:courseId', async (c) => {
   if (!(await portalTokenMatchesStudent(c, studentId))) return c.json({ status: 'error', message: 'Unauthorized' }, 401);
   const course = await c.env.DB.prepare(
     `SELECT id, title, title_th AS titleTh, description, description_th AS descriptionTh,
-            overview, overview_th AS overviewTh, category, price_satang AS priceSatang, currency,
+            overview, overview_th AS overviewTh, category, price_satang AS priceSatang,
+            discount_satang AS discountSatang, included_in_plus AS includedInPlus, currency,
             (cover_key IS NOT NULL) AS hasCover
      FROM courses WHERE id = ? AND status = 'published'`,
   )
@@ -652,18 +692,22 @@ coursesPortal.post('/portal/:studentId/courses/:courseId/checkout', async (c) =>
   if (!(await portalTokenMatchesStudent(c, studentId))) return c.json({ status: 'error', message: 'Unauthorized' }, 401);
 
   const course = await c.env.DB.prepare(
-    `SELECT id, title, title_th AS titleTh, price_satang AS priceSatang, currency FROM courses WHERE id = ? AND status = 'published'`,
+    `SELECT id, title, title_th AS titleTh, price_satang AS priceSatang, discount_satang AS discountSatang, currency
+       FROM courses WHERE id = ? AND status = 'published'`,
   )
     .bind(courseId)
-    .first<{ id: number; title: string; titleTh: string | null; priceSatang: number; currency: string }>();
+    .first<{ id: number; title: string; titleTh: string | null; priceSatang: number; discountSatang: number | null; currency: string }>();
   if (!course) return c.json({ status: 'error', message: 'ไม่พบคอร์ส' }, 404);
 
   if (await isEnrolled(c.env.DB, courseId, studentId)) {
     return c.json({ status: 'success', enrolled: true });
   }
 
-  // Free course — grant straight away, no Stripe round-trip.
-  if (!course.priceSatang || course.priceSatang <= 0) {
+  // Charge the effective price — the promo price when the course is on sale.
+  const chargeSatang = effectivePriceSatang(course.priceSatang, course.discountSatang);
+
+  // Free course (or on sale for free) — grant straight away, no Stripe round-trip.
+  if (chargeSatang <= 0) {
     await grantEnrollment(c.env.DB, courseId, studentId, 0, null);
     await logAudit(c.env.DB, null, 'COURSE_ENROLL_FREE', studentId, String(courseId), true);
     return c.json({ status: 'success', enrolled: true });
@@ -677,7 +721,7 @@ coursesPortal.post('/portal/:studentId/courses/:courseId/checkout', async (c) =>
     const link = await createStripePaymentLink(c.env.STRIPE_SECRET_KEY, {
       productName: name,
       productDescription: withPolicyNote(`คอร์สเรียน: ${name}`),
-      amountSatang: course.priceSatang,
+      amountSatang: chargeSatang,
       currency: (course.currency || 'thb').toLowerCase(),
       metadata: { type: 'course', course_id: String(courseId), student_id: studentId },
       afterCompletionUrl: returnUrl,
@@ -793,11 +837,13 @@ coursesPortal.get('/portal/:studentId/dashboard', async (c) => {
   const notEnrolled = enrolledIds.length ? `AND id NOT IN (${enrolledIds.map(() => '?').join(',')})` : '';
   const { results: recRows } = await c.env.DB.prepare(
     `SELECT id, title, title_th AS titleTh, description, description_th AS descriptionTh,
-            category, price_satang AS priceSatang,
+            category, price_satang AS priceSatang, discount_satang AS discountSatang,
+            included_in_plus AS includedInPlus,
             (SELECT COUNT(*) FROM course_items ci WHERE ci.course_id = courses.id) AS itemCount
      FROM courses
      WHERE status = 'published' ${notEnrolled}
-     ORDER BY published_at DESC, id DESC LIMIT 2`,
+     ORDER BY (discount_satang IS NOT NULL AND discount_satang < price_satang) DESC,
+              published_at DESC, id DESC LIMIT 2`,
   )
     .bind(...enrolledIds)
     .all();
