@@ -5,6 +5,7 @@ import { makeTokenGetter, fetchDashboard, type DashboardResponse, type Dashboard
 import { formatBaht, formatClassTimeLocal, formatShortThaiDate, toYMD } from '../utils/format';
 import { SCREEN_ROUTES } from '../utils/screenRoutes';
 import { useSharedStudentSelection } from '../hooks/useSharedStudentSelection';
+import TabMenu from './TabMenu';
 
 const TIMEFRAMES: { id: DashboardRange; label: string }[] = [
   { id: 'today', label: 'วันนี้' },
@@ -84,19 +85,7 @@ export default function DashboardScreen() {
             <span>{todayLabel}</span>
           </p>
         </div>
-        <div className="tab-menu" role="tablist">
-          {TIMEFRAMES.map((tf) => (
-            <button
-              key={tf.id}
-              className="tab-btn"
-              role="tab"
-              aria-selected={range === tf.id}
-              onClick={() => setRange(tf.id)}
-            >
-              {tf.label}
-            </button>
-          ))}
-        </div>
+        <TabMenu items={TIMEFRAMES} active={range} onChange={setRange} ariaLabel="ช่วงเวลา" />
       </div>
 
       <div className="stat-grid">

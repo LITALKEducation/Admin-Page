@@ -98,6 +98,16 @@
             --radius-sm: 8px;
             --radius-md: 10px;
             --radius-lg: 12px;
+            /* transitions.dev — Checkbox check. The box fills, then the
+               mark draws. --check-len is the path's own length (~14.4)
+               rounded up, so the stroke neither pre-reveals nor over-draws. */
+            --check-box: 150ms;
+            --check-draw: 350ms;
+            --check-delay: 0ms;
+            --check-uncheck: 150ms;
+            --check-ease: cubic-bezier(0.22, 1, 0.36, 1);
+            --check-len: 15;
+
             --space-1: 8px;
             --space-2: 16px;
             --space-3: 24px;
@@ -1511,6 +1521,102 @@
         @media (prefers-reduced-motion: reduce) {
             .tab-content,
             [data-profile-panel].active { animation: none !important; }
+        }
+
+
+        /* ============================================================
+           Transitions.dev — Checkbox check
+           The native input stays (keyboard, forms, screen readers); it is
+           hidden and the state is read off :checked rather than the recipe's
+           aria-checked. See components/Checkbox.tsx.
+           ============================================================ */
+        .t-check-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-weight: 400;
+        }
+
+        .t-check {
+            position: relative;
+            display: inline-flex;
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Hidden, not removed — it still takes focus and drives the state. */
+        .t-check input {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .t-check-box {
+            position: absolute;
+            inset: 0;
+            border: 1.5px solid var(--border-color);
+            border-radius: 6px;
+            background-color: var(--bg-tertiary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            transition:
+                background-color var(--check-box) var(--check-ease),
+                border-color var(--check-box) var(--check-ease),
+                box-shadow var(--check-box) var(--check-ease);
+        }
+
+        .t-check input:checked ~ .t-check-box {
+            background-color: var(--text-primary);
+            border-color: var(--text-primary);
+        }
+
+        .t-check input:focus-visible ~ .t-check-box {
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+        }
+
+        .t-check input:disabled ~ .t-check-box {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .t-check-box svg {
+            width: 12px;
+            height: 12px;
+            overflow: visible;
+        }
+
+        .t-check-box svg path {
+            fill: none;
+            stroke: var(--bg-secondary);
+            stroke-width: 1.6;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-dasharray: var(--check-len);
+            stroke-dashoffset: var(--check-len);
+            transition: stroke-dashoffset var(--check-uncheck) var(--check-ease);
+        }
+
+        /* Checked: draw it in, after the box has filled. Unchecking uses the
+           shorter duration above and no delay, so it clears immediately. */
+        .t-check input:checked ~ .t-check-box svg path {
+            stroke-dashoffset: 0;
+            transition: stroke-dashoffset var(--check-draw) var(--check-ease) var(--check-delay);
+        }
+
+        .t-check-label {
+            line-height: 1.45;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .t-check-box, .t-check-box svg path { transition: none !important; }
         }
 
         /* Transitions.dev — Tabs sliding (small pill toggle, e.g. add/withdraw
