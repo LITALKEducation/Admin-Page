@@ -39,6 +39,9 @@ interface CourseForm {
   // Blank = no promotion. When set below the price it's an active sale.
   discountBaht: string;
   includedInPlus: boolean;
+  // datetime-local value (local time). Blank = open immediately; a future
+  // value puts the course in "coming soon" mode until then.
+  availableAtLocal: string;
   items: { quizId: number; kind: CourseItemKind }[];
 }
 
@@ -58,6 +61,7 @@ const EMPTY_FORM: CourseForm = {
   priceBaht: '0',
   discountBaht: '',
   includedInPlus: false,
+  availableAtLocal: '',
   items: [],
 };
 
@@ -92,6 +96,28 @@ function clearDraft(id: number | null) {
 
 function formatBaht(satang: number): string {
   return (satang / 100).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+// A course is "coming soon" when its launch time is set and still in the future.
+function isComingSoon(availableAt: string | null): boolean {
+  if (!availableAt) return false;
+  const t = new Date(availableAt).getTime();
+  return !Number.isNaN(t) && t > Date.now();
+}
+
+// ISO (UTC) -> value for <input type="datetime-local"> (the admin's local time).
+function isoToLocalInput(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function fmtDateTime(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 export default function CoursesScreen() {
@@ -232,6 +258,7 @@ export default function CoursesScreen() {
         priceBaht: String((course.priceSatang ?? 0) / 100),
         discountBaht: course.discountSatang == null ? '' : String(course.discountSatang / 100),
         includedInPlus: !!course.includedInPlus,
+        availableAtLocal: isoToLocalInput(course.availableAt),
         items: items.map((it) => ({ quizId: it.quizId, kind: it.kind })),
       };
       const draft = readDraft(id);
@@ -316,6 +343,9 @@ export default function CoursesScreen() {
         priceSatang: Math.round(priceBaht * 100),
         discountSatang: hasDiscount ? Math.round(discountBaht * 100) : null,
         includedInPlus: form.includedInPlus ? 1 : 0,
+        // Convert the local datetime to a UTC ISO string here (in the admin's
+        // timezone) so the server stores the exact instant.
+        availableAt: form.availableAtLocal.trim() ? new Date(form.availableAtLocal).toISOString() : null,
         currency: 'thb',
         items: form.items,
       };
@@ -554,10 +584,34 @@ export default function CoursesScreen() {
                   onChange={(e) => setForm({ ...form, includedInPlus: e.target.checked })}
                 />
                 <span>
-                  <i className="fas fa-crown" style={{ color: '#e0a100' }}></i> รวมอยู่ในแพ็กเกจ <strong>LITALK+</strong> (สมาชิกรายเดือน — เร็ว ๆ นี้)
+                  รวมอยู่ในแพ็กเกจ <strong>LITALK+</strong> (สมาชิกรายเดือน — เร็ว ๆ นี้)
                 </span>
               </label>
               <div className="form-hint">เตรียมไว้สำหรับระบบสมัครสมาชิก LITALK+ ในอนาคต ยังไม่มีผลต่อการซื้อคอร์สตอนนี้</div>
+            </div>
+
+            <div className="form-group">
+              <label>
+                <i className="fas fa-clock"></i> เปิดให้ลงทะเบียนเมื่อ (โหมด "เร็ว ๆ นี้")
+              </label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  type="datetime-local"
+                  value={form.availableAtLocal}
+                  style={{ maxWidth: 260 }}
+                  onChange={(e) => setForm({ ...form, availableAtLocal: e.target.value })}
+                />
+                {form.availableAtLocal && (
+                  <button type="button" className="btn btn-secondary" style={{ padding: '6px 11px' }} onClick={() => setForm({ ...form, availableAtLocal: '' })}>
+                    <i className="fas fa-xmark"></i> ล้าง
+                  </button>
+                )}
+              </div>
+              <div className="form-hint">
+                {form.availableAtLocal && new Date(form.availableAtLocal).getTime() > Date.now()
+                  ? `คอร์สจะแสดงแบบ "เร็ว ๆ นี้" พร้อมนับถอยหลัง และจะเปิดให้ลงทะเบียนอัตโนมัติเมื่อ ${fmtDateTime(new Date(form.availableAtLocal).toISOString())}`
+                  : 'เว้นว่าง = เปิดให้ลงทะเบียนทันทีที่เผยแพร่ · ตั้งวัน–เวลาในอนาคตเพื่อเปิดเป็นโหมดเร็ว ๆ นี้'}
+              </div>
             </div>
 
             <div className="form-group">
@@ -674,9 +728,14 @@ export default function CoursesScreen() {
                     )}
                     {course.includedInPlus ? (
                       <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 999, background: '#fff4d6', color: '#a97400' }}>
-                        <i className="fas fa-crown"></i> LITALK+
+                        LITALK+
                       </span>
                     ) : null}
+                    {isComingSoon(course.availableAt) && (
+                      <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 999, background: '#e0edff', color: '#1e40af' }}>
+                        <i className="fas fa-clock"></i> เร็ว ๆ นี้ · {fmtDateTime(course.availableAt)}
+                      </span>
+                    )}
                   </div>
                   <div className="form-hint" style={{ marginTop: 2 }}>
                     {course.discountSatang != null && course.discountSatang < course.priceSatang ? (
