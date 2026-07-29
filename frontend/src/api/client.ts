@@ -1238,6 +1238,7 @@ export interface CourseSummary {
   priceSatang: number;
   discountSatang: number | null;
   includedInPlus: number;
+  availableAt: string | null;
   currency: string;
   status: CourseStatus;
   authorName: string | null;
@@ -1291,6 +1292,7 @@ export interface CoursePayload {
   priceSatang?: number;
   discountSatang?: number | null;
   includedInPlus?: number;
+  availableAt?: string | null;
   currency?: string;
   items?: { quizId: number; kind: CourseItemKind }[];
 }
