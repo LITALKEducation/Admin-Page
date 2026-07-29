@@ -37,6 +37,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { screen: 'logs', label: 'บันทึกการเรียน', icon: 'fa-book-open' },
       { screen: 'quizzes', label: 'แบบทดสอบออนไลน์', icon: 'fa-clipboard-question' },
       { screen: 'courses', label: 'คอร์สเรียนออนไลน์', icon: 'fa-graduation-cap' },
+      { screen: 'learners', label: 'ผู้เรียนออนไลน์', icon: 'fa-user-check' },
     ],
   },
   {
