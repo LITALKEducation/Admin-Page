@@ -42,6 +42,12 @@ interface QuizRow {
   lesson: string | null;
   lessonTh: string | null;
   videoUrl: string | null;
+  // The R2 half of the same field: the name/size are for the editor to show,
+  // hasVideoFile is what both panels branch on. The key itself is never sent
+  // — nothing outside the Worker addresses the bucket directly. See video.ts.
+  videoName?: string | null;
+  videoSize?: number | null;
+  hasVideoFile?: number;
   category: string | null;
   audience: string;
   status: string;
@@ -104,6 +110,7 @@ const REVIEWED_BY_FIELD = `COALESCE(rst.name, q.reviewed_by) AS reviewedBy`;
 
 const QUIZ_FIELDS = `q.id, q.title, q.title_th AS titleTh, q.description, q.description_th AS descriptionTh,
   q.lesson, q.lesson_th AS lessonTh, q.video_url AS videoUrl, q.category, q.audience, q.status, q.time_limit_min AS timeLimitMin,
+  q.video_name AS videoName, q.video_size AS videoSize, (q.video_key IS NOT NULL) AS hasVideoFile,
   q.pass_score AS passScore, q.allow_retake AS allowRetake, q.show_answers AS showAnswers,
   q.author_identity AS authorIdentity, ${AUTHOR_NAME_FIELD}, ${REVIEWED_BY_FIELD},
   q.created_at AS createdAt, q.updated_at AS updatedAt, q.published_at AS publishedAt`;
@@ -488,6 +495,7 @@ quizzesPortal.get('/portal/:studentId/quizzes', async (c) => {
             q.allow_retake AS allowRetake, q.published_at AS publishedAt,
             (SELECT COUNT(*) FROM quiz_questions qq WHERE qq.quiz_id = q.id) AS questionCount,
             (q.lesson IS NOT NULL AND q.lesson != '') AS hasLesson,
+            (q.video_key IS NOT NULL OR (q.video_url IS NOT NULL AND q.video_url != '')) AS hasVideo,
             (SELECT COUNT(*) FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS attempts,
             (SELECT MAX(qa.score) FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS bestScore,
             (SELECT MAX(qa.passed) FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS passed
@@ -512,7 +520,8 @@ quizzesPortal.get('/portal/:studentId/quizzes/:quizId', async (c) => {
   }
   const quiz = await c.env.DB.prepare(
     `SELECT id, title, title_th AS titleTh, description, description_th AS descriptionTh,
-            lesson, lesson_th AS lessonTh, video_url AS videoUrl, category, time_limit_min AS timeLimitMin,
+            lesson, lesson_th AS lessonTh, video_url AS videoUrl, (video_key IS NOT NULL) AS hasVideoFile,
+            category, time_limit_min AS timeLimitMin,
             pass_score AS passScore, allow_retake AS allowRetake, show_answers AS showAnswers
      FROM quizzes WHERE id = ? AND status = 'published'`,
   )

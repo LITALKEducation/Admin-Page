@@ -1981,6 +1981,25 @@
             line-height: 1.4;
         }
 
+        /* Determinate upload progress. A lesson video is hundreds of megabytes
+           and is sent one part at a time (worker/src/video.ts), so the panel
+           knows exactly how far along it is — a spinner would throw that away
+           and leave someone unable to tell a slow upload from a stuck one. */
+        .upload-progress {
+            height: 6px;
+            border-radius: 3px;
+            background-color: var(--bg-tertiary);
+            overflow: hidden;
+            margin-bottom: 6px;
+        }
+
+        .upload-progress__fill {
+            height: 100%;
+            background-color: var(--brand-primary);
+            /* Parts land in steps, so ease between them rather than jumping. */
+            transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
         .admin-main-forms {
             display: flex;
             flex-direction: column;

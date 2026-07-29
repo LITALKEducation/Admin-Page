@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useMe } from '../hooks/useMe';
 import { useToast } from '../ui/ToastContext';
@@ -12,13 +12,17 @@ import {
   setQuizStatusApi,
   deleteQuizApi,
   fetchQuizAttempts,
+  uploadQuizVideo,
+  deleteQuizVideo,
   type QuizSummary,
+  type QuizVideoFile,
   type QuizQuestion,
   type QuizStatus,
   type QuestionType,
   type QuizAudience,
   type QuizAttemptRow,
 } from '../api/client';
+import { formatFileSize } from '../utils/format';
 
 const AUDIENCE_LABEL: Record<QuizAudience, string> = {
   on_demand: 'เรียน On Demand',
@@ -361,6 +365,13 @@ export default function QuizzesScreen() {
   const [saving, setSaving] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
 
+  // The lesson's uploaded video, kept apart from `form` because it is not part
+  // of the save: it lands in R2 and in the row the moment the upload finishes,
+  // so it is never in the on-device draft either.
+  const [videoFile, setVideoFile] = useState<QuizVideoFile | null>(null);
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
+  const uploadAbort = useRef<AbortController | null>(null);
+
   const [resultsFor, setResultsFor] = useState<QuizSummary | null>(null);
   const [attempts, setAttempts] = useState<QuizAttemptRow[] | null>(null);
 
@@ -403,6 +414,7 @@ export default function QuizzesScreen() {
   }, [quizzes, search, statusFilter, audienceFilter]);
 
   const openNew = async () => {
+    setVideoFile(null);
     const draft = readEditorDraft(null);
     if (
       draft?.form &&
@@ -428,6 +440,9 @@ export default function QuizzesScreen() {
     try {
       const getToken = makeTokenGetter(getAccessTokenSilently);
       const { quiz, questions: qs } = await fetchQuiz(getToken, id);
+      // Set before the draft branch below returns: the uploaded video belongs
+      // to the saved quiz, not to whatever draft the device is holding.
+      setVideoFile({ hasVideoFile: quiz.hasVideoFile ?? 0, videoName: quiz.videoName, videoSize: quiz.videoSize });
       const draft = readEditorDraft(id);
       if (
         draft?.form &&
@@ -467,8 +482,49 @@ export default function QuizzesScreen() {
   };
 
   const closeEditor = () => {
+    uploadAbort.current?.abort();
+    setUploadPct(null);
     setEditorOpen(false);
     setEditingId(null);
+  };
+
+  /* ----- Lesson video hosted in R2 (worker/src/video.ts) ----- */
+
+  const pickVideo = async (file: File) => {
+    if (!editingId) return;
+    const controller = new AbortController();
+    uploadAbort.current = controller;
+    setUploadPct(0);
+    try {
+      const res = await uploadQuizVideo(
+        makeTokenGetter(getAccessTokenSilently),
+        editingId,
+        file,
+        setUploadPct,
+        controller.signal,
+      );
+      setVideoFile({ hasVideoFile: 1, videoName: file.name, videoSize: res.size });
+      showToast('อัปโหลดวีดีโอแล้ว', file.name, 'success');
+    } catch (error) {
+      if ((error as Error)?.name !== 'AbortError') {
+        showToast('อัปโหลดวีดีโอไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
+      }
+    } finally {
+      uploadAbort.current = null;
+      setUploadPct(null);
+    }
+  };
+
+  const removeVideo = async () => {
+    if (!editingId) return;
+    if (!(await confirmDialog('ลบวีดีโอการสอนของแบบทดสอบนี้?', { title: 'ลบวีดีโอ', okLabel: 'ลบวีดีโอ', danger: true }))) return;
+    try {
+      await deleteQuizVideo(makeTokenGetter(getAccessTokenSilently), editingId);
+      setVideoFile({ hasVideoFile: 0, videoName: null, videoSize: null });
+      showToast('ลบวีดีโอแล้ว', undefined, 'success');
+    } catch (error) {
+      showToast('ลบวีดีโอไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
+    }
   };
 
   // Turn the editor's questions into the wire shape, trimming empty option
@@ -678,6 +734,75 @@ export default function QuizzesScreen() {
               </div>
             </div>
 
+            {/* Two ways to give a lesson its video. The uploaded file wins when
+                both are set — see worker/migrations/0032 — so the upload block
+                comes first and says so. */}
+            <div className="form-group">
+              <label>
+                <i className="fas fa-film"></i> วีดีโอการสอน (อัปโหลดไฟล์ · ไม่บังคับ)
+              </label>
+              {!editingId ? (
+                <div className="form-hint">
+                  <i className="fas fa-circle-info"></i> บันทึกแบบทดสอบก่อน แล้วจึงอัปโหลดวีดีโอได้
+                </div>
+              ) : uploadPct != null ? (
+                <div>
+                  <div className="upload-progress">
+                    <div className="upload-progress__fill" style={{ width: `${Math.round(uploadPct * 100)}%` }}></div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span className="form-hint" style={{ margin: 0 }}>
+                      กำลังอัปโหลด {Math.round(uploadPct * 100)}% · อย่าปิดหน้านี้
+                    </span>
+                    <button type="button" className="btn btn-secondary" style={{ padding: '6px 10px' }} onClick={() => uploadAbort.current?.abort()}>
+                      ยกเลิก
+                    </button>
+                  </div>
+                </div>
+              ) : videoFile?.hasVideoFile ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <span>
+                    <i className="fas fa-circle-check" style={{ color: 'var(--accent-success)' }}></i>{' '}
+                    {videoFile.videoName || 'วีดีโอการสอน'}
+                    {videoFile.videoSize ? ` · ${formatFileSize(videoFile.videoSize)}` : ''}
+                  </span>
+                  <label className="btn btn-secondary" style={{ margin: 0, padding: '6px 10px' }}>
+                    <i className="fas fa-arrows-rotate"></i> เปลี่ยนไฟล์
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/ogg,video/quicktime"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = '';
+                        if (f) pickVideo(f);
+                      }}
+                    />
+                  </label>
+                  <button type="button" className="btn btn-danger" style={{ padding: '6px 10px' }} onClick={removeVideo}>
+                    <i className="fas fa-trash"></i> ลบวีดีโอ
+                  </button>
+                </div>
+              ) : (
+                <label className="btn btn-secondary" style={{ margin: 0, padding: '6px 10px' }}>
+                  <i className="fas fa-upload"></i> เลือกไฟล์วีดีโอ
+                  <input
+                    type="file"
+                    accept="video/mp4,video/webm,video/ogg,video/quicktime"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = '';
+                      if (f) pickVideo(f);
+                    }}
+                  />
+                </label>
+              )}
+              <div className="form-hint">
+                MP4, WebM, OGG หรือ MOV · สูงสุด 2 GB · อัปโหลดแล้วเล่นจากเซิร์ฟเวอร์ของโรงเรียนเอง ไม่ผ่าน YouTube
+              </div>
+            </div>
+
             <div className="form-group">
               <label>
                 <i className="fas fa-video"></i> วีดีโอการสอน (ลิงก์ · ไม่บังคับ)
@@ -688,7 +813,10 @@ export default function QuizzesScreen() {
                 placeholder="เช่น https://youtu.be/xxxx หรือ https://vimeo.com/xxxx หรือลิงก์ไฟล์ .mp4"
                 onChange={(e) => setForm({ ...form, videoUrl: e.target.value })}
               />
-              <div className="form-hint">นักเรียนจะดูวีดีโอนี้ก่อนทำแบบทดสอบ · รองรับ YouTube, Vimeo และไฟล์วีดีโอโดยตรง</div>
+              <div className="form-hint">
+                นักเรียนจะดูวีดีโอนี้ก่อนทำแบบทดสอบ · รองรับ YouTube, Vimeo และไฟล์วีดีโอโดยตรง
+                {videoFile?.hasVideoFile ? ' · ขณะนี้ใช้ไฟล์ที่อัปโหลดไว้แทนลิงก์นี้' : ''}
+              </div>
             </div>
 
             <div className="form-group">

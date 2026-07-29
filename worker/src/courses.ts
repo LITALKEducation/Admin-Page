@@ -134,6 +134,9 @@ interface ProgressRow {
   description: string | null;
   descriptionTh: string | null;
   videoUrl: string | null;
+  // A lesson's video is either a link (video_url) or a file in R2
+  // (video_key) — "has a video" means either. See migrations/0032.
+  videoKey: string | null;
   passScore: number;
   questionCount: number;
   hasLesson: number;
@@ -149,7 +152,7 @@ export async function loadItemsWithProgress(db: D1Database, courseId: number, st
     .prepare(
       `SELECT ci.quiz_id AS quizId, ci.kind AS kind, ci.position AS position,
               q.title, q.title_th AS titleTh, q.description, q.description_th AS descriptionTh,
-              q.video_url AS videoUrl, q.pass_score AS passScore,
+              q.video_url AS videoUrl, q.video_key AS videoKey, q.pass_score AS passScore,
               (SELECT COUNT(*) FROM quiz_questions qq WHERE qq.quiz_id = q.id) AS questionCount,
               (q.lesson IS NOT NULL AND q.lesson != '') AS hasLesson,
               (SELECT COUNT(*) FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.student_id = ? COLLATE NOCASE) AS attempts,
@@ -617,7 +620,7 @@ coursesPublic.get('/courses/public/:id', async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT q.title, q.title_th AS titleTh, ci.kind AS kind,
             (SELECT COUNT(*) FROM quiz_questions qq WHERE qq.quiz_id = q.id) AS questionCount,
-            (q.video_url IS NOT NULL AND q.video_url != '') AS hasVideo
+            (q.video_key IS NOT NULL OR (q.video_url IS NOT NULL AND q.video_url != '')) AS hasVideo
      FROM course_items ci JOIN quizzes q ON q.id = ci.quiz_id
      WHERE ci.course_id = ? ORDER BY ci.position, ci.id`,
   )
@@ -687,7 +690,7 @@ coursesPortal.get('/portal/:studentId/courses/:courseId', async (c) => {
     descriptionTh: p.descriptionTh,
     questionCount: p.questionCount,
     hasLesson: p.hasLesson,
-    hasVideo: p.videoUrl ? 1 : 0,
+    hasVideo: p.videoKey || p.videoUrl ? 1 : 0,
     attempts: p.attempts,
     passed: p.passed === 1 ? 1 : 0,
     bestScore: p.bestScore,
@@ -838,7 +841,7 @@ coursesPortal.get('/portal/:studentId/dashboard', async (c) => {
           quizId: it.quizId,
           title: e.titleTh ? it.titleTh || it.title : it.title,
           kind: it.kind,
-          hasVideo: it.videoUrl ? 1 : 0,
+          hasVideo: it.videoKey || it.videoUrl ? 1 : 0,
           reason: (it.attempts ?? 0) === 0 ? 'not_started' : 'not_passed',
           locked,
         });

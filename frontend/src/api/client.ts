@@ -1170,7 +1170,14 @@ export interface QuizPayload {
   questions?: QuizQuestion[];
 }
 
-export interface QuizDetail extends QuizSummary {
+/** The lesson's video when it is a file in R2 rather than a link (video.ts). */
+export interface QuizVideoFile {
+  hasVideoFile: number;
+  videoName: string | null;
+  videoSize: number | null;
+}
+
+export interface QuizDetail extends QuizSummary, QuizVideoFile {
   lesson: string | null;
   lessonTh: string | null;
   videoUrl: string | null;
@@ -1222,6 +1229,60 @@ export async function deleteQuizApi(getToken: GetTokenFn, id: number) {
 
 export async function fetchQuizAttempts(getToken: GetTokenFn, id: number) {
   return apiJson<{ attempts: QuizAttemptRow[] }>(getToken, `/quizzes/${id}/attempts`);
+}
+
+/* ---- Lesson video in R2 (worker/src/video.ts) ----
+   Not one POST: a Worker request body is capped at ~100 MB and a lesson
+   recording is routinely bigger, so the file is cut into parts and each part
+   is its own request. The panel drives the sequence rather than the Worker,
+   because only the panel holds the file. */
+
+export async function uploadQuizVideo(
+  getToken: GetTokenFn,
+  quizId: number,
+  file: File,
+  onProgress?: (fraction: number) => void,
+  signal?: AbortSignal,
+): Promise<{ size: number }> {
+  const start = await apiJson<{ key: string; uploadId: string; partSize: number }>(
+    getToken,
+    `/quizzes/${quizId}/video/uploads`,
+    { method: 'POST', body: JSON.stringify({ name: file.name, mime: file.type, size: file.size }) },
+  );
+  const { key, uploadId, partSize } = start;
+  const base = `/quizzes/${quizId}/video/uploads/${encodeURIComponent(uploadId)}`;
+  const parts: { partNumber: number; etag: string }[] = [];
+
+  try {
+    const total = Math.max(1, Math.ceil(file.size / partSize));
+    for (let i = 0; i < total; i += 1) {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      const slice = file.slice(i * partSize, Math.min(file.size, (i + 1) * partSize));
+      // Sent one at a time on purpose. Parallel parts finish sooner on a fast
+      // link and knock a slow one over — a school upload competing with a
+      // classroom's traffic is the case that matters here.
+      const done = await apiJson<{ partNumber: number; etag: string }>(
+        getToken,
+        `${base}/parts/${i + 1}?key=${encodeURIComponent(key)}`,
+        { method: 'PUT', body: slice, headers: { 'Content-Type': 'application/octet-stream' }, signal },
+      );
+      parts.push(done);
+      onProgress?.((i + 1) / total);
+    }
+    return await apiJson<{ size: number }>(getToken, `${base}/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ key, parts, name: file.name, mime: file.type }),
+    });
+  } catch (err) {
+    // R2 keeps (and bills for) the parts of an upload that is never completed
+    // or aborted, so a cancelled or failed run must say so.
+    await apiJson(getToken, `${base}/abort?key=${encodeURIComponent(key)}`, { method: 'POST' }).catch(() => {});
+    throw err;
+  }
+}
+
+export async function deleteQuizVideo(getToken: GetTokenFn, quizId: number) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/quizzes/${quizId}/video`, { method: 'DELETE' });
 }
 
 /* ===================== Courses (paid, Stripe-gated) ===================== */

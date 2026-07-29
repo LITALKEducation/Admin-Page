@@ -46,6 +46,7 @@ import type { Env } from './types';
 import blog, { blogPublic } from './blog';
 import quizzes, { quizzesPortal } from './quizzes';
 import courses, { coursesPortal, coursesPublic, grantEnrollment } from './courses';
+import { video, videoPortal, purgeExpiredVideoTickets } from './video';
 import shortLinks, { shortLinkRedirect } from './shortlinks';
 
 const app = new Hono<AppBindings>();
@@ -1141,6 +1142,13 @@ app.get('/public/files/:token', async (c) => {
 app.route('/', quizzesPortal);
 app.route('/', coursesPortal);
 
+// Lesson video streaming from R2. Registered here rather than with the
+// authenticated routes because a <video src> cannot carry an Authorization
+// header — the stream authenticates with a short-lived ticket minted by the
+// route next to it, which is where ownership and the course gate are checked.
+// See worker/src/video.ts.
+app.route('/', videoPortal);
+
 // ===== Authenticated routes =====
 
 app.use('*', verifyAuth);
@@ -1225,6 +1233,7 @@ app.route('/', chat);
 app.route('/', blog);
 app.route('/', quizzes);
 app.route('/', courses);
+app.route('/', video);
 app.route('/', shortLinks);
 
 // Also carries title/phone/hasAvatar from the staff table (not part of the
@@ -1655,5 +1664,6 @@ export default {
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(expireStalePaymentLinks(env));
     ctx.waitUntil(purgeExpiredChatData(env));
+    ctx.waitUntil(purgeExpiredVideoTickets(env.DB));
   },
 };

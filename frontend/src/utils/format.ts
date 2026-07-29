@@ -1,3 +1,13 @@
+// Lives here rather than in a screen because two screens upload files —
+// BlogScreen's covers and QuizzesScreen's lesson videos — and a video is the
+// reason the scale runs as far as GB.
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
+
 export function formatBaht(n: number | undefined | null): string {
   return '฿' + Number(n || 0).toLocaleString('en-US');
 }
