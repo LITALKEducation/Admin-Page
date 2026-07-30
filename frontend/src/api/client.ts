@@ -1177,7 +1177,14 @@ export interface QuizVideoFile {
   videoSize: number | null;
 }
 
-export interface QuizDetail extends QuizSummary, QuizVideoFile {
+/** The lesson's downloadable slide deck — a LITALK+ benefit (slides.ts). */
+export interface QuizSlideFile {
+  hasSlides: number;
+  slideName: string | null;
+  slideSize: number | null;
+}
+
+export interface QuizDetail extends QuizSummary, QuizVideoFile, QuizSlideFile {
   lesson: string | null;
   lessonTh: string | null;
   videoUrl: string | null;
@@ -1285,6 +1292,23 @@ export async function deleteQuizVideo(getToken: GetTokenFn, quizId: number) {
   return apiJson<{ ok: boolean; error?: string }>(getToken, `/quizzes/${quizId}/video`, { method: 'DELETE' });
 }
 
+/* ---- Lesson slides (worker/src/slides.ts) ----
+   One POST, unlike the video: a slide deck fits inside a Worker request body,
+   so none of the multipart machinery above applies. */
+
+export async function uploadQuizSlides(getToken: GetTokenFn, quizId: number, file: File) {
+  const form = new FormData();
+  form.append('file', file);
+  return apiJson<{ ok: boolean; name: string; size: number; error?: string }>(getToken, `/quizzes/${quizId}/slides`, {
+    method: 'POST',
+    body: form,
+  });
+}
+
+export async function deleteQuizSlides(getToken: GetTokenFn, quizId: number) {
+  return apiJson<{ ok: boolean; error?: string }>(getToken, `/quizzes/${quizId}/slides`, { method: 'DELETE' });
+}
+
 /* ===================== Courses (paid, Stripe-gated) ===================== */
 
 export type CourseStatus = 'draft' | 'published' | 'archived';
@@ -1315,7 +1339,7 @@ export interface CourseDetail extends CourseSummary {
   overviewTh: string | null;
 }
 
-export type CourseItemKind = 'pretest' | 'lesson' | 'posttest';
+export type CourseItemKind = 'pretest' | 'lesson' | 'midterm' | 'posttest' | 'final';
 
 export interface CourseItem {
   quizId: number;

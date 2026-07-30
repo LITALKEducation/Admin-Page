@@ -38,6 +38,12 @@ export interface Env {
   // Secrets (set via `wrangler secret put`, absent in plain `wrangler dev`)
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
+  // Recurring Price ids for LITALK+ (worker/src/plus.ts). Vars, not secrets —
+  // a Price id is not sensitive, and keeping them as config means changing
+  // what LITALK+ costs is a Stripe dashboard edit rather than a deploy. Unset
+  // means that plan simply is not offered.
+  STRIPE_PLUS_PRICE_MONTHLY?: string;
+  STRIPE_PLUS_PRICE_YEARLY?: string;
   AUTH0_MGMT_CLIENT_ID?: string;
   AUTH0_MGMT_CLIENT_SECRET?: string;
   // AI chat assistant (worker/src/gemini.ts) — Gemini Developer API

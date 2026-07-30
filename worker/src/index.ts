@@ -41,12 +41,15 @@ import {
   updateNotice,
 } from './serviceNotices';
 import { chatReply, ChatNotConfiguredError } from './gemini';
-import { verifyStripeSignature, retrievePaymentReceiptUrl, deactivateStripePaymentLink } from './stripe';
+import { verifyStripeSignature, retrievePaymentReceiptUrl, deactivateStripePaymentLink , retrieveSubscription, type StripeSubscription } from './stripe';
 import type { Env } from './types';
 import blog, { blogPublic } from './blog';
 import quizzes, { quizzesPortal } from './quizzes';
 import courses, { coursesPortal, coursesPublic, grantEnrollment } from './courses';
 import { video, videoPortal, purgeExpiredVideoTickets } from './video';
+import { plus, plusPortal, syncSubscription, isPlusMember } from './plus';
+import { slides, slidesPortal } from './slides';
+import { practiceExams } from './practiceExams';
 import shortLinks, { shortLinkRedirect } from './shortlinks';
 
 const app = new Hono<AppBindings>();
@@ -97,6 +100,9 @@ app.get('/service-status', async (c) => {
 // A Stripe Checkout Session, as it appears on checkout.session.* events.
 interface StripeCheckoutSession {
   id: string;
+  mode?: string;                 // 'payment' | 'subscription' | 'setup'
+  subscription?: string | null;  // set when mode === 'subscription'
+  client_reference_id?: string | null;
   payment_link?: string | null;
   payment_status?: string;
   amount_total?: number | null;
@@ -123,6 +129,11 @@ interface StripeCharge {
 // schedule activation is itself idempotent.
 async function recordCheckoutPayment(env: Env, session: StripeCheckoutSession): Promise<void> {
   if (session.payment_status !== 'paid' || !session.amount_total) return;
+  // A LITALK+ checkout is also a paid session with an amount_total, and would
+  // otherwise land in `payments` as a one-off course purchase. Subscriptions
+  // are handled by the customer.subscription.* branches instead, so that the
+  // ledger keeps meaning "someone bought a thing".
+  if (session.mode === 'subscription') return;
   const meta = session.metadata ?? {};
   const discountAmount = session.total_details?.amount_discount ? session.total_details.amount_discount / 100 : null;
   const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
@@ -217,6 +228,16 @@ app.post('/stripe/webhook', async (c) => {
       case 'checkout.session.completed':
       case 'checkout.session.async_payment_succeeded':
         await recordCheckoutPayment(c.env, event.data.object);
+        // A LITALK+ signup. recordCheckoutPayment ignores it (see the mode
+        // guard there); activation happens here. Belt and braces with the
+        // customer.subscription.created event below — whichever arrives first
+        // writes the row and the other is an idempotent no-op — but this one
+        // carries client_reference_id, so it does not depend on the metadata
+        // having propagated onto the subscription object.
+        if (event.data.object.mode === 'subscription' && event.data.object.subscription && c.env.STRIPE_SECRET_KEY) {
+          const sub = await retrieveSubscription(c.env.STRIPE_SECRET_KEY, event.data.object.subscription);
+          await syncSubscription(c.env, sub, event.data.object.client_reference_id ?? null);
+        }
         break;
       // A delayed payment (PromptPay/bank) that ultimately failed. Nothing to
       // record — logged so a chased-up payment that never lands is visible.
@@ -225,6 +246,13 @@ app.post('/stripe/webhook', async (c) => {
         break;
       case 'charge.refunded':
         await recordChargeRefund(c.env, event.data.object);
+        break;
+      // LITALK+ (worker/src/plus.ts). The membership table is written here and
+      // nowhere else, so a portal request can never grant itself access.
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted':
+        await syncSubscription(c.env, event.data.object as unknown as StripeSubscription);
         break;
       // checkout.session.expired (an abandoned checkout attempt) is
       // intentionally ignored: a Payment Link spawns a fresh session per
@@ -705,9 +733,25 @@ app.post('/portal/:studentId/chat', async (c) => {
     return c.json({ status: 'error', message: 'ผู้ช่วย AI ปิดให้บริการอยู่ในขณะนี้ กรุณาติดต่อเจ้าหน้าที่ผ่าน LINE OA' }, 503);
   }
 
+  // The daily quota is the FREE tier. LITALK+ lifts it entirely — that is the
+  // headline of the membership, so it is enforced here rather than left to the
+  // client to honour. settings.dailyLimit stays the admin-editable free-tier
+  // number (AI settings screen); nothing about the free allowance is hardcoded.
+  const plusMember = await isPlusMember(c.env.DB, studentId);
   const usedToday = await portalMessageCountToday(c.env.DB, studentId);
-  if (usedToday >= settings.dailyLimit) {
-    return c.json({ status: 'error', message: 'วันนี้ถามคำถามครบโควตาแล้ว กรุณาลองใหม่พรุ่งนี้ หรือติดต่อเจ้าหน้าที่ผ่าน LINE OA' }, 429);
+  if (!plusMember && usedToday >= settings.dailyLimit) {
+    return c.json(
+      {
+        status: 'error',
+        // The free tier exists to bring people in, so running out says what
+        // lifts it rather than only "come back tomorrow".
+        message: `วันนี้ถามน้องลิลลี่ครบ ${settings.dailyLimit} คำถามแล้ว — สมัคร LITALK+ เพื่อถามได้ไม่จำกัด หรือกลับมาใหม่พรุ่งนี้`,
+        quotaExhausted: true,
+        dailyLimit: settings.dailyLimit,
+        upgradeTo: 'plus',
+      },
+      429,
+    );
   }
 
   const conversationId = body.conversationId || crypto.randomUUID();
@@ -1148,6 +1192,9 @@ app.route('/', coursesPortal);
 // route next to it, which is where ownership and the course gate are checked.
 // See worker/src/video.ts.
 app.route('/', videoPortal);
+app.route('/', plusPortal);
+app.route('/', slidesPortal);
+app.route('/', practiceExams);
 
 // ===== Authenticated routes =====
 
@@ -1234,6 +1281,8 @@ app.route('/', blog);
 app.route('/', quizzes);
 app.route('/', courses);
 app.route('/', video);
+app.route('/', plus);
+app.route('/', slides);
 app.route('/', shortLinks);
 
 // Also carries title/phone/hasAvatar from the staff table (not part of the
@@ -1280,7 +1329,10 @@ app.post('/staff/id-card-token', async (c) => {
   const token = crypto.randomUUID().replace(/-/g, '');
   const expiresAt = new Date(Date.now() + ID_CARD_TOKEN_TTL_MS).toISOString();
   await c.env.DB.batch([
-    c.env.DB.prepare(`DELETE FROM id_card_tokens WHERE person_type = 'staff' AND person_id = ?`).bind(user.email),
+    // COLLATE NOCASE so re-minting really replaces the previous token. Matching
+    // case-sensitively let a second one survive alongside it whenever the JWT's
+    // casing differed, leaving an old QR live until its own expiry.
+    c.env.DB.prepare(`DELETE FROM id_card_tokens WHERE person_type = 'staff' AND person_id = ? COLLATE NOCASE`).bind(user.email),
     c.env.DB.prepare(`INSERT INTO id_card_tokens (token, person_type, person_id, expires_at) VALUES (?, 'staff', ?, ?)`)
       .bind(token, user.email, expiresAt),
   ]);
@@ -1357,7 +1409,14 @@ app.post('/campus-checkin', requirePermission('data:write'), async (c) => {
       .first<{ id: number }>();
     bookingId = booking?.id ?? null;
   } else {
-    const staff = await c.env.DB.prepare(`SELECT name, avatar_key AS avatarKey FROM staff WHERE identity = ?`)
+    // COLLATE NOCASE, like every other staff-identity lookup in this repo.
+    // person_id here is the email the token was minted under — i.e. whatever
+    // case the JWT carries — while staff.identity holds whatever case the row
+    // was created with, and `identity TEXT PRIMARY KEY` collates BINARY. Without
+    // this the card mints, shows a QR, and then fails only at the scan with
+    // "ไม่พบบัญชีเจ้าหน้าที่นี้ในระบบ", which reads as a broken card rather
+    // than a casing mismatch. Students never hit it: their branch above has it.
+    const staff = await c.env.DB.prepare(`SELECT name, avatar_key AS avatarKey FROM staff WHERE identity = ? COLLATE NOCASE`)
       .bind(personId)
       .first<{ name: string | null; avatarKey: string | null }>();
     if (!staff) return c.json({ status: 'error', message: 'ไม่พบบัญชีเจ้าหน้าที่นี้ในระบบ' }, 404);
@@ -1401,7 +1460,7 @@ app.get('/campus-checkins', requireAdmin, async (c) => {
             cc.checked_out_at AS checkedOutAt, cc.checked_out_by AS checkedOutBy
      FROM campus_checkins cc
      LEFT JOIN students s ON cc.person_type = 'student' AND s.id = cc.person_id COLLATE NOCASE
-     LEFT JOIN staff st ON cc.person_type = 'staff' AND st.identity = cc.person_id
+     LEFT JOIN staff st ON cc.person_type = 'staff' AND st.identity = cc.person_id COLLATE NOCASE
      WHERE date(cc.checked_in_at, '+7 hours') = date('now', '+7 hours')
      ORDER BY cc.checked_in_at DESC LIMIT 200`,
   ).all();
@@ -1428,7 +1487,7 @@ app.post('/nfc-cards', requireAdmin, async (c) => {
     const row = await c.env.DB.prepare(`SELECT id FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`).bind(personId).first();
     if (!row) return c.json({ error: 'ไม่พบนักเรียนรหัสนี้ในระบบ' }, 404);
   } else {
-    const row = await c.env.DB.prepare(`SELECT identity FROM staff WHERE identity = ?`).bind(personId).first();
+    const row = await c.env.DB.prepare(`SELECT identity FROM staff WHERE identity = ? COLLATE NOCASE`).bind(personId).first();
     if (!row) return c.json({ error: 'ไม่พบเจ้าหน้าที่คนนี้ในระบบ' }, 404);
   }
 

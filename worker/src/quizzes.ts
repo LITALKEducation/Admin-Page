@@ -18,6 +18,7 @@ import type { AppBindings, AuthUser } from './types';
 import { isAdmin, requireAdmin, portalTokenMatchesStudent } from './auth';
 import { logAudit } from './db';
 import { courseGateForQuiz } from './courses';
+import { isPlusMember } from './plus';
 
 const MAX_TITLE = 300;
 const MAX_TEXT = 2_000;
@@ -48,6 +49,11 @@ interface QuizRow {
   videoName?: string | null;
   videoSize?: number | null;
   hasVideoFile?: number;
+  // Same shape for the lesson's slide deck (migrations/0034). The key is never
+  // sent; hasSlides is what both panels branch on. See slides.ts.
+  slideName?: string | null;
+  slideSize?: number | null;
+  hasSlides?: number;
   category: string | null;
   audience: string;
   status: string;
@@ -63,7 +69,7 @@ interface QuizRow {
   publishedAt: string | null;
 }
 
-interface QuestionRow {
+export interface QuestionRow {
   id: number;
   quizId?: number;
   position: number;
@@ -111,6 +117,7 @@ const REVIEWED_BY_FIELD = `COALESCE(rst.name, q.reviewed_by) AS reviewedBy`;
 const QUIZ_FIELDS = `q.id, q.title, q.title_th AS titleTh, q.description, q.description_th AS descriptionTh,
   q.lesson, q.lesson_th AS lessonTh, q.video_url AS videoUrl, q.category, q.audience, q.status, q.time_limit_min AS timeLimitMin,
   q.video_name AS videoName, q.video_size AS videoSize, (q.video_key IS NOT NULL) AS hasVideoFile,
+  q.slide_name AS slideName, q.slide_size AS slideSize, (q.slide_key IS NOT NULL) AS hasSlides,
   q.pass_score AS passScore, q.allow_retake AS allowRetake, q.show_answers AS showAnswers,
   q.author_identity AS authorIdentity, ${AUTHOR_NAME_FIELD}, ${REVIEWED_BY_FIELD},
   q.created_at AS createdAt, q.updated_at AS updatedAt, q.published_at AS publishedAt`;
@@ -121,7 +128,7 @@ function canEdit(user: AuthUser, quiz: { authorIdentity?: string }): boolean {
   return isAdmin(user) || (quiz.authorIdentity ?? '').toLowerCase() === user.email.toLowerCase();
 }
 
-function parseJson<T>(raw: string | null, fallback: T): T {
+export function parseJson<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
   try {
     return JSON.parse(raw) as T;
@@ -185,7 +192,7 @@ function normaliseQuestion(input: QuestionInput): { error: string } | {
 
 // Grade one stored question against the student's submitted answer. Returns
 // the points earned (all-or-nothing per question) and whether it was correct.
-function gradeQuestion(q: QuestionRow, submitted: unknown): { correct: boolean; earned: number } {
+export function gradeQuestion(q: QuestionRow, submitted: unknown): { correct: boolean; earned: number } {
   const wrong = { correct: false, earned: 0 };
   const right = { correct: true, earned: q.points };
   switch (q.type) {
@@ -521,6 +528,7 @@ quizzesPortal.get('/portal/:studentId/quizzes/:quizId', async (c) => {
   const quiz = await c.env.DB.prepare(
     `SELECT id, title, title_th AS titleTh, description, description_th AS descriptionTh,
             lesson, lesson_th AS lessonTh, video_url AS videoUrl, (video_key IS NOT NULL) AS hasVideoFile,
+            (slide_key IS NOT NULL) AS hasSlides, slide_name AS slideName, slide_size AS slideSize,
             category, time_limit_min AS timeLimitMin,
             pass_score AS passScore, allow_retake AS allowRetake, show_answers AS showAnswers
      FROM quizzes WHERE id = ? AND status = 'published'`,
@@ -604,6 +612,17 @@ quizzesPortal.post('/portal/:studentId/quizzes/:quizId/attempts', async (c) => {
     .all<QuestionRow>();
   const questions = results ?? [];
 
+  // "เฉลยละเอียด" is a LITALK+ benefit. Two conditions, both required, for the
+  // same reason hasCourseAccess has two: showAnswers is the AUTHOR's choice
+  // about whether this quiz should ever reveal its answers, membership is
+  // whether THIS learner is entitled to see them. Neither implies the other.
+  //
+  // The split is deliberate: everyone still learns their score and which
+  // questions they got wrong — a free exercise you cannot mark is not much of
+  // an exercise — while the model answer and the explanation are the paid part.
+  const plusMember = await isPlusMember(c.env.DB, studentId);
+  const detailedAnswers = quiz.showAnswers === 1 && plusMember;
+
   let score = 0;
   let maxScore = 0;
   const breakdown = questions.map((q) => {
@@ -615,7 +634,7 @@ quizzesPortal.post('/portal/:studentId/quizzes/:quizId/attempts', async (c) => {
       correct: graded.correct,
       earned: graded.earned,
       points: q.points,
-      ...(quiz.showAnswers === 1
+      ...(detailedAnswers
         ? { correctAnswer: parseJson<unknown>(q.answer, null), explanation: q.explanation }
         : {}),
     };
@@ -646,7 +665,11 @@ quizzesPortal.post('/portal/:studentId/quizzes/:quizId/attempts', async (c) => {
     maxScore,
     percent: maxScore > 0 ? Math.round((score / maxScore) * 100) : 0,
     passed,
-    showAnswers: quiz.showAnswers === 1,
+    showAnswers: detailedAnswers,
+    // Distinguishes "this quiz never shows answers" from "it would, but this
+    // learner is not a member" — so the portal can offer the upgrade at the
+    // exact moment it is worth something, instead of silently showing less.
+    detailedLocked: quiz.showAnswers === 1 && !plusMember,
     breakdown,
   });
 });

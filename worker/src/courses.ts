@@ -14,6 +14,7 @@ import type { AppBindings, AuthUser, Env } from './types';
 import { isAdmin, requireAdmin, portalTokenMatchesStudent } from './auth';
 import { logAudit, extname } from './db';
 import { createStripePaymentLink, withPolicyNote } from './stripe';
+import { isPlusMember } from './plus';
 
 const MAX_TITLE = 300;
 const MAX_TEXT = 2_000;
@@ -93,7 +94,16 @@ function isComingSoon(availableAt: string | null | undefined): boolean {
   return !Number.isNaN(d.getTime()) && d.getTime() > Date.now();
 }
 
-const ITEM_KINDS = new Set(['pretest', 'lesson', 'posttest']);
+// 0026 deliberately left course_items.kind without a CHECK constraint and put
+// validation here, which is why adding exam kinds needs no migration.
+//
+// midterm/final are the LITALK+ exams. They are separate from posttest rather
+// than a rename of it: posttest measures learning against the pretest and stays
+// free, an exam is graded and is part of the membership.
+const ITEM_KINDS = new Set(['pretest', 'lesson', 'midterm', 'posttest', 'final']);
+
+// The two that need a membership, and that unlock on their own rules below.
+const EXAM_KINDS = new Set(['midterm', 'final']);
 
 const AUTHOR_JOIN = `LEFT JOIN staff st ON st.identity = c.author_identity COLLATE NOCASE`;
 const AUTHOR_NAME_FIELD = `COALESCE(st.name, c.author_name) AS authorName`;
@@ -122,6 +132,26 @@ export async function isEnrolled(db: D1Database, courseId: number, studentId: st
     .bind(courseId, studentId)
     .first<{ ok: number }>();
   return !!row;
+}
+
+// May this learner open this course? Two independent routes in:
+//
+//   * they bought it — course_enrollments, which is permanent; a course bought
+//     outright stays theirs whether or not they ever subscribe.
+//   * it is part of LITALK+ and they are a current member (see plus.ts).
+//
+// Kept separate from isEnrolled on purpose. isEnrolled still means "owns this
+// course" and is what enrollment counts, receipts and the finance ledger are
+// about; membership is access, not ownership, and a lapsed member must not
+// leave rows behind that read as purchases.
+export async function hasCourseAccess(db: D1Database, courseId: number, studentId: string): Promise<boolean> {
+  if (await isEnrolled(db, courseId, studentId)) return true;
+  const course = await db
+    .prepare(`SELECT included_in_plus AS includedInPlus FROM courses WHERE id = ?`)
+    .bind(courseId)
+    .first<{ includedInPlus: number }>();
+  if (!course || course.includedInPlus !== 1) return false;
+  return isPlusMember(db, studentId);
 }
 
 // One course item joined with this student's progress on its quiz.
@@ -193,12 +223,18 @@ function lessonDone(r: ProgressRow): boolean {
 export interface CourseGate {
   allowed: boolean;
   courseId?: number;
-  reason?: 'enroll' | 'pretest' | 'lessons';
+  reason?: 'enroll' | 'pretest' | 'lessons' | 'plus';
   message?: string;
 }
 
 // The single sequencing gate quizzes.ts consults before letting a student open
-// or submit a course quiz: enrollment first, then Pretest → Lessons → Posttest.
+// or submit a course quiz: enrollment first, then
+// Pretest → Lessons → Midterm → Posttest/Final.
+//
+// The midterm is positional rather than "half the lessons": course_items
+// already carries an order, so an author places the exam where it belongs and
+// it unlocks once the lessons BEFORE it are done. Counting lessons instead
+// would silently move the exam every time one was added.
 export async function courseGateForQuiz(db: D1Database, quizId: number, studentId: string): Promise<CourseGate> {
   const item = await db
     .prepare(`SELECT course_id AS courseId, kind FROM course_items WHERE quiz_id = ?`)
@@ -207,7 +243,7 @@ export async function courseGateForQuiz(db: D1Database, quizId: number, studentI
   if (!item) return { allowed: true }; // free standalone quiz
 
   const courseId = item.courseId;
-  if (!(await isEnrolled(db, courseId, studentId))) {
+  if (!(await hasCourseAccess(db, courseId, studentId))) {
     return { allowed: false, courseId, reason: 'enroll', message: 'ต้องลงทะเบียนคอร์สนี้ก่อนจึงจะเข้าเรียนได้' };
   }
   if (item.kind === 'pretest') return { allowed: true, courseId };
@@ -220,10 +256,32 @@ export async function courseGateForQuiz(db: D1Database, quizId: number, studentI
   }
   if (item.kind === 'lesson') return { allowed: true, courseId };
 
-  // posttest — needs every lesson completed.
+  // Exams are a LITALK+ benefit. Checked before the sequencing rules so a
+  // non-member is told what actually stands in their way, rather than being
+  // sent to finish lessons that would not unlock it anyway.
+  if (EXAM_KINDS.has(item.kind) && !(await isPlusMember(db, studentId))) {
+    return {
+      allowed: false,
+      courseId,
+      reason: 'plus',
+      message: 'ข้อสอบกลางภาคและปลายภาคเป็นสิทธิ์ของสมาชิก LITALK+',
+    };
+  }
+
+  if (item.kind === 'midterm') {
+    const self = progress.find((p) => p.quizId === quizId);
+    const before = progress.filter((p) => p.kind === 'lesson' && p.position < (self?.position ?? Number.MAX_SAFE_INTEGER));
+    if (!before.every(lessonDone)) {
+      return { allowed: false, courseId, reason: 'lessons', message: 'กรุณาเรียนบทเรียนก่อนหน้าให้ครบก่อนสอบกลางภาค' };
+    }
+    return { allowed: true, courseId };
+  }
+
+  // posttest / final — need every lesson completed.
   const lessons = progress.filter((p) => p.kind === 'lesson');
   if (!lessons.every(lessonDone)) {
-    return { allowed: false, courseId, reason: 'lessons', message: 'กรุณาเรียนและผ่านทุกบทเรียนก่อนทำ Posttest' };
+    const what = item.kind === 'final' ? 'สอบปลายภาค' : 'ทำ Posttest';
+    return { allowed: false, courseId, reason: 'lessons', message: `กรุณาเรียนและผ่านทุกบทเรียนก่อน${what}` };
   }
   return { allowed: true, courseId };
 }
@@ -280,14 +338,23 @@ async function replaceItems(db: D1Database, courseId: number, items: { quizId: n
   const clean: { quizId: number; kind: string }[] = [];
   let hasPretest = false;
   let hasPosttest = false;
+  let hasMidterm = false;
+  let hasFinal = false;
   for (const it of items) {
     const quizId = Number(it.quizId);
     if (!Number.isInteger(quizId) || quizId <= 0 || seen.has(quizId)) continue;
     let kind = ITEM_KINDS.has(it.kind ?? '') ? (it.kind as string) : 'lesson';
     if (kind === 'pretest' && hasPretest) kind = 'lesson';
     if (kind === 'posttest' && hasPosttest) kind = 'lesson';
+    // Same one-per-course rule for the exams: a second "final" is almost
+    // always a mis-click, and two of them would make "the final exam"
+    // ambiguous for the gate below.
+    if (kind === 'midterm' && hasMidterm) kind = 'lesson';
+    if (kind === 'final' && hasFinal) kind = 'lesson';
     if (kind === 'pretest') hasPretest = true;
     if (kind === 'posttest') hasPosttest = true;
+    if (kind === 'midterm') hasMidterm = true;
+    if (kind === 'final') hasFinal = true;
     seen.add(quizId);
     clean.push({ quizId, kind });
   }
@@ -670,15 +737,26 @@ coursesPortal.get('/portal/:studentId/courses/:courseId', async (c) => {
     .bind(courseId)
     .first<CourseRow>();
   if (!course) return c.json({ status: 'error', message: 'ไม่พบคอร์ส' }, 404);
-  const enrolled = await isEnrolled(c.env.DB, courseId, studentId);
+  // Access, not ownership — a LITALK+ member can open a Plus course they have
+  // not bought. `enrolled` is what the page keys its lesson list off.
+  const enrolled = await hasCourseAccess(c.env.DB, courseId, studentId);
 
   const progress = await loadItemsWithProgress(c.env.DB, courseId, studentId);
   const pretestRow = progress.find((p) => p.kind === 'pretest') ?? null;
   const lessonRows = progress.filter((p) => p.kind === 'lesson');
   const posttestRow = progress.find((p) => p.kind === 'posttest') ?? null;
+  const midtermRow = progress.find((p) => p.kind === 'midterm') ?? null;
+  const finalRow = progress.find((p) => p.kind === 'final') ?? null;
 
   const pretestDone = !pretestRow || attempted(pretestRow);
   const lessonsAllDone = lessonRows.length === 0 || lessonRows.every(lessonDone);
+  // The midterm unlocks on the lessons BEFORE it, not on all of them — the
+  // author's ordering is what says which those are. Mirrors courseGateForQuiz.
+  const beforeMidtermDone =
+    !midtermRow || lessonRows.filter((p) => p.position < midtermRow.position).every(lessonDone);
+  // Exams also need a membership, so the page can show the lock for the right
+  // reason instead of implying more lessons would help.
+  const examsUnlocked = await isPlusMember(c.env.DB, studentId);
 
   // Shape one item for the portal, with its done/locked state resolved so the
   // client just renders — the same rules the access gate enforces.
@@ -702,10 +780,21 @@ coursesPortal.get('/portal/:studentId/courses/:courseId', async (c) => {
     status: 'success',
     course,
     enrolled,
-    gates: { pretestDone, lessonsAllDone, hasPretest: !!pretestRow, hasPosttest: !!posttestRow },
+    gates: {
+      pretestDone,
+      lessonsAllDone,
+      hasPretest: !!pretestRow,
+      hasPosttest: !!posttestRow,
+      hasMidterm: !!midtermRow,
+      hasFinal: !!finalRow,
+      // So the portal can say "this needs LITALK+" rather than "keep studying".
+      examsUnlocked,
+    },
     pretest: pretestRow ? toItem(pretestRow, false) : null,
     lessons: lessonRows.map((p) => toItem(p, !pretestDone)),
+    midterm: midtermRow ? toItem(midtermRow, !(pretestDone && beforeMidtermDone && examsUnlocked)) : null,
     posttest: posttestRow ? toItem(posttestRow, !(pretestDone && lessonsAllDone)) : null,
+    final: finalRow ? toItem(finalRow, !(pretestDone && lessonsAllDone && examsUnlocked)) : null,
   });
 });
 
@@ -725,7 +814,9 @@ coursesPortal.post('/portal/:studentId/courses/:courseId/checkout', async (c) =>
     .first<{ id: number; title: string; titleTh: string | null; priceSatang: number; discountSatang: number | null; availableAt: string | null; currency: string }>();
   if (!course) return c.json({ status: 'error', message: 'ไม่พบคอร์ส' }, 404);
 
-  if (await isEnrolled(c.env.DB, courseId, studentId)) {
+  // Includes LITALK+ members, so a course their membership already covers
+  // never opens a payment page.
+  if (await hasCourseAccess(c.env.DB, courseId, studentId)) {
     return c.json({ status: 'success', enrolled: true });
   }
 
@@ -815,6 +906,10 @@ coursesPortal.get('/portal/:studentId/dashboard', async (c) => {
     }>();
   const enrollments = enrRows ?? [];
 
+  // Read once for the whole dashboard rather than per course item — the exam
+  // lock below needs it, and it does not change between rows.
+  const plusMember = await isPlusMember(c.env.DB, studentId);
+
   const enrolled: unknown[] = [];
   const completed: unknown[] = [];
   const todo: unknown[] = [];
@@ -834,7 +929,17 @@ coursesPortal.get('/portal/:studentId/dashboard', async (c) => {
       if ((it.questionCount ?? 0) > 0 && it.bestPercent != null) percents.push(it.bestPercent);
       if (!isDone) {
         const locked =
-          it.kind === 'lesson' ? !pretestDone : it.kind === 'posttest' ? !(pretestDone && lessonsAllDone) : false;
+          it.kind === 'lesson'
+            ? !pretestDone
+            : it.kind === 'posttest'
+              ? !(pretestDone && lessonsAllDone)
+              : it.kind === 'final'
+                ? !(pretestDone && lessonsAllDone && plusMember)
+                : it.kind === 'midterm'
+                  ? !(pretestDone &&
+                      plusMember &&
+                      items.filter((p) => p.kind === 'lesson' && p.position < it.position).every(computeItemDone))
+                  : false;
         todo.push({
           courseId: e.courseId,
           courseTitle: e.titleTh || e.title,

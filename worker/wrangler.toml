@@ -78,6 +78,21 @@ SHORT_DOMAIN_PAYMENT = "payment.litalkeducation.com"
 # Login email for an auto-created student account is <studentId>@<this domain>.
 # MUST match the convention the old GAS backend used (the student site derives
 # the student id from the email's local part).
+# LITALK+ subscription (worker/src/plus.ts). These are recurring Stripe Price
+# ids — NOT secrets, and deliberately config rather than code so changing what
+# LITALK+ costs is a dashboard edit instead of a deploy.
+#
+# Create them once in Stripe: Product "LITALK+" with two recurring prices, one
+# monthly and one yearly, then paste the price ids here. A plan left unset is
+# simply not offered — the portal hides that button rather than failing on a
+# click — so the monthly plan can launch before the yearly one is priced.
+#
+# Also enable the Customer Portal (Stripe → Settings → Billing → Customer
+# portal) — cancelling and switching plans go through it, and
+# POST /portal/:id/plus/manage returns 502 until it is turned on.
+# STRIPE_PLUS_PRICE_MONTHLY = "price_..."
+# STRIPE_PLUS_PRICE_YEARLY  = "price_..."
+
 STUDENT_EMAIL_DOMAIN = "litalkeducation.com"
 AUTH0_DB_CONNECTION = "LITALK-Student"
 

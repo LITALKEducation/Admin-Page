@@ -191,18 +191,44 @@ tickets for it will fail.
    ```
 2. Create a webhook endpoint (**Developers → Webhooks → Add endpoint**):
    - URL: `https://api.litalkeducation.com/stripe/webhook`
-   - Events (all four — the last three are required for delayed payments and
-     refunds to record, not just card payments):
+   - Events (the first four cover one-off payments; the last three are LITALK+):
      - `checkout.session.completed` — card and other instant methods
      - `checkout.session.async_payment_succeeded` — PromptPay / bank debits
        that settle after the session first completes unpaid
      - `checkout.session.async_payment_failed` — a delayed payment that never
        landed (logged to the audit trail, nothing recorded)
      - `charge.refunded` — records the refund against the original payment
+     - `customer.subscription.created` / `.updated` / `.deleted` — **required
+       for LITALK+.** `plus_subscriptions` is written by these events and by
+       nothing else, so without them a member pays and never gets access, and
+       a cancellation never takes effect.
    Then store its signing secret:
    ```sh
    npx wrangler secret put STRIPE_WEBHOOK_SECRET
    ```
+
+### LITALK+ (subscription)
+
+LITALK+ is the monthly/yearly membership that unlocks every course flagged
+**included_in_plus**. Courses without that flag stay one-off purchases, so both
+models run side by side.
+
+Three things have to exist in Stripe before the portal will offer it:
+
+1. A **Product** ("LITALK+") with two **recurring Prices** — one monthly, one
+   yearly. Paste their ids into `STRIPE_PLUS_PRICE_MONTHLY` /
+   `STRIPE_PLUS_PRICE_YEARLY` in `wrangler.toml`. They are ids, not secrets.
+   A plan left unset is simply not offered, so monthly can launch alone.
+2. The three `customer.subscription.*` webhook events above.
+3. The **Customer portal** (Settings → Billing → Customer portal), enabled.
+   Cancelling, switching plan and updating a card all go through Stripe's
+   hosted portal — `POST /portal/:studentId/plus/manage` returns 502 until it
+   is turned on.
+
+Access lasts to the end of the paid period: cancelling sets
+`cancel_at_period_end` and the member keeps everything until
+`current_period_end` passes. Buying a course outright is unaffected by any of
+this — a purchased course stays purchased whether or not the membership lapses.
 
 Payment links are single-use (one completed payment each) and carry the
 student id + creator email as metadata; when Stripe reports the session as

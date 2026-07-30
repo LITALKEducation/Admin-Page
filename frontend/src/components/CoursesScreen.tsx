@@ -46,11 +46,21 @@ interface CourseForm {
   items: { quizId: number; kind: CourseItemKind }[];
 }
 
+// Listed in the order a learner meets them, so the dropdown reads as the
+// course path. The two exams are LITALK+ only and the Worker enforces that
+// (courseGateForQuiz) — the label says so because an author picking a role
+// here is deciding who can reach it.
 const KIND_LABEL: Record<CourseItemKind, string> = {
   pretest: 'Pretest (แบบทดสอบก่อนเรียน)',
   lesson: 'บทเรียน',
+  midterm: 'สอบกลางภาค (สมาชิก LITALK+)',
   posttest: 'Posttest (แบบทดสอบหลังเรียน)',
+  final: 'สอบปลายภาค (สมาชิก LITALK+)',
 };
+
+// One of each per course. A second "final" would make "the final exam"
+// ambiguous for the sequencing gate, which unlocks on exactly one.
+const SINGLETON_KINDS: CourseItemKind[] = ['pretest', 'midterm', 'posttest', 'final'];
 
 const EMPTY_FORM: CourseForm = {
   title: '',
@@ -301,11 +311,11 @@ export default function CoursesScreen() {
   const setItemKind = (quizId: number, kind: CourseItemKind) => {
     setForm((f) => ({
       ...f,
-      // Only one pretest and one posttest per course — assigning a role moves
-      // it off whoever held it before.
+      // One pretest, one midterm, one posttest and one final per course —
+      // assigning a role moves it off whoever held it before.
       items: f.items.map((it) => {
         if (it.quizId === quizId) return { ...it, kind };
-        if ((kind === 'pretest' || kind === 'posttest') && it.kind === kind) return { ...it, kind: 'lesson' as CourseItemKind };
+        if (SINGLETON_KINDS.includes(kind) && it.kind === kind) return { ...it, kind: 'lesson' as CourseItemKind };
         return it;
       }),
     }));

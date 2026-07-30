@@ -185,21 +185,32 @@ export default function App() {
           <EditingLogProvider>
             <DeepLinkHandler onOpenIdCard={() => setIdCardOpen(true)} />
             <QuickCreateFab isAdmin={isAdmin} />
-            {paletteMounted && (
-              <Suspense fallback={null}>
-                <CommandPalette
-                  isAdmin={isAdmin}
-                  students={students}
-                  open={paletteOpen}
-                  onOpenChange={setPaletteOpen}
-                />
-              </Suspense>
-            )}
-            {idCardOpen && (
-              <Suspense fallback={null}>
-                <StaffIdCard me={me} isAdmin={isAdmin} onClose={() => setIdCardOpen(false)} />
-              </Suspense>
-            )}
+            {/* These two are lazy like every screen, but they live OUTSIDE the
+                Routes — so the ChunkErrorBoundary further down never covered
+                them. A tab left open across a deploy asks for a chunk filename
+                that no longer exists, React.lazy throws, and with no boundary
+                above it the error reached the root and unmounted the whole app:
+                tapping the ID card button blanked the entire page. Measured
+                with the chunk 404ing — #root went from 3 children to 0.
+                Wrapped here so a stale chunk gets the same one-shot
+                cache-busted reload a stale screen already got. */}
+            <ChunkErrorBoundary>
+              {paletteMounted && (
+                <Suspense fallback={null}>
+                  <CommandPalette
+                    isAdmin={isAdmin}
+                    students={students}
+                    open={paletteOpen}
+                    onOpenChange={setPaletteOpen}
+                  />
+                </Suspense>
+              )}
+              {idCardOpen && (
+                <Suspense fallback={null}>
+                  <StaffIdCard me={me} isAdmin={isAdmin} onClose={() => setIdCardOpen(false)} />
+                </Suspense>
+              )}
+            </ChunkErrorBoundary>
             <div className="admin-dashboard" id="admin-panel" style={{ display: 'flex' }}>
               <Sidebar isAdmin={isAdmin} email={email} onLogout={handleLogout} />
               <main className="app-main">
