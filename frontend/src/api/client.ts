@@ -1339,7 +1339,7 @@ export interface CourseDetail extends CourseSummary {
   overviewTh: string | null;
 }
 
-export type CourseItemKind = 'pretest' | 'lesson' | 'posttest';
+export type CourseItemKind = 'pretest' | 'lesson' | 'midterm' | 'posttest' | 'final';
 
 export interface CourseItem {
   quizId: number;
