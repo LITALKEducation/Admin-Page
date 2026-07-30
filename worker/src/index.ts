@@ -1280,7 +1280,10 @@ app.post('/staff/id-card-token', async (c) => {
   const token = crypto.randomUUID().replace(/-/g, '');
   const expiresAt = new Date(Date.now() + ID_CARD_TOKEN_TTL_MS).toISOString();
   await c.env.DB.batch([
-    c.env.DB.prepare(`DELETE FROM id_card_tokens WHERE person_type = 'staff' AND person_id = ?`).bind(user.email),
+    // COLLATE NOCASE so re-minting really replaces the previous token. Matching
+    // case-sensitively let a second one survive alongside it whenever the JWT's
+    // casing differed, leaving an old QR live until its own expiry.
+    c.env.DB.prepare(`DELETE FROM id_card_tokens WHERE person_type = 'staff' AND person_id = ? COLLATE NOCASE`).bind(user.email),
     c.env.DB.prepare(`INSERT INTO id_card_tokens (token, person_type, person_id, expires_at) VALUES (?, 'staff', ?, ?)`)
       .bind(token, user.email, expiresAt),
   ]);
@@ -1357,7 +1360,14 @@ app.post('/campus-checkin', requirePermission('data:write'), async (c) => {
       .first<{ id: number }>();
     bookingId = booking?.id ?? null;
   } else {
-    const staff = await c.env.DB.prepare(`SELECT name, avatar_key AS avatarKey FROM staff WHERE identity = ?`)
+    // COLLATE NOCASE, like every other staff-identity lookup in this repo.
+    // person_id here is the email the token was minted under — i.e. whatever
+    // case the JWT carries — while staff.identity holds whatever case the row
+    // was created with, and `identity TEXT PRIMARY KEY` collates BINARY. Without
+    // this the card mints, shows a QR, and then fails only at the scan with
+    // "ไม่พบบัญชีเจ้าหน้าที่นี้ในระบบ", which reads as a broken card rather
+    // than a casing mismatch. Students never hit it: their branch above has it.
+    const staff = await c.env.DB.prepare(`SELECT name, avatar_key AS avatarKey FROM staff WHERE identity = ? COLLATE NOCASE`)
       .bind(personId)
       .first<{ name: string | null; avatarKey: string | null }>();
     if (!staff) return c.json({ status: 'error', message: 'ไม่พบบัญชีเจ้าหน้าที่นี้ในระบบ' }, 404);
@@ -1401,7 +1411,7 @@ app.get('/campus-checkins', requireAdmin, async (c) => {
             cc.checked_out_at AS checkedOutAt, cc.checked_out_by AS checkedOutBy
      FROM campus_checkins cc
      LEFT JOIN students s ON cc.person_type = 'student' AND s.id = cc.person_id COLLATE NOCASE
-     LEFT JOIN staff st ON cc.person_type = 'staff' AND st.identity = cc.person_id
+     LEFT JOIN staff st ON cc.person_type = 'staff' AND st.identity = cc.person_id COLLATE NOCASE
      WHERE date(cc.checked_in_at, '+7 hours') = date('now', '+7 hours')
      ORDER BY cc.checked_in_at DESC LIMIT 200`,
   ).all();
@@ -1428,7 +1438,7 @@ app.post('/nfc-cards', requireAdmin, async (c) => {
     const row = await c.env.DB.prepare(`SELECT id FROM students WHERE id = ? COLLATE NOCASE AND deleted_at IS NULL`).bind(personId).first();
     if (!row) return c.json({ error: 'ไม่พบนักเรียนรหัสนี้ในระบบ' }, 404);
   } else {
-    const row = await c.env.DB.prepare(`SELECT identity FROM staff WHERE identity = ?`).bind(personId).first();
+    const row = await c.env.DB.prepare(`SELECT identity FROM staff WHERE identity = ? COLLATE NOCASE`).bind(personId).first();
     if (!row) return c.json({ error: 'ไม่พบเจ้าหน้าที่คนนี้ในระบบ' }, 404);
   }
 
