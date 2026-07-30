@@ -49,6 +49,7 @@ import courses, { coursesPortal, coursesPublic, grantEnrollment } from './course
 import { video, videoPortal, purgeExpiredVideoTickets } from './video';
 import { plus, plusPortal, syncSubscription, isPlusMember } from './plus';
 import { slides, slidesPortal } from './slides';
+import { practiceExams } from './practiceExams';
 import shortLinks, { shortLinkRedirect } from './shortlinks';
 
 const app = new Hono<AppBindings>();
@@ -1193,6 +1194,7 @@ app.route('/', coursesPortal);
 app.route('/', videoPortal);
 app.route('/', plusPortal);
 app.route('/', slidesPortal);
+app.route('/', practiceExams);
 
 // ===== Authenticated routes =====
 

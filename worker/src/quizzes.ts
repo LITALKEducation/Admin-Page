@@ -69,7 +69,7 @@ interface QuizRow {
   publishedAt: string | null;
 }
 
-interface QuestionRow {
+export interface QuestionRow {
   id: number;
   quizId?: number;
   position: number;
@@ -128,7 +128,7 @@ function canEdit(user: AuthUser, quiz: { authorIdentity?: string }): boolean {
   return isAdmin(user) || (quiz.authorIdentity ?? '').toLowerCase() === user.email.toLowerCase();
 }
 
-function parseJson<T>(raw: string | null, fallback: T): T {
+export function parseJson<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
   try {
     return JSON.parse(raw) as T;
@@ -192,7 +192,7 @@ function normaliseQuestion(input: QuestionInput): { error: string } | {
 
 // Grade one stored question against the student's submitted answer. Returns
 // the points earned (all-or-nothing per question) and whether it was correct.
-function gradeQuestion(q: QuestionRow, submitted: unknown): { correct: boolean; earned: number } {
+export function gradeQuestion(q: QuestionRow, submitted: unknown): { correct: boolean; earned: number } {
   const wrong = { correct: false, earned: 0 };
   const right = { correct: true, earned: q.points };
   switch (q.type) {
