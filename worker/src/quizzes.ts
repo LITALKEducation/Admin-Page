@@ -18,6 +18,7 @@ import type { AppBindings, AuthUser } from './types';
 import { isAdmin, requireAdmin, portalTokenMatchesStudent } from './auth';
 import { logAudit } from './db';
 import { courseGateForQuiz } from './courses';
+import { isPlusMember } from './plus';
 
 const MAX_TITLE = 300;
 const MAX_TEXT = 2_000;
@@ -604,6 +605,17 @@ quizzesPortal.post('/portal/:studentId/quizzes/:quizId/attempts', async (c) => {
     .all<QuestionRow>();
   const questions = results ?? [];
 
+  // "เฉลยละเอียด" is a LITALK+ benefit. Two conditions, both required, for the
+  // same reason hasCourseAccess has two: showAnswers is the AUTHOR's choice
+  // about whether this quiz should ever reveal its answers, membership is
+  // whether THIS learner is entitled to see them. Neither implies the other.
+  //
+  // The split is deliberate: everyone still learns their score and which
+  // questions they got wrong — a free exercise you cannot mark is not much of
+  // an exercise — while the model answer and the explanation are the paid part.
+  const plusMember = await isPlusMember(c.env.DB, studentId);
+  const detailedAnswers = quiz.showAnswers === 1 && plusMember;
+
   let score = 0;
   let maxScore = 0;
   const breakdown = questions.map((q) => {
@@ -615,7 +627,7 @@ quizzesPortal.post('/portal/:studentId/quizzes/:quizId/attempts', async (c) => {
       correct: graded.correct,
       earned: graded.earned,
       points: q.points,
-      ...(quiz.showAnswers === 1
+      ...(detailedAnswers
         ? { correctAnswer: parseJson<unknown>(q.answer, null), explanation: q.explanation }
         : {}),
     };
@@ -646,7 +658,11 @@ quizzesPortal.post('/portal/:studentId/quizzes/:quizId/attempts', async (c) => {
     maxScore,
     percent: maxScore > 0 ? Math.round((score / maxScore) * 100) : 0,
     passed,
-    showAnswers: quiz.showAnswers === 1,
+    showAnswers: detailedAnswers,
+    // Distinguishes "this quiz never shows answers" from "it would, but this
+    // learner is not a member" — so the portal can offer the upgrade at the
+    // exact moment it is worth something, instead of silently showing less.
+    detailedLocked: quiz.showAnswers === 1 && !plusMember,
     breakdown,
   });
 });
