@@ -110,6 +110,79 @@ export async function createStripePaymentLink(
   return { id: link.id, url: link.url };
 }
 
+/* ===================== Subscriptions (LITALK+) ===================== */
+
+// A subscription cannot go through a Payment Link the way a course does:
+// Payment Links create a fresh customer per payment and have no notion of a
+// renewal, so LITALK+ uses a Checkout Session in `subscription` mode against a
+// recurring Price created once in the Stripe dashboard. The Price id is
+// configuration (STRIPE_PLUS_PRICE_MONTHLY / _YEARLY), so changing what
+// LITALK+ costs is a dashboard edit and not a deploy.
+export async function createSubscriptionCheckoutSession(
+  secretKey: string,
+  opts: {
+    priceId: string;
+    successUrl: string;
+    cancelUrl: string;
+    // Ties the resulting subscription back to a learner. Sent as both
+    // client_reference_id and metadata: the first survives on the session, the
+    // second is copied onto the subscription itself, which is what later
+    // customer.subscription.* events carry.
+    studentId: string;
+    customerEmail?: string;
+    metadata?: Record<string, string>;
+  },
+): Promise<{ id: string; url: string }> {
+  const params: Record<string, string> = {
+    mode: 'subscription',
+    'line_items[0][price]': opts.priceId,
+    'line_items[0][quantity]': '1',
+    success_url: opts.successUrl,
+    cancel_url: opts.cancelUrl,
+    client_reference_id: opts.studentId,
+    allow_promotion_codes: 'true',
+    'metadata[type]': 'plus',
+    'metadata[student_id]': opts.studentId,
+    // Copied onto the Subscription, so customer.subscription.updated/deleted
+    // can identify the learner without a lookup back through the session.
+    'subscription_data[metadata][type]': 'plus',
+    'subscription_data[metadata][student_id]': opts.studentId,
+    ...(opts.customerEmail ? { customer_email: opts.customerEmail } : {}),
+  };
+  for (const [k, v] of Object.entries(opts.metadata ?? {})) params[`metadata[${k}]`] = v;
+
+  const session = await stripeRequest<{ id: string; url: string }>(secretKey, 'POST', '/v1/checkout/sessions', params);
+  return { id: session.id, url: session.url };
+}
+
+// Stripe's hosted billing portal: change card, switch monthly/yearly, cancel,
+// download invoices. Building any of that ourselves would mean handling card
+// details and dunning, which is exactly what Stripe is for.
+export async function createBillingPortalSession(
+  secretKey: string,
+  customerId: string,
+  returnUrl: string,
+): Promise<{ url: string }> {
+  return stripeRequest<{ url: string }>(secretKey, 'POST', '/v1/billing_portal/sessions', {
+    customer: customerId,
+    return_url: returnUrl,
+  });
+}
+
+export interface StripeSubscription {
+  id: string;
+  status: string;
+  customer: string | { id: string };
+  cancel_at_period_end?: boolean;
+  current_period_end?: number; // Unix seconds
+  metadata?: Record<string, string>;
+  items?: { data?: { price?: { id?: string; recurring?: { interval?: string } | null } | null }[] };
+}
+
+export async function retrieveSubscription(secretKey: string, subscriptionId: string): Promise<StripeSubscription> {
+  return stripeRequest<StripeSubscription>(secretKey, 'GET', `/v1/subscriptions/${subscriptionId}`);
+}
+
 export async function deactivateStripePaymentLink(secretKey: string, paymentLinkId: string): Promise<void> {
   await stripeRequest(secretKey, 'POST', `/v1/payment_links/${paymentLinkId}`, { active: 'false' });
 }

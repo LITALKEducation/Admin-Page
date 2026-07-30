@@ -41,12 +41,13 @@ import {
   updateNotice,
 } from './serviceNotices';
 import { chatReply, ChatNotConfiguredError } from './gemini';
-import { verifyStripeSignature, retrievePaymentReceiptUrl, deactivateStripePaymentLink } from './stripe';
+import { verifyStripeSignature, retrievePaymentReceiptUrl, deactivateStripePaymentLink , retrieveSubscription, type StripeSubscription } from './stripe';
 import type { Env } from './types';
 import blog, { blogPublic } from './blog';
 import quizzes, { quizzesPortal } from './quizzes';
 import courses, { coursesPortal, coursesPublic, grantEnrollment } from './courses';
 import { video, videoPortal, purgeExpiredVideoTickets } from './video';
+import { plus, plusPortal, syncSubscription } from './plus';
 import shortLinks, { shortLinkRedirect } from './shortlinks';
 
 const app = new Hono<AppBindings>();
@@ -97,6 +98,9 @@ app.get('/service-status', async (c) => {
 // A Stripe Checkout Session, as it appears on checkout.session.* events.
 interface StripeCheckoutSession {
   id: string;
+  mode?: string;                 // 'payment' | 'subscription' | 'setup'
+  subscription?: string | null;  // set when mode === 'subscription'
+  client_reference_id?: string | null;
   payment_link?: string | null;
   payment_status?: string;
   amount_total?: number | null;
@@ -123,6 +127,11 @@ interface StripeCharge {
 // schedule activation is itself idempotent.
 async function recordCheckoutPayment(env: Env, session: StripeCheckoutSession): Promise<void> {
   if (session.payment_status !== 'paid' || !session.amount_total) return;
+  // A LITALK+ checkout is also a paid session with an amount_total, and would
+  // otherwise land in `payments` as a one-off course purchase. Subscriptions
+  // are handled by the customer.subscription.* branches instead, so that the
+  // ledger keeps meaning "someone bought a thing".
+  if (session.mode === 'subscription') return;
   const meta = session.metadata ?? {};
   const discountAmount = session.total_details?.amount_discount ? session.total_details.amount_discount / 100 : null;
   const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
@@ -217,6 +226,16 @@ app.post('/stripe/webhook', async (c) => {
       case 'checkout.session.completed':
       case 'checkout.session.async_payment_succeeded':
         await recordCheckoutPayment(c.env, event.data.object);
+        // A LITALK+ signup. recordCheckoutPayment ignores it (see the mode
+        // guard there); activation happens here. Belt and braces with the
+        // customer.subscription.created event below — whichever arrives first
+        // writes the row and the other is an idempotent no-op — but this one
+        // carries client_reference_id, so it does not depend on the metadata
+        // having propagated onto the subscription object.
+        if (event.data.object.mode === 'subscription' && event.data.object.subscription && c.env.STRIPE_SECRET_KEY) {
+          const sub = await retrieveSubscription(c.env.STRIPE_SECRET_KEY, event.data.object.subscription);
+          await syncSubscription(c.env, sub, event.data.object.client_reference_id ?? null);
+        }
         break;
       // A delayed payment (PromptPay/bank) that ultimately failed. Nothing to
       // record — logged so a chased-up payment that never lands is visible.
@@ -225,6 +244,13 @@ app.post('/stripe/webhook', async (c) => {
         break;
       case 'charge.refunded':
         await recordChargeRefund(c.env, event.data.object);
+        break;
+      // LITALK+ (worker/src/plus.ts). The membership table is written here and
+      // nowhere else, so a portal request can never grant itself access.
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted':
+        await syncSubscription(c.env, event.data.object as unknown as StripeSubscription);
         break;
       // checkout.session.expired (an abandoned checkout attempt) is
       // intentionally ignored: a Payment Link spawns a fresh session per
@@ -1148,6 +1174,7 @@ app.route('/', coursesPortal);
 // route next to it, which is where ownership and the course gate are checked.
 // See worker/src/video.ts.
 app.route('/', videoPortal);
+app.route('/', plusPortal);
 
 // ===== Authenticated routes =====
 
@@ -1234,6 +1261,7 @@ app.route('/', blog);
 app.route('/', quizzes);
 app.route('/', courses);
 app.route('/', video);
+app.route('/', plus);
 app.route('/', shortLinks);
 
 // Also carries title/phone/hasAvatar from the staff table (not part of the

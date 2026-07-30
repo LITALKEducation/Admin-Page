@@ -149,6 +149,26 @@ When adding a surface, add it to `SERVICE_SURFACES` **and** to `SURFACES` in
 `ServiceScreen.tsx` — the whole-system switch derives its list from the latter
 so a new surface is included by default.
 
+## LITALK+ and course access
+
+`worker/src/plus.ts`. A member pays monthly or yearly and gets every course
+flagged `included_in_plus`; everything else stays a one-off purchase.
+
+**Gate on `hasCourseAccess`, not `isEnrolled`.** `isEnrolled` still means
+"owns this course" — it is what enrollment counts, receipts and the finance
+ledger are about. Access is `bought it OR (in Plus AND a current member)`, and
+using the wrong one either locks members out or counts them as buyers.
+
+`plus_subscriptions` is written by the Stripe webhook and by **nothing else**,
+so a portal request cannot grant itself a membership. Access runs to
+`current_period_end` even after a cancellation, which is why entitlement checks
+the date as well as the status. Unlike the maintenance system, this one fails
+**closed**.
+
+The recurring Price ids are config (`STRIPE_PLUS_PRICE_*`), not code, so
+changing what LITALK+ costs is a Stripe dashboard edit. A plan left unset is
+not offered rather than broken.
+
 ## Lesson videos in R2
 
 `worker/src/video.ts`. A quiz's video is either a link (`video_url`) or a file

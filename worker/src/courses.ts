@@ -14,6 +14,7 @@ import type { AppBindings, AuthUser, Env } from './types';
 import { isAdmin, requireAdmin, portalTokenMatchesStudent } from './auth';
 import { logAudit, extname } from './db';
 import { createStripePaymentLink, withPolicyNote } from './stripe';
+import { isPlusMember } from './plus';
 
 const MAX_TITLE = 300;
 const MAX_TEXT = 2_000;
@@ -124,6 +125,26 @@ export async function isEnrolled(db: D1Database, courseId: number, studentId: st
   return !!row;
 }
 
+// May this learner open this course? Two independent routes in:
+//
+//   * they bought it — course_enrollments, which is permanent; a course bought
+//     outright stays theirs whether or not they ever subscribe.
+//   * it is part of LITALK+ and they are a current member (see plus.ts).
+//
+// Kept separate from isEnrolled on purpose. isEnrolled still means "owns this
+// course" and is what enrollment counts, receipts and the finance ledger are
+// about; membership is access, not ownership, and a lapsed member must not
+// leave rows behind that read as purchases.
+export async function hasCourseAccess(db: D1Database, courseId: number, studentId: string): Promise<boolean> {
+  if (await isEnrolled(db, courseId, studentId)) return true;
+  const course = await db
+    .prepare(`SELECT included_in_plus AS includedInPlus FROM courses WHERE id = ?`)
+    .bind(courseId)
+    .first<{ includedInPlus: number }>();
+  if (!course || course.includedInPlus !== 1) return false;
+  return isPlusMember(db, studentId);
+}
+
 // One course item joined with this student's progress on its quiz.
 interface ProgressRow {
   quizId: number;
@@ -207,7 +228,7 @@ export async function courseGateForQuiz(db: D1Database, quizId: number, studentI
   if (!item) return { allowed: true }; // free standalone quiz
 
   const courseId = item.courseId;
-  if (!(await isEnrolled(db, courseId, studentId))) {
+  if (!(await hasCourseAccess(db, courseId, studentId))) {
     return { allowed: false, courseId, reason: 'enroll', message: 'ต้องลงทะเบียนคอร์สนี้ก่อนจึงจะเข้าเรียนได้' };
   }
   if (item.kind === 'pretest') return { allowed: true, courseId };
@@ -670,7 +691,9 @@ coursesPortal.get('/portal/:studentId/courses/:courseId', async (c) => {
     .bind(courseId)
     .first<CourseRow>();
   if (!course) return c.json({ status: 'error', message: 'ไม่พบคอร์ส' }, 404);
-  const enrolled = await isEnrolled(c.env.DB, courseId, studentId);
+  // Access, not ownership — a LITALK+ member can open a Plus course they have
+  // not bought. `enrolled` is what the page keys its lesson list off.
+  const enrolled = await hasCourseAccess(c.env.DB, courseId, studentId);
 
   const progress = await loadItemsWithProgress(c.env.DB, courseId, studentId);
   const pretestRow = progress.find((p) => p.kind === 'pretest') ?? null;
@@ -725,7 +748,9 @@ coursesPortal.post('/portal/:studentId/courses/:courseId/checkout', async (c) =>
     .first<{ id: number; title: string; titleTh: string | null; priceSatang: number; discountSatang: number | null; availableAt: string | null; currency: string }>();
   if (!course) return c.json({ status: 'error', message: 'ไม่พบคอร์ส' }, 404);
 
-  if (await isEnrolled(c.env.DB, courseId, studentId)) {
+  // Includes LITALK+ members, so a course their membership already covers
+  // never opens a payment page.
+  if (await hasCourseAccess(c.env.DB, courseId, studentId)) {
     return c.json({ status: 'success', enrolled: true });
   }
 
