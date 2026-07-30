@@ -280,6 +280,25 @@ plusPortal.post('/portal/:studentId/plus/manage', async (c) => {
   }
 });
 
+/* ===================== Public route (before verifyAuth) ===================== */
+
+// Whether LITALK+ is on sale yet, for the marketing page. Deliberately says
+// nothing about anyone — no auth, no student id, just "is there a plan".
+//
+// The point is that launching is a Stripe dashboard edit, exactly like the
+// price: set STRIPE_PLUS_PRICE_MONTHLY / _YEARLY and the "เร็ว ๆ นี้" badge
+// turns into a real call to action with no deploy. Fails to `available: false`,
+// so the safe answer is the coming-soon one.
+plusPortal.get('/plus/public', async (c) => {
+  const monthly = !!c.env.STRIPE_PLUS_PRICE_MONTHLY;
+  const yearly = !!c.env.STRIPE_PLUS_PRICE_YEARLY;
+  return c.json({
+    status: 'success',
+    available: !!c.env.STRIPE_SECRET_KEY && (monthly || yearly),
+    plans: { monthly, yearly },
+  });
+});
+
 /* ===================== Admin routes (after verifyAuth) ===================== */
 
 export const plus = new Hono<AppBindings>();
