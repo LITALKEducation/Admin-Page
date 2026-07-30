@@ -47,7 +47,7 @@ import blog, { blogPublic } from './blog';
 import quizzes, { quizzesPortal } from './quizzes';
 import courses, { coursesPortal, coursesPublic, grantEnrollment } from './courses';
 import { video, videoPortal, purgeExpiredVideoTickets } from './video';
-import { plus, plusPortal, syncSubscription } from './plus';
+import { plus, plusPortal, syncSubscription, isPlusMember } from './plus';
 import shortLinks, { shortLinkRedirect } from './shortlinks';
 
 const app = new Hono<AppBindings>();
@@ -731,9 +731,25 @@ app.post('/portal/:studentId/chat', async (c) => {
     return c.json({ status: 'error', message: 'ผู้ช่วย AI ปิดให้บริการอยู่ในขณะนี้ กรุณาติดต่อเจ้าหน้าที่ผ่าน LINE OA' }, 503);
   }
 
+  // The daily quota is the FREE tier. LITALK+ lifts it entirely — that is the
+  // headline of the membership, so it is enforced here rather than left to the
+  // client to honour. settings.dailyLimit stays the admin-editable free-tier
+  // number (AI settings screen); nothing about the free allowance is hardcoded.
+  const plusMember = await isPlusMember(c.env.DB, studentId);
   const usedToday = await portalMessageCountToday(c.env.DB, studentId);
-  if (usedToday >= settings.dailyLimit) {
-    return c.json({ status: 'error', message: 'วันนี้ถามคำถามครบโควตาแล้ว กรุณาลองใหม่พรุ่งนี้ หรือติดต่อเจ้าหน้าที่ผ่าน LINE OA' }, 429);
+  if (!plusMember && usedToday >= settings.dailyLimit) {
+    return c.json(
+      {
+        status: 'error',
+        // The free tier exists to bring people in, so running out says what
+        // lifts it rather than only "come back tomorrow".
+        message: `วันนี้ถามน้องลิลลี่ครบ ${settings.dailyLimit} คำถามแล้ว — สมัคร LITALK+ เพื่อถามได้ไม่จำกัด หรือกลับมาใหม่พรุ่งนี้`,
+        quotaExhausted: true,
+        dailyLimit: settings.dailyLimit,
+        upgradeTo: 'plus',
+      },
+      429,
+    );
   }
 
   const conversationId = body.conversationId || crypto.randomUUID();

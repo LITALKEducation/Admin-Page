@@ -20,6 +20,8 @@
 import { Hono } from 'hono';
 import type { AppBindings, Env } from './types';
 import { requireAdmin, portalTokenMatchesStudent } from './auth';
+import { loadSurfaceSettings } from './aiSettings';
+import { portalMessageCountToday } from './chat';
 import { logAudit } from './db';
 import {
   createSubscriptionCheckoutSession,
@@ -171,9 +173,24 @@ plusPortal.get('/portal/:studentId/plus', async (c) => {
     return c.json({ status: 'error', message: 'Unauthorized' }, 401);
   }
   const row = await loadPlus(c.env.DB, studentId);
+  const member = rowIsEntitled(row);
+
+  // The Lilly quota belongs here rather than behind a second call: the portal
+  // needs "what does this person get" as one answer, and showing the remaining
+  // free questions BEFORE someone hits the wall is the whole point of the free
+  // tier being a way in rather than a dead end.
+  const chatSettings = await loadSurfaceSettings(c.env.DB, 'portal');
+  const usedToday = member ? 0 : await portalMessageCountToday(c.env.DB, studentId);
+
   return c.json({
     status: 'success',
-    member: rowIsEntitled(row),
+    member,
+    chat: {
+      unlimited: member,
+      dailyLimit: chatSettings.dailyLimit,
+      usedToday,
+      remaining: member ? null : Math.max(0, chatSettings.dailyLimit - usedToday),
+    },
     // Absent rather than null when there has never been a subscription, so the
     // portal can tell "never joined" from "joined and lapsed".
     subscription: row
