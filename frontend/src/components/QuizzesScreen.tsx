@@ -14,8 +14,11 @@ import {
   fetchQuizAttempts,
   uploadQuizVideo,
   deleteQuizVideo,
+  uploadQuizSlides,
+  deleteQuizSlides,
   type QuizSummary,
   type QuizVideoFile,
+  type QuizSlideFile,
   type QuizQuestion,
   type QuizStatus,
   type QuestionType,
@@ -372,6 +375,11 @@ export default function QuizzesScreen() {
   const [uploadPct, setUploadPct] = useState<number | null>(null);
   const uploadAbort = useRef<AbortController | null>(null);
 
+  // The lesson's slide deck. Same "not part of the save" reasoning as the
+  // video above — it lands in R2 and in the row the moment it uploads.
+  const [slideFile, setSlideFile] = useState<QuizSlideFile | null>(null);
+  const [slidesBusy, setSlidesBusy] = useState(false);
+
   const [resultsFor, setResultsFor] = useState<QuizSummary | null>(null);
   const [attempts, setAttempts] = useState<QuizAttemptRow[] | null>(null);
 
@@ -415,6 +423,7 @@ export default function QuizzesScreen() {
 
   const openNew = async () => {
     setVideoFile(null);
+    setSlideFile(null);
     const draft = readEditorDraft(null);
     if (
       draft?.form &&
@@ -443,6 +452,7 @@ export default function QuizzesScreen() {
       // Set before the draft branch below returns: the uploaded video belongs
       // to the saved quiz, not to whatever draft the device is holding.
       setVideoFile({ hasVideoFile: quiz.hasVideoFile ?? 0, videoName: quiz.videoName, videoSize: quiz.videoSize });
+      setSlideFile({ hasSlides: quiz.hasSlides ?? 0, slideName: quiz.slideName, slideSize: quiz.slideSize });
       const draft = readEditorDraft(id);
       if (
         draft?.form &&
@@ -512,6 +522,34 @@ export default function QuizzesScreen() {
     } finally {
       uploadAbort.current = null;
       setUploadPct(null);
+    }
+  };
+
+  /* ----- Lesson slides, a LITALK+ benefit (worker/src/slides.ts) ----- */
+
+  const pickSlides = async (file: File) => {
+    if (!editingId) return;
+    setSlidesBusy(true);
+    try {
+      const res = await uploadQuizSlides(makeTokenGetter(getAccessTokenSilently), editingId, file);
+      setSlideFile({ hasSlides: 1, slideName: file.name, slideSize: res.size });
+      showToast('อัปโหลดสไลด์แล้ว', file.name, 'success');
+    } catch (error) {
+      showToast('อัปโหลดสไลด์ไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
+    } finally {
+      setSlidesBusy(false);
+    }
+  };
+
+  const removeSlides = async () => {
+    if (!editingId) return;
+    if (!(await confirmDialog('ลบสไลด์ของบทเรียนนี้?', { title: 'ลบสไลด์', okLabel: 'ลบสไลด์', danger: true }))) return;
+    try {
+      await deleteQuizSlides(makeTokenGetter(getAccessTokenSilently), editingId);
+      setSlideFile({ hasSlides: 0, slideName: null, slideSize: null });
+      showToast('ลบสไลด์แล้ว', undefined, 'success');
+    } catch (error) {
+      showToast('ลบสไลด์ไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
     }
   };
 
@@ -800,6 +838,65 @@ export default function QuizzesScreen() {
               )}
               <div className="form-hint">
                 MP4, WebM, OGG หรือ MOV · สูงสุด 2 GB · อัปโหลดแล้วเล่นจากเซิร์ฟเวอร์ของโรงเรียนเอง ไม่ผ่าน YouTube
+              </div>
+            </div>
+
+            {/* A LITALK+ benefit: the server only hands this file to a member
+                (worker/src/slides.ts). Uploaded here like any other lesson
+                asset — one POST, because a PDF fits in a request body. */}
+            <div className="form-group">
+              <label>
+                <i className="fas fa-file-pdf"></i> สไลด์บทเรียน (PDF · สิทธิ์สมาชิก LITALK+)
+              </label>
+              {!editingId ? (
+                <div className="form-hint">
+                  <i className="fas fa-circle-info"></i> บันทึกแบบทดสอบก่อน แล้วจึงอัปโหลดสไลด์ได้
+                </div>
+              ) : slidesBusy ? (
+                <div className="form-hint">
+                  <i className="fas fa-spinner fa-spin"></i> กำลังอัปโหลด...
+                </div>
+              ) : slideFile?.hasSlides ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <span>
+                    <i className="fas fa-circle-check" style={{ color: 'var(--accent-success)' }}></i>{' '}
+                    {slideFile.slideName || 'สไลด์บทเรียน'}
+                    {slideFile.slideSize ? ` · ${formatFileSize(slideFile.slideSize)}` : ''}
+                  </span>
+                  <label className="btn btn-secondary" style={{ margin: 0, padding: '6px 10px' }}>
+                    <i className="fas fa-arrows-rotate"></i> เปลี่ยนไฟล์
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = '';
+                        if (f) pickSlides(f);
+                      }}
+                    />
+                  </label>
+                  <button type="button" className="btn btn-danger" style={{ padding: '6px 10px' }} onClick={removeSlides}>
+                    <i className="fas fa-trash"></i> ลบสไลด์
+                  </button>
+                </div>
+              ) : (
+                <label className="btn btn-secondary" style={{ margin: 0, padding: '6px 10px' }}>
+                  <i className="fas fa-upload"></i> เลือกไฟล์ PDF
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = '';
+                      if (f) pickSlides(f);
+                    }}
+                  />
+                </label>
+              )}
+              <div className="form-hint">
+                PDF เท่านั้น · สูงสุด 40 MB · เฉพาะสมาชิก LITALK+ ที่เข้าถึงบทเรียนนี้ได้จึงจะดาวน์โหลดได้
               </div>
             </div>
 

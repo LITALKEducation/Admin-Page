@@ -48,6 +48,7 @@ import quizzes, { quizzesPortal } from './quizzes';
 import courses, { coursesPortal, coursesPublic, grantEnrollment } from './courses';
 import { video, videoPortal, purgeExpiredVideoTickets } from './video';
 import { plus, plusPortal, syncSubscription, isPlusMember } from './plus';
+import { slides, slidesPortal } from './slides';
 import shortLinks, { shortLinkRedirect } from './shortlinks';
 
 const app = new Hono<AppBindings>();
@@ -1191,6 +1192,7 @@ app.route('/', coursesPortal);
 // See worker/src/video.ts.
 app.route('/', videoPortal);
 app.route('/', plusPortal);
+app.route('/', slidesPortal);
 
 // ===== Authenticated routes =====
 
@@ -1278,6 +1280,7 @@ app.route('/', quizzes);
 app.route('/', courses);
 app.route('/', video);
 app.route('/', plus);
+app.route('/', slides);
 app.route('/', shortLinks);
 
 // Also carries title/phone/hasAvatar from the staff table (not part of the

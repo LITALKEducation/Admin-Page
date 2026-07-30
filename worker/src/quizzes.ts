@@ -49,6 +49,11 @@ interface QuizRow {
   videoName?: string | null;
   videoSize?: number | null;
   hasVideoFile?: number;
+  // Same shape for the lesson's slide deck (migrations/0034). The key is never
+  // sent; hasSlides is what both panels branch on. See slides.ts.
+  slideName?: string | null;
+  slideSize?: number | null;
+  hasSlides?: number;
   category: string | null;
   audience: string;
   status: string;
@@ -112,6 +117,7 @@ const REVIEWED_BY_FIELD = `COALESCE(rst.name, q.reviewed_by) AS reviewedBy`;
 const QUIZ_FIELDS = `q.id, q.title, q.title_th AS titleTh, q.description, q.description_th AS descriptionTh,
   q.lesson, q.lesson_th AS lessonTh, q.video_url AS videoUrl, q.category, q.audience, q.status, q.time_limit_min AS timeLimitMin,
   q.video_name AS videoName, q.video_size AS videoSize, (q.video_key IS NOT NULL) AS hasVideoFile,
+  q.slide_name AS slideName, q.slide_size AS slideSize, (q.slide_key IS NOT NULL) AS hasSlides,
   q.pass_score AS passScore, q.allow_retake AS allowRetake, q.show_answers AS showAnswers,
   q.author_identity AS authorIdentity, ${AUTHOR_NAME_FIELD}, ${REVIEWED_BY_FIELD},
   q.created_at AS createdAt, q.updated_at AS updatedAt, q.published_at AS publishedAt`;
@@ -522,6 +528,7 @@ quizzesPortal.get('/portal/:studentId/quizzes/:quizId', async (c) => {
   const quiz = await c.env.DB.prepare(
     `SELECT id, title, title_th AS titleTh, description, description_th AS descriptionTh,
             lesson, lesson_th AS lessonTh, video_url AS videoUrl, (video_key IS NOT NULL) AS hasVideoFile,
+            (slide_key IS NOT NULL) AS hasSlides, slide_name AS slideName, slide_size AS slideSize,
             category, time_limit_min AS timeLimitMin,
             pass_score AS passScore, allow_retake AS allowRetake, show_answers AS showAnswers
      FROM quizzes WHERE id = ? AND status = 'published'`,
