@@ -75,24 +75,31 @@ PUBLIC_FILES_ORIGIN = "https://istudent.litalkeducation.com"
 SHORT_DOMAIN_GO = "go.litalkeducation.com"
 SHORT_DOMAIN_PAYMENT = "payment.litalkeducation.com"
 
-# Login email for an auto-created student account is <studentId>@<this domain>.
-# MUST match the convention the old GAS backend used (the student site derives
-# the student id from the email's local part).
 # LITALK+ subscription (worker/src/plus.ts). These are recurring Stripe Price
 # ids — NOT secrets, and deliberately config rather than code so changing what
 # LITALK+ costs is a dashboard edit instead of a deploy.
 #
-# Create them once in Stripe: Product "LITALK+" with two recurring prices, one
-# monthly and one yearly, then paste the price ids here. A plan left unset is
-# simply not offered — the portal hides that button rather than failing on a
-# click — so the monthly plan can launch before the yearly one is priced.
+# Three plans. A plan left unset is simply not offered — the portal hides that
+# button rather than failing on a click — so they can launch one at a time.
+#
+# TERM is a school term: 5 months. Note it is interval "month" with a count of
+# 5, NOT its own interval, which is why plus.ts resolves a subscription's plan
+# from the price id here rather than from the billing interval — reading the
+# interval would file a term member as monthly.
 #
 # Also enable the Customer Portal (Stripe → Settings → Billing → Customer
 # portal) — cancelling and switching plans go through it, and
 # POST /portal/:id/plus/manage returns 502 until it is turned on.
-# STRIPE_PLUS_PRICE_MONTHLY = "price_..."
-# STRIPE_PLUS_PRICE_YEARLY  = "price_..."
+#
+# These ids must match the mode STRIPE_SECRET_KEY is in: a live price id
+# against a test key (or the reverse) fails at checkout with "no such price".
+STRIPE_PLUS_PRICE_MONTHLY = "price_1Tz7vYACRT45Tj2qqkMB6Vkl"
+STRIPE_PLUS_PRICE_TERM    = "price_1Tz7vZACRT45Tj2qRfYrjpS3"
+STRIPE_PLUS_PRICE_YEARLY  = "price_1Tz7vYACRT45Tj2q1Sbiqemw"
 
+# Login email for an auto-created student account is <studentId>@<this domain>.
+# MUST match the convention the old GAS backend used (the student site derives
+# the student id from the email's local part).
 STUDENT_EMAIL_DOMAIN = "litalkeducation.com"
 AUTH0_DB_CONNECTION = "LITALK-Student"
 

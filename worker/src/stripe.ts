@@ -176,7 +176,12 @@ export interface StripeSubscription {
   cancel_at_period_end?: boolean;
   current_period_end?: number; // Unix seconds
   metadata?: Record<string, string>;
-  items?: { data?: { price?: { id?: string; recurring?: { interval?: string } | null } | null }[] };
+  // interval_count matters: LITALK+ has a 5-month term plan, which is
+  // interval "month" with a count of 5 — indistinguishable from monthly on
+  // interval alone.
+  items?: {
+    data?: { price?: { id?: string; recurring?: { interval?: string; interval_count?: number } | null } | null }[];
+  };
 }
 
 export async function retrieveSubscription(secretKey: string, subscriptionId: string): Promise<StripeSubscription> {

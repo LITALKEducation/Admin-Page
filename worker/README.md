@@ -215,10 +215,19 @@ models run side by side.
 
 Three things have to exist in Stripe before the portal will offer it:
 
-1. A **Product** ("LITALK+") with two **recurring Prices** — one monthly, one
-   yearly. Paste their ids into `STRIPE_PLUS_PRICE_MONTHLY` /
-   `STRIPE_PLUS_PRICE_YEARLY` in `wrangler.toml`. They are ids, not secrets.
-   A plan left unset is simply not offered, so monthly can launch alone.
+1. A **Product** ("LITALK+") with three **recurring Prices** — monthly, term
+   (5 months) and yearly. Their ids go in `STRIPE_PLUS_PRICE_MONTHLY` /
+   `_TERM` / `_YEARLY` in `wrangler.toml`. They are ids, not secrets. A plan
+   left unset is simply not offered, so they can launch one at a time.
+
+   **The term price is `interval: month` with `interval_count: 5`, not its own
+   interval.** That is why `plus.ts` works out a subscription's plan from the
+   price id rather than from the billing interval — reading the interval would
+   file a term member as monthly for five months at a time.
+
+   The ids must also match the mode `STRIPE_SECRET_KEY` is in. A live price id
+   against a test key (or the reverse) fails at checkout with "no such price",
+   which reads as a code bug and is not one.
 2. The three `customer.subscription.*` webhook events above.
 3. The **Customer portal** (Settings → Billing → Customer portal), enabled.
    Cancelling, switching plan and updating a card all go through Stripe's

@@ -43,6 +43,10 @@ export interface Env {
   // what LITALK+ costs is a Stripe dashboard edit rather than a deploy. Unset
   // means that plan simply is not offered.
   STRIPE_PLUS_PRICE_MONTHLY?: string;
+  // A school term — 5 months. Between monthly and yearly, and the reason plan
+  // detection maps the price id rather than reading the billing interval:
+  // this one is interval "month" with a count of 5.
+  STRIPE_PLUS_PRICE_TERM?: string;
   STRIPE_PLUS_PRICE_YEARLY?: string;
   AUTH0_MGMT_CLIENT_ID?: string;
   AUTH0_MGMT_CLIENT_SECRET?: string;
