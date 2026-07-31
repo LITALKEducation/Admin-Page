@@ -26,6 +26,7 @@ import {
   type QuizAttemptRow,
 } from '../api/client';
 import { formatFileSize } from '../utils/format';
+import { quizCsvTemplate, questionsToCsv, csvToQuestions } from '../utils/quizCsv';
 
 const AUDIENCE_LABEL: Record<QuizAudience, string> = {
   on_demand: 'เรียน On Demand',
@@ -44,6 +45,20 @@ const TYPE_LABEL: Record<QuestionType, string> = {
   truefalse: 'จริง / เท็จ',
   short: 'เติมคำตอบสั้น',
 };
+
+// Trigger a client-side download of a CSV string. The UTF-8 BOM makes Excel
+// open Thai text correctly instead of as garbled bytes.
+function downloadCsv(filename: string, text: string) {
+  const blob = new Blob(['\ufeff' + text], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 interface QuizForm {
   title: string;
@@ -640,6 +655,51 @@ export default function QuizzesScreen() {
     setSaving(false);
   };
 
+  // Bulk-load questions from a spreadsheet. Only touches the (unsaved) editor
+  // state — the staff member reviews the imported questions and saves as usual.
+  const onImportCsv = async (file: File | null) => {
+    if (!file) return;
+    let text = '';
+    try {
+      text = await file.text();
+    } catch {
+      showToast('อ่านไฟล์ไม่สำเร็จ', 'กรุณาลองใหม่อีกครั้ง', 'error');
+      return;
+    }
+    const { questions: parsed, errors } = csvToQuestions(text);
+    if (parsed.length === 0) {
+      showToast('นำเข้าไม่สำเร็จ', errors[0] || 'ไม่พบคำถามในไฟล์', 'error');
+      return;
+    }
+
+    // If the editor already holds real questions, ask whether to replace them
+    // all or append. Nothing is saved to the cloud until "บันทึก", so either
+    // choice is safely reversible by not saving.
+    const hasExisting = questions.some((q) => q.prompt.trim() !== '');
+    let mode: 'replace' | 'append' = 'replace';
+    if (hasExisting) {
+      const replace = await confirmDialog(
+        `พบคำถามในไฟล์ ${parsed.length} ข้อ — ต้องการแทนที่คำถามเดิม ${questions.length} ข้อทั้งหมด หรือเพิ่มต่อท้าย?`,
+        { title: 'นำเข้าคำถามจาก CSV', okLabel: 'แทนที่ทั้งหมด', cancelLabel: 'เพิ่มต่อท้าย' },
+      );
+      mode = replace ? 'replace' : 'append';
+    }
+    setQuestions(mode === 'replace' ? parsed : [...questions.filter((q) => q.prompt.trim() !== ''), ...parsed]);
+
+    const skipped = errors.length ? ` · ข้าม ${errors.length} แถวที่ไม่ถูกต้อง` : '';
+    showToast(`นำเข้า ${parsed.length} ข้อแล้ว${skipped}`, errors[0], errors.length ? 'error' : 'success');
+  };
+
+  const onExportCsv = () => {
+    const clean = questions.filter((q) => q.prompt.trim() !== '');
+    if (clean.length === 0) {
+      showToast('ยังไม่มีคำถามให้ส่งออก', undefined, 'error');
+      return;
+    }
+    const name = (form.titleTh || form.title || 'quiz').trim().replace(/[^\w฀-๿-]+/g, '_').slice(0, 40) || 'quiz';
+    downloadCsv(`${name}.csv`, questionsToCsv(clean));
+  };
+
   const changeStatus = async (quiz: QuizSummary, status: QuizStatus) => {
     try {
       const getToken = makeTokenGetter(getAccessTokenSilently);
@@ -976,9 +1036,33 @@ export default function QuizzesScreen() {
 
             <hr style={{ border: 'none', borderTop: '1px solid var(--border-color, #e5e7eb)', margin: '10px 0 18px' }} />
 
-            <h3 style={{ margin: '0 0 12px' }}>
-              <i className="fas fa-list-ol"></i> คำถาม ({questions.length})
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 6px' }}>
+              <h3 style={{ margin: 0, flex: '1 1 auto' }}>
+                <i className="fas fa-list-ol"></i> คำถาม ({questions.length})
+              </h3>
+              <button type="button" className="btn btn-secondary" style={{ padding: '6px 11px' }} onClick={() => downloadCsv('litalk-quiz-template.csv', quizCsvTemplate())}>
+                <i className="fas fa-file-arrow-down"></i> Template
+              </button>
+              <label className="btn btn-secondary" style={{ padding: '6px 11px', cursor: 'pointer', margin: 0 }}>
+                <i className="fas fa-file-import"></i> นำเข้า CSV
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    onImportCsv(e.target.files?.[0] || null);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              <button type="button" className="btn btn-secondary" style={{ padding: '6px 11px' }} onClick={onExportCsv}>
+                <i className="fas fa-file-export"></i> ส่งออก
+              </button>
+            </div>
+            <div className="form-hint" style={{ margin: '0 0 14px' }}>
+              นำเข้า/แก้ไขคำถามจำนวนมากผ่านไฟล์ CSV ได้ — กด <strong>Template</strong> เพื่อดาวน์โหลดไฟล์ตัวอย่าง (เปิดด้วย Excel/Google Sheets),
+              กรอกคำถาม แล้วกด <strong>นำเข้า CSV</strong> · ประเภท: single, multiple, truefalse, short · ช่อง answer สำหรับ single/multiple ใส่ลำดับตัวเลือก (เช่น 1 หรือ 1;3)
+            </div>
 
             {questions.map((q, i) => (
               <QuestionEditor
