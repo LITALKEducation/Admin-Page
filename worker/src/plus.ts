@@ -26,6 +26,7 @@ import { logAudit } from './db';
 import {
   createSubscriptionCheckoutSession,
   createBillingPortalSession,
+  retrievePrice,
   type StripeSubscription,
 } from './stripe';
 
@@ -100,6 +101,63 @@ export function configuredPlans(env: Env): Record<PlusPlan, boolean> {
 
 export function anyPlanConfigured(env: Env): boolean {
   return !!env.STRIPE_SECRET_KEY && Object.values(configuredPlans(env)).some(Boolean);
+}
+
+function planPriceId(env: Env, plan: PlusPlan): string | undefined {
+  if (plan === 'yearly') return env.STRIPE_PLUS_PRICE_YEARLY;
+  if (plan === 'term') return env.STRIPE_PLUS_PRICE_TERM;
+  return env.STRIPE_PLUS_PRICE_MONTHLY;
+}
+
+export interface PlanPrice {
+  plan: PlusPlan;
+  amount: number; // satang
+  currency: string;
+  interval: string; // 'month' | 'year'
+  intervalCount: number;
+}
+
+// Prices come from Stripe rather than from a number typed into the marketing
+// page, so the page cannot advertise a price the checkout will not honour.
+//
+// Cached in the isolate for PRICE_TTL_MS: a price changes about never, and
+// three Stripe round trips on every visitor would be absurd. A stale price for
+// a few minutes after a deliberate change is the trade, and checkout always
+// charges what Stripe says regardless of what the page showed.
+const PRICE_TTL_MS = 10 * 60_000;
+let priceCache: { at: number; prices: PlanPrice[] } | null = null;
+
+export async function loadPlanPrices(env: Env): Promise<PlanPrice[]> {
+  if (priceCache && Date.now() - priceCache.at < PRICE_TTL_MS) return priceCache.prices;
+  if (!env.STRIPE_SECRET_KEY) return [];
+
+  const wanted = PLUS_PLANS.map((plan) => ({ plan, id: planPriceId(env, plan) })).filter(
+    (p): p is { plan: PlusPlan; id: string } => !!p.id,
+  );
+  const prices: PlanPrice[] = [];
+  for (const { plan, id } of wanted) {
+    try {
+      const price = await retrievePrice(env.STRIPE_SECRET_KEY, id);
+      if (price.unit_amount == null) continue;
+      prices.push({
+        plan,
+        amount: price.unit_amount,
+        currency: price.currency,
+        interval: price.recurring?.interval ?? 'month',
+        intervalCount: price.recurring?.interval_count ?? 1,
+      });
+    } catch (err) {
+      // One unreadable price must not cost the page the other two — the plan
+      // is simply not listed, which is the same as it not being configured.
+      console.error('plus: could not read price', id, err);
+    }
+  }
+  // Only a successful read is cached. An empty list means either nothing is
+  // configured (no Stripe call was made, so retrying costs nothing) or every
+  // read failed — and caching that would keep the page in its coming-soon
+  // state for ten minutes after Stripe came back.
+  if (prices.length) priceCache = { at: Date.now(), prices };
+  return prices;
 }
 
 /* ===================== Webhook side ===================== */
@@ -184,12 +242,6 @@ export async function syncSubscription(
 /* ===================== Portal routes (before verifyAuth) ===================== */
 
 export const plusPortal = new Hono<AppBindings>();
-
-function planPriceId(env: Env, plan: PlusPlan): string | undefined {
-  if (plan === 'yearly') return env.STRIPE_PLUS_PRICE_YEARLY;
-  if (plan === 'term') return env.STRIPE_PLUS_PRICE_TERM;
-  return env.STRIPE_PLUS_PRICE_MONTHLY;
-}
 
 // An unknown plan name from a client falls back to monthly rather than being
 // rejected, but only after being checked against the real list — so a typo
@@ -343,6 +395,7 @@ plusPortal.get('/plus/public', async (c) => {
     status: 'success',
     available: anyPlanConfigured(c.env),
     plans: configuredPlans(c.env),
+    prices: await loadPlanPrices(c.env),
   });
 });
 

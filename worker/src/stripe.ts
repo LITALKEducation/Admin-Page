@@ -189,6 +189,17 @@ export interface StripeSubscription {
   };
 }
 
+export interface StripePrice {
+  id: string;
+  currency: string;
+  unit_amount: number | null;
+  recurring?: { interval?: string; interval_count?: number } | null;
+}
+
+export async function retrievePrice(secretKey: string, priceId: string): Promise<StripePrice> {
+  return stripeRequest<StripePrice>(secretKey, 'GET', `/v1/prices/${priceId}`);
+}
+
 export async function retrieveSubscription(secretKey: string, subscriptionId: string): Promise<StripeSubscription> {
   return stripeRequest<StripeSubscription>(secretKey, 'GET', `/v1/subscriptions/${subscriptionId}`);
 }
