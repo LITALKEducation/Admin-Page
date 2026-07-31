@@ -26,7 +26,7 @@ import {
   type QuizAttemptRow,
 } from '../api/client';
 import { formatFileSize } from '../utils/format';
-import { quizCsvTemplate, questionsToCsv, csvToQuestions } from '../utils/quizCsv';
+import { quizCsvTemplate, questionsToCsv, csvToQuestions, multiQuizCsvTemplate, csvToQuizzes } from '../utils/quizCsv';
 
 const AUDIENCE_LABEL: Record<QuizAudience, string> = {
   on_demand: 'เรียน On Demand',
@@ -700,6 +700,62 @@ export default function QuizzesScreen() {
     downloadCsv(`${name}.csv`, questionsToCsv(clean));
   };
 
+  // Bulk-create several quizzes from one CSV (grouped by the `quiz` column).
+  // Each becomes a new draft via the normal create API; the author then reviews
+  // and publishes as usual.
+  const onImportQuizzesCsv = async (file: File | null) => {
+    if (!file) return;
+    let text = '';
+    try {
+      text = await file.text();
+    } catch {
+      showToast('อ่านไฟล์ไม่สำเร็จ', 'กรุณาลองใหม่อีกครั้ง', 'error');
+      return;
+    }
+    const { quizzes, errors } = csvToQuizzes(text);
+    if (quizzes.length === 0) {
+      showToast('นำเข้าไม่สำเร็จ', errors[0] || 'ไม่พบแบบทดสอบในไฟล์', 'error');
+      return;
+    }
+    const totalQ = quizzes.reduce((n, q) => n + q.questions.length, 0);
+    const skipped = errors.length ? `\n\n(มี ${errors.length} แถว/ชุดที่ข้าม: ${errors[0]})` : '';
+    if (
+      !(await confirmDialog(`จะสร้างแบบทดสอบใหม่ ${quizzes.length} ชุด (รวม ${totalQ} คำถาม) เป็นฉบับร่างหรือไม่?${skipped}`, {
+        title: 'นำเข้าแบบทดสอบหลายชุด',
+        okLabel: `สร้าง ${quizzes.length} ชุด`,
+      }))
+    )
+      return;
+
+    setSaving(true);
+    const getToken = makeTokenGetter(getAccessTokenSilently);
+    let ok = 0;
+    const failed: string[] = [];
+    for (const q of quizzes) {
+      try {
+        const res = await createQuiz(getToken, {
+          title: q.title,
+          titleTh: q.titleTh,
+          category: q.category,
+          audience: q.audience,
+          passScore: q.passScore,
+          questions: q.questions,
+        });
+        if (res.id) ok += 1;
+        else failed.push(q.title);
+      } catch {
+        failed.push(q.title);
+      }
+    }
+    setSaving(false);
+    showToast(
+      `สร้างแบบทดสอบแล้ว ${ok} ชุด${failed.length ? ` · ล้มเหลว ${failed.length}` : ''}`,
+      failed.length ? `ล้มเหลว: ${failed.slice(0, 3).join(', ')}` : 'ทั้งหมดเป็นฉบับร่าง — ตรวจสอบและเผยแพร่ได้เลย',
+      failed.length ? 'error' : 'success',
+    );
+    load();
+  };
+
   const changeStatus = async (quiz: QuizSummary, status: QuizStatus) => {
     try {
       const getToken = makeTokenGetter(getAccessTokenSilently);
@@ -1112,9 +1168,26 @@ export default function QuizzesScreen() {
             <p>จัดการบทเรียนและแบบทดสอบ ดูผลคะแนนของนักเรียน</p>
           </div>
           {!editorOpen && (
-            <button type="button" className="btn btn-primary" onClick={openNew}>
-              <i className="fas fa-plus"></i> สร้างแบบทดสอบใหม่
-            </button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => downloadCsv('litalk-quizzes-template.csv', multiQuizCsvTemplate())} title="ดาวน์โหลดไฟล์ตัวอย่างสำหรับสร้างหลายชุด">
+                <i className="fas fa-file-arrow-down"></i> Template หลายชุด
+              </button>
+              <label className="btn btn-secondary" style={{ cursor: 'pointer', margin: 0 }}>
+                <i className="fas fa-file-import"></i> นำเข้าหลายชุด
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    onImportQuizzesCsv(e.target.files?.[0] || null);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              <button type="button" className="btn btn-primary" onClick={openNew}>
+                <i className="fas fa-plus"></i> สร้างแบบทดสอบใหม่
+              </button>
+            </div>
           )}
         </div>
 
