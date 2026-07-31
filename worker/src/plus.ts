@@ -26,10 +26,15 @@ import { logAudit } from './db';
 import {
   createSubscriptionCheckoutSession,
   createBillingPortalSession,
+  retrievePrice,
   type StripeSubscription,
 } from './stripe';
 
-export type PlusPlan = 'monthly' | 'yearly';
+// 'term' is a school term — 5 months. See planFor() for why the plan is
+// resolved from the price id rather than from the billing interval.
+export type PlusPlan = 'monthly' | 'term' | 'yearly';
+
+export const PLUS_PLANS: PlusPlan[] = ['monthly', 'term', 'yearly'];
 
 // Statuses Stripe considers a live, paying (or trialing) subscription.
 // 'past_due' is deliberately NOT here: Stripe is still retrying the card, and
@@ -83,11 +88,102 @@ export async function isPlusMember(db: D1Database, studentId: string): Promise<b
   }
 }
 
+// Which plans this deployment actually offers. A plan without a price id is
+// simply not offered — the portal hides its button rather than failing on a
+// click — so plans can be launched one at a time.
+export function configuredPlans(env: Env): Record<PlusPlan, boolean> {
+  return {
+    monthly: !!env.STRIPE_PLUS_PRICE_MONTHLY,
+    term: !!env.STRIPE_PLUS_PRICE_TERM,
+    yearly: !!env.STRIPE_PLUS_PRICE_YEARLY,
+  };
+}
+
+export function anyPlanConfigured(env: Env): boolean {
+  return !!env.STRIPE_SECRET_KEY && Object.values(configuredPlans(env)).some(Boolean);
+}
+
+function planPriceId(env: Env, plan: PlusPlan): string | undefined {
+  if (plan === 'yearly') return env.STRIPE_PLUS_PRICE_YEARLY;
+  if (plan === 'term') return env.STRIPE_PLUS_PRICE_TERM;
+  return env.STRIPE_PLUS_PRICE_MONTHLY;
+}
+
+export interface PlanPrice {
+  plan: PlusPlan;
+  amount: number; // satang
+  currency: string;
+  interval: string; // 'month' | 'year'
+  intervalCount: number;
+}
+
+// Prices come from Stripe rather than from a number typed into the marketing
+// page, so the page cannot advertise a price the checkout will not honour.
+//
+// Cached in the isolate for PRICE_TTL_MS: a price changes about never, and
+// three Stripe round trips on every visitor would be absurd. A stale price for
+// a few minutes after a deliberate change is the trade, and checkout always
+// charges what Stripe says regardless of what the page showed.
+const PRICE_TTL_MS = 10 * 60_000;
+let priceCache: { at: number; prices: PlanPrice[] } | null = null;
+
+export async function loadPlanPrices(env: Env): Promise<PlanPrice[]> {
+  if (priceCache && Date.now() - priceCache.at < PRICE_TTL_MS) return priceCache.prices;
+  if (!env.STRIPE_SECRET_KEY) return [];
+
+  const wanted = PLUS_PLANS.map((plan) => ({ plan, id: planPriceId(env, plan) })).filter(
+    (p): p is { plan: PlusPlan; id: string } => !!p.id,
+  );
+  const prices: PlanPrice[] = [];
+  for (const { plan, id } of wanted) {
+    try {
+      const price = await retrievePrice(env.STRIPE_SECRET_KEY, id);
+      if (price.unit_amount == null) continue;
+      prices.push({
+        plan,
+        amount: price.unit_amount,
+        currency: price.currency,
+        interval: price.recurring?.interval ?? 'month',
+        intervalCount: price.recurring?.interval_count ?? 1,
+      });
+    } catch (err) {
+      // One unreadable price must not cost the page the other two — the plan
+      // is simply not listed, which is the same as it not being configured.
+      console.error('plus: could not read price', id, err);
+    }
+  }
+  // Only a successful read is cached. An empty list means either nothing is
+  // configured (no Stripe call was made, so retrying costs nothing) or every
+  // read failed — and caching that would keep the page in its coming-soon
+  // state for ten minutes after Stripe came back.
+  if (prices.length) priceCache = { at: Date.now(), prices };
+  return prices;
+}
+
 /* ===================== Webhook side ===================== */
 
-function planFromInterval(sub: StripeSubscription): PlusPlan {
-  const interval = sub.items?.data?.[0]?.price?.recurring?.interval;
-  return interval === 'year' ? 'yearly' : 'monthly';
+// Which plan is this subscription on?
+//
+// Resolved from the PRICE ID against our own config, not from the billing
+// interval: the term plan is interval "month" with a count of 5, so reading
+// the interval alone would file it as monthly and the member would see the
+// wrong plan for five months at a time.
+//
+// The interval is only a fallback, for a subscription on a price we do not
+// know — someone switched plan in Stripe's billing portal to something added
+// there and not here. Even then it distinguishes term from monthly by count,
+// so the fallback is wrong only for an interval we have never seen.
+function planFor(env: Env, sub: StripeSubscription): PlusPlan {
+  const priceId = sub.items?.data?.[0]?.price?.id;
+  if (priceId) {
+    if (priceId === env.STRIPE_PLUS_PRICE_MONTHLY) return 'monthly';
+    if (priceId === env.STRIPE_PLUS_PRICE_TERM) return 'term';
+    if (priceId === env.STRIPE_PLUS_PRICE_YEARLY) return 'yearly';
+  }
+  const recurring = sub.items?.data?.[0]?.price?.recurring;
+  if (recurring?.interval === 'year') return 'yearly';
+  if (recurring?.interval === 'month' && (recurring.interval_count ?? 1) > 1) return 'term';
+  return 'monthly';
 }
 
 function customerIdOf(sub: StripeSubscription): string | null {
@@ -132,7 +228,7 @@ export async function syncSubscription(
   )
     .bind(
       studentId,
-      planFromInterval(sub),
+      planFor(env, sub),
       sub.status,
       customerIdOf(sub),
       sub.id,
@@ -147,8 +243,11 @@ export async function syncSubscription(
 
 export const plusPortal = new Hono<AppBindings>();
 
-function planPriceId(env: Env, plan: PlusPlan): string | undefined {
-  return plan === 'yearly' ? env.STRIPE_PLUS_PRICE_YEARLY : env.STRIPE_PLUS_PRICE_MONTHLY;
+// An unknown plan name from a client falls back to monthly rather than being
+// rejected, but only after being checked against the real list — so a typo
+// cannot silently charge someone the yearly price.
+function normalisePlan(value: unknown): PlusPlan {
+  return PLUS_PLANS.includes(value as PlusPlan) ? (value as PlusPlan) : 'monthly';
 }
 
 // Only ever redirect back to one of our own origins — the same open-redirect
@@ -202,11 +301,8 @@ plusPortal.get('/portal/:studentId/plus', async (c) => {
         }
       : null,
     // So the page can hide the buttons rather than fail on a click.
-    available: !!(c.env.STRIPE_SECRET_KEY && (c.env.STRIPE_PLUS_PRICE_MONTHLY || c.env.STRIPE_PLUS_PRICE_YEARLY)),
-    plans: {
-      monthly: !!c.env.STRIPE_PLUS_PRICE_MONTHLY,
-      yearly: !!c.env.STRIPE_PLUS_PRICE_YEARLY,
-    },
+    available: anyPlanConfigured(c.env),
+    plans: configuredPlans(c.env),
   });
 });
 
@@ -220,7 +316,7 @@ plusPortal.post('/portal/:studentId/plus/checkout', async (c) => {
   }
 
   const body = await c.req.json<{ plan?: string; returnUrl?: string }>().catch(() => ({}) as never);
-  const plan: PlusPlan = body.plan === 'yearly' ? 'yearly' : 'monthly';
+  const plan = normalisePlan(body.plan);
 
   const existing = await loadPlus(c.env.DB, studentId);
   if (rowIsEntitled(existing)) {
@@ -254,8 +350,13 @@ plusPortal.post('/portal/:studentId/plus/checkout', async (c) => {
   }
 });
 
-// Manage / switch plan / cancel — Stripe's hosted billing portal. Doing this
-// ourselves would mean handling card details and failed-payment dunning.
+// Manage / cancel — Stripe's hosted billing portal. Doing this ourselves would
+// mean handling card details and failed-payment dunning.
+//
+// Switching plan is not offered there yet (subscription_update is disabled in
+// the portal configuration), which is why the checkout route above refuses a
+// second subscription rather than treating it as an upgrade: creating one
+// would bill the member twice.
 plusPortal.post('/portal/:studentId/plus/manage', async (c) => {
   const studentId = c.req.param('studentId');
   if (!(await portalTokenMatchesStudent(c, studentId))) {
@@ -290,12 +391,11 @@ plusPortal.post('/portal/:studentId/plus/manage', async (c) => {
 // turns into a real call to action with no deploy. Fails to `available: false`,
 // so the safe answer is the coming-soon one.
 plusPortal.get('/plus/public', async (c) => {
-  const monthly = !!c.env.STRIPE_PLUS_PRICE_MONTHLY;
-  const yearly = !!c.env.STRIPE_PLUS_PRICE_YEARLY;
   return c.json({
     status: 'success',
-    available: !!c.env.STRIPE_SECRET_KEY && (monthly || yearly),
-    plans: { monthly, yearly },
+    available: anyPlanConfigured(c.env),
+    plans: configuredPlans(c.env),
+    prices: await loadPlanPrices(c.env),
   });
 });
 

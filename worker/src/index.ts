@@ -252,6 +252,13 @@ app.post('/stripe/webhook', async (c) => {
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted':
+      // The endpoint also subscribes to paused/resumed. Stripe usually sends
+      // an `updated` alongside them, but relying on that would mean a paused
+      // subscription keeps its 'active' row — and its access — if it ever
+      // does not. They carry the same Subscription object, so syncing them
+      // costs nothing and closes that gap.
+      case 'customer.subscription.paused':
+      case 'customer.subscription.resumed':
         await syncSubscription(c.env, event.data.object as unknown as StripeSubscription);
         break;
       // checkout.session.expired (an abandoned checkout attempt) is

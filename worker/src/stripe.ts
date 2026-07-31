@@ -155,9 +155,14 @@ export async function createSubscriptionCheckoutSession(
   return { id: session.id, url: session.url };
 }
 
-// Stripe's hosted billing portal: change card, switch monthly/yearly, cancel,
-// download invoices. Building any of that ourselves would mean handling card
-// details and dunning, which is exactly what Stripe is for.
+// Stripe's hosted billing portal: change card, cancel, download invoices.
+// Building any of that ourselves would mean handling card details and
+// dunning, which is exactly what Stripe is for.
+//
+// NOTE: switching plan is NOT currently available — the portal configuration
+// has subscription_update disabled, so a monthly member cannot move to term or
+// yearly from here. Enabling it is a Stripe dashboard setting, not a code
+// change. Until then the only route is cancel and re-subscribe.
 export async function createBillingPortalSession(
   secretKey: string,
   customerId: string,
@@ -176,7 +181,23 @@ export interface StripeSubscription {
   cancel_at_period_end?: boolean;
   current_period_end?: number; // Unix seconds
   metadata?: Record<string, string>;
-  items?: { data?: { price?: { id?: string; recurring?: { interval?: string } | null } | null }[] };
+  // interval_count matters: LITALK+ has a 5-month term plan, which is
+  // interval "month" with a count of 5 — indistinguishable from monthly on
+  // interval alone.
+  items?: {
+    data?: { price?: { id?: string; recurring?: { interval?: string; interval_count?: number } | null } | null }[];
+  };
+}
+
+export interface StripePrice {
+  id: string;
+  currency: string;
+  unit_amount: number | null;
+  recurring?: { interval?: string; interval_count?: number } | null;
+}
+
+export async function retrievePrice(secretKey: string, priceId: string): Promise<StripePrice> {
+  return stripeRequest<StripePrice>(secretKey, 'GET', `/v1/prices/${priceId}`);
 }
 
 export async function retrieveSubscription(secretKey: string, subscriptionId: string): Promise<StripeSubscription> {
