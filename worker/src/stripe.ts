@@ -155,9 +155,14 @@ export async function createSubscriptionCheckoutSession(
   return { id: session.id, url: session.url };
 }
 
-// Stripe's hosted billing portal: change card, switch monthly/yearly, cancel,
-// download invoices. Building any of that ourselves would mean handling card
-// details and dunning, which is exactly what Stripe is for.
+// Stripe's hosted billing portal: change card, cancel, download invoices.
+// Building any of that ourselves would mean handling card details and
+// dunning, which is exactly what Stripe is for.
+//
+// NOTE: switching plan is NOT currently available — the portal configuration
+// has subscription_update disabled, so a monthly member cannot move to term or
+// yearly from here. Enabling it is a Stripe dashboard setting, not a code
+// change. Until then the only route is cancel and re-subscribe.
 export async function createBillingPortalSession(
   secretKey: string,
   customerId: string,

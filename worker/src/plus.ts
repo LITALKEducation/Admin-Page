@@ -298,8 +298,13 @@ plusPortal.post('/portal/:studentId/plus/checkout', async (c) => {
   }
 });
 
-// Manage / switch plan / cancel — Stripe's hosted billing portal. Doing this
-// ourselves would mean handling card details and failed-payment dunning.
+// Manage / cancel — Stripe's hosted billing portal. Doing this ourselves would
+// mean handling card details and failed-payment dunning.
+//
+// Switching plan is not offered there yet (subscription_update is disabled in
+// the portal configuration), which is why the checkout route above refuses a
+// second subscription rather than treating it as an upgrade: creating one
+// would bill the member twice.
 plusPortal.post('/portal/:studentId/plus/manage', async (c) => {
   const studentId = c.req.param('studentId');
   if (!(await portalTokenMatchesStudent(c, studentId))) {

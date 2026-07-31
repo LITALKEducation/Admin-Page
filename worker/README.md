@@ -230,9 +230,16 @@ Three things have to exist in Stripe before the portal will offer it:
    which reads as a code bug and is not one.
 2. The three `customer.subscription.*` webhook events above.
 3. The **Customer portal** (Settings → Billing → Customer portal), enabled.
-   Cancelling, switching plan and updating a card all go through Stripe's
-   hosted portal — `POST /portal/:studentId/plus/manage` returns 502 until it
-   is turned on.
+   Cancelling and updating a card go through Stripe's hosted portal —
+   `POST /portal/:studentId/plus/manage` returns 502 until it is turned on.
+
+   **Switching plan is a separate switch and is currently OFF.** The portal
+   configuration has `subscription_update` disabled, so a monthly member
+   cannot move to term or yearly. With three plans that is worth turning on
+   (Customer portal → "Customers can switch plans", then list the three
+   prices). Until it is, the only route is cancel and re-subscribe: the
+   checkout route deliberately refuses a second subscription for an existing
+   member rather than billing them twice.
 
 Access lasts to the end of the paid period: cancelling sets
 `cancel_at_period_end` and the member keeps everything until
