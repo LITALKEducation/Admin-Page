@@ -44,6 +44,7 @@ const BlogScreen = lazy(() => import('./components/BlogScreen'));
 const LinksScreen = lazy(() => import('./components/LinksScreen'));
 const AiSettingsScreen = lazy(() => import('./components/AiSettingsScreen'));
 const ServiceScreen = lazy(() => import('./components/ServiceScreen'));
+const TcasFortuneScreen = lazy(() => import('./components/TcasFortuneScreen'));
 
 // Code-split the palette: it drags in cmdk + the dialog primitive, and the
 // Ctrl+K listener lives in App so nothing loads until the first open.
@@ -100,6 +101,7 @@ const TITLES: Record<string, string> = {
   '/links': 'ลิงก์ย่อ',
   '/ai-settings': 'ตั้งค่า AI Chat',
   '/service': 'ควบคุมการเปิด-ปิดระบบ',
+  '/tcas-fortune': 'TCAS Fortune',
 };
 
 function ScreenFallback() {
@@ -255,6 +257,7 @@ export default function App() {
                         <Route path="/links" element={<LinksScreen />} />
                         {isAdmin && <Route path="/ai-settings" element={<AiSettingsScreen />} />}
                         {isAdmin && <Route path="/service" element={<ServiceScreen />} />}
+                        {isAdmin && <Route path="/tcas-fortune" element={<TcasFortuneScreen />} />}
                       </Routes>
                     </Suspense>
                   </ChunkErrorBoundary>

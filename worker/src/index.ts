@@ -51,6 +51,7 @@ import { plus, plusPortal, syncSubscription, isPlusMember } from './plus';
 import { slides, slidesPortal } from './slides';
 import { practiceExams } from './practiceExams';
 import shortLinks, { shortLinkRedirect } from './shortlinks';
+import { tcasFortunePublic, tcasFortuneAdmin } from './tcasFortune';
 
 const app = new Hono<AppBindings>();
 
@@ -75,6 +76,7 @@ app.route('/', blogPublic);
 
 // Public on-demand course catalogue for the marketing site (no login).
 app.route('/', coursesPublic);
+app.route('/', tcasFortunePublic);
 
 // What the popup on every public page polls: the notices visible right now,
 // already filtered by phase so the client never has to reason about times.
@@ -1206,6 +1208,7 @@ app.route('/', practiceExams);
 // ===== Authenticated routes =====
 
 app.use('*', verifyAuth);
+app.route('/', tcasFortuneAdmin);
 
 // The 'admin' surface: the panel closed for maintenance. Sitting here rather
 // than in each handler means a route added later is covered without anyone

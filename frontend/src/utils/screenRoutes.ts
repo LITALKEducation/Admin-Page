@@ -2,6 +2,7 @@
 // whole admin panel has been migrated — the single source of truth for
 // Sidebar links, cross-screen navigation, and shareable deep links.
 export const SCREEN_ROUTES: Record<string, string> = {
+  'tcas-fortune': '/tcas-fortune',
   dashboard: '/',
   students: '/students',
   check: '/check',
