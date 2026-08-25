@@ -2,6 +2,10 @@ import { FILES_API_AUDIENCE, FILES_API_URL } from '../config';
 
 export type GetTokenFn = () => Promise<string>;
 
+export interface TcasFortuneSettings { enabled:number; maintenance:number; dailyLimit:number; burstLimit:number; model:string; maxOutputTokens:number; shareEnabled:number; askLitalkEnabled:number; promptAdditions:string; categoriesJson:string }
+export async function fetchTcasFortuneSettings(getToken:GetTokenFn) { return apiJson<{settings:TcasFortuneSettings}>(getToken,'/settings/tcas-fortune'); }
+export async function saveTcasFortuneSettings(getToken:GetTokenFn, value:TcasFortuneSettings & {categories:string[]}) { return apiJson<{ok:boolean}>(getToken,'/settings/tcas-fortune',{method:'PUT',body:JSON.stringify(value)}); }
+
 // Mirrors the legacy apiFetch() in index.html: authenticated fetch against
 // the Cloudflare Worker (D1-backed) API, JSON in/out.
 export async function apiFetch(getAccessTokenSilently: GetTokenFn, path: string, options: RequestInit = {}) {

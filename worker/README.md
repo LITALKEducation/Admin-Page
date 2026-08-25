@@ -653,6 +653,38 @@ when the current token carries no email. Setting up the Action from step
 
 ## Scope / security notes
 
+## TCAS Fortune API
+
+`POST /api/tcas-fortune` is the public Thailand-only three-card reading route.
+Cloudflare's `request.cf.country` must be `TH`; browser locale and request
+payload location fields are ignored. The request must be JSON (maximum 8 KiB):
+
+```json
+{"questionType":"current_focus","question":"","language":"th","cards":[{"id":"the-chariot","position":"current"},{"id":"the-moon","position":"challenge"},{"id":"the-star","position":"guidance"}]}
+```
+
+`language` is `th` or `en`, `question` is at most 500 characters, and
+`questionType` must be one of the stable IDs configured by an admin. Exactly
+three distinct canonical Major Arcana IDs are required, in `current`,
+`challenge`, `guidance` order. Names and meanings from a client are never used.
+Success returns `headline`, `overall_message`, exactly three `cards` with
+`card_id`, `position`, `meaning`, `tcas_interpretation`, and `action`, followed
+by `focus_today`, `encouragement`, and the canonical server disclaimer.
+
+Public failures use `{ "error": "code", "message": "safe message" }` with
+`region_not_supported` (403), `rate_limited` (429), `feature_disabled` (503),
+`invalid_request` / `invalid_cards` (400). Provider and invalid-output failures
+return a conservative canonical-card fallback rather than provider details.
+
+Admin-role routes are `GET/PUT /settings/tcas-fortune` and
+`GET /settings/tcas-fortune/analytics`. They reuse Auth0's existing Admin role.
+Migration `0036_tcas_fortune.sql` extends D1 for configuration, anonymous
+per-IP time-window counters, and aggregate events. Raw questions and precise
+locations are not stored. The existing `GEMINI_API_KEY` Worker secret is reused;
+there are no new bindings or secrets. `ALLOWED_ORIGIN` must include the public
+Website origin. The feature defaults off after migration so an admin can review
+the model, limits, categories, and CORS configuration before enabling it.
+
 - Staff routes require an Auth0 access token with the listed permission.
 - "admin" in the table above means the `files:delete` permission, which only
   the Admin role holds in the Auth0 setup from step 1 — it doubles as the
