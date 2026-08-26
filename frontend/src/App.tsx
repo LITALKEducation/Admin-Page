@@ -18,15 +18,13 @@ import { EditingLogProvider } from './hooks/useEditingLog';
 import { SCREEN_ROUTES } from './utils/screenRoutes';
 import ChunkErrorBoundary from './ChunkErrorBoundary';
 
-// Every screen past the dashboard is code-split — with 16+ admin screens
-// there's no reason to ship the blog editor or NFC registration UI to
-// someone who only ever opens the dashboard.
 const DashboardScreen = lazy(() => import('./components/DashboardScreen'));
 const StudentsScreen = lazy(() => import('./components/StudentsScreen'));
 const CheckScreen = lazy(() => import('./components/CheckScreen'));
 const LogsScreen = lazy(() => import('./components/LogsScreen'));
-const QuizzesScreen = lazy(() => import('./components/QuizzesScreen'));
-const CoursesScreen = lazy(() => import('./components/CoursesScreen'));
+const TutoredExamsScreen = lazy(() => import('./components/TutoredExamsScreen'));
+const OnlineLearningScreen = lazy(() => import('./components/OnlineLearningScreen'));
+const CourseContentScreen = lazy(() => import('./components/CourseContentScreen'));
 const LearnersScreen = lazy(() => import('./components/LearnersScreen'));
 const PaymentsScreen = lazy(() => import('./components/PaymentsScreen'));
 const CreateStudentScreen = lazy(() => import('./components/CreateStudentScreen'));
@@ -45,18 +43,9 @@ const LinksScreen = lazy(() => import('./components/LinksScreen'));
 const AiSettingsScreen = lazy(() => import('./components/AiSettingsScreen'));
 const ServiceScreen = lazy(() => import('./components/ServiceScreen'));
 const TcasFortuneScreen = lazy(() => import('./components/TcasFortuneScreen'));
-
-// Code-split the palette: it drags in cmdk + the dialog primitive, and the
-// Ctrl+K listener lives in App so nothing loads until the first open.
 const CommandPalette = lazy(() => import('./components/CommandPalette'));
-// Likewise the ID card, which pulls in the QR encoder.
 const StaffIdCard = lazy(() => import('./components/StaffIdCard'));
 
-// Supports shareable links like /app/?screen=logs&student=litalk12345
-// (e.g. the "copy study log link" buttons) by seeding the shared
-// selection once on load, then dropping the query string — mirrors the
-// legacy applyDeepLink(). ?card=1 opens the digital ID card straight away,
-// for a phone Shortcut / Action Button pinned to check-in.
 function DeepLinkHandler({ onOpenIdCard }: { onOpenIdCard: () => void }) {
   const navigate = useNavigate();
   const [, setSelectedStudent] = useSharedStudentSelection();
@@ -82,8 +71,9 @@ const TITLES: Record<string, string> = {
   '/students': 'รายชื่อนักเรียน',
   '/check': 'โปรไฟล์นักเรียน',
   '/logs': 'บันทึกการเรียน',
-  '/quizzes': 'แบบทดสอบออนไลน์',
+  '/quizzes': 'แบบทดสอบออนไลน์ 1 ต่อ 1',
   '/courses': 'คอร์สเรียนออนไลน์',
+  '/course-content': 'คลังบทเรียนและ Assessment',
   '/learners': 'ผู้เรียนออนไลน์',
   '/payments': 'บันทึกการชำระเงิน',
   '/create': 'สร้างบัญชีนักเรียน',
@@ -114,15 +104,11 @@ function ScreenFallback() {
 
 export default function App() {
   const { isLoading, isAuthenticated, user, logout } = useAuth0();
-  // Still called for its effect (it stamps data-theme / .dark on <html>);
-  // the value itself is no longer read now that the logo recolors in CSS.
   const { toggleTheme } = useTheme();
   const { me, isAdmin, loading: meLoading } = useMe();
   const { students, loading: studentsLoading, failed: studentsFailed } = useStudents();
   const location = useLocation();
   const [paletteOpen, setPaletteOpen] = useState(false);
-  // Defer mounting the (lazy) palette until it's first needed so its cmdk +
-  // dialog code stays out of the initial bundle.
   const [paletteMounted, setPaletteMounted] = useState(false);
   const openPalette = () => {
     setPaletteMounted(true);
@@ -130,8 +116,6 @@ export default function App() {
   };
   const [idCardOpen, setIdCardOpen] = useState(false);
 
-  // Ctrl/Cmd+K lives here (not in the lazy palette) so the shortcut works
-  // before the palette chunk has ever loaded.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -152,31 +136,19 @@ export default function App() {
     );
   }
 
-  if (!isAuthenticated) {
-    return <Login />;
-  }
+  if (!isAuthenticated) return <Login />;
 
   const email = user?.email || user?.nickname || user?.name || 'Admin';
 
-  // The panel closed for maintenance. Checked before the teacher gate because
-  // when the panel is shut, why it is shut is the more useful thing to say.
-  // /me only ever reports this to a non-admin, so an admin never lands here.
   if (me?.serviceBlock) {
     return <ServiceClosed block={me.serviceBlock} isStaff={me.email || user?.email} />;
   }
 
-  // A non-admin teacher with no assigned students gets no menus — just a
-  // notice to contact staff (legacy applyRoleGating). Wait for both the
-  // permission and student loads before deciding, so we never flash the
-  // gate at an admin or a teacher whose students are still loading. A
-  // failed student load is treated as "not gated" so a transient API
-  // error doesn't lock a legitimate user out.
   if (!meLoading && !studentsLoading) {
     const gated = !isAdmin && !studentsFailed && students.length === 0;
-    if (gated) {
-      return <TeacherEmptyState identity={me?.email || user?.email || user?.name} />;
-    }
+    if (gated) return <TeacherEmptyState identity={me?.email || user?.email || user?.name} />;
   }
+
   const title = TITLES[location.pathname] || 'LITALK Control';
   const handleLogout = () => logout({ logoutParams: { returnTo: `${window.location.origin}/app/` } });
 
@@ -187,24 +159,10 @@ export default function App() {
           <EditingLogProvider>
             <DeepLinkHandler onOpenIdCard={() => setIdCardOpen(true)} />
             <QuickCreateFab isAdmin={isAdmin} />
-            {/* These two are lazy like every screen, but they live OUTSIDE the
-                Routes — so the ChunkErrorBoundary further down never covered
-                them. A tab left open across a deploy asks for a chunk filename
-                that no longer exists, React.lazy throws, and with no boundary
-                above it the error reached the root and unmounted the whole app:
-                tapping the ID card button blanked the entire page. Measured
-                with the chunk 404ing — #root went from 3 children to 0.
-                Wrapped here so a stale chunk gets the same one-shot
-                cache-busted reload a stale screen already got. */}
             <ChunkErrorBoundary>
               {paletteMounted && (
                 <Suspense fallback={null}>
-                  <CommandPalette
-                    isAdmin={isAdmin}
-                    students={students}
-                    open={paletteOpen}
-                    onOpenChange={setPaletteOpen}
-                  />
+                  <CommandPalette isAdmin={isAdmin} students={students} open={paletteOpen} onOpenChange={setPaletteOpen} />
                 </Suspense>
               )}
               {idCardOpen && (
@@ -224,12 +182,7 @@ export default function App() {
                   onOpenSearch={openPalette}
                   onOpenIdCard={() => setIdCardOpen(true)}
                 />
-                <Topbar
-                  title={title}
-                  onToggleTheme={toggleTheme}
-                  onOpenSearch={openPalette}
-                  onOpenIdCard={() => setIdCardOpen(true)}
-                />
+                <Topbar title={title} onToggleTheme={toggleTheme} onOpenSearch={openPalette} onOpenIdCard={() => setIdCardOpen(true)} />
                 <div className="dashboard-content">
                   <ChunkErrorBoundary>
                     <Suspense fallback={<ScreenFallback />}>
@@ -238,8 +191,9 @@ export default function App() {
                         <Route path="/students" element={<StudentsScreen />} />
                         <Route path="/check" element={<CheckScreen />} />
                         <Route path="/logs" element={<LogsScreen />} />
-                        <Route path="/quizzes" element={<QuizzesScreen />} />
-                        <Route path="/courses" element={<CoursesScreen />} />
+                        <Route path="/quizzes" element={<TutoredExamsScreen />} />
+                        <Route path="/courses" element={<OnlineLearningScreen />} />
+                        <Route path="/course-content" element={<CourseContentScreen />} />
                         <Route path="/learners" element={<LearnersScreen />} />
                         <Route path="/payments" element={<PaymentsScreen />} />
                         {isAdmin && <Route path="/create" element={<CreateStudentScreen />} />}
