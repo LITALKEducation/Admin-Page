@@ -3,37 +3,42 @@ account_id = "aacf06eb2a3dcbf4fc501455805047d0"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
 
+# LITALK hostname responsibilities
+# --------------------------------
+# api.litalkeducation.com
+#   Primary/general API. Use for public website, Ask LITALK, admin operations,
+#   service status and other API endpoints that are not specifically student
+#   documents/files or financial/share links.
+#
+# istudent.litalkeducation.com
+#   Student-facing origin. Reserve for Student Portal flows and student files /
+#   documents. PUBLIC_FILES_ORIGIN below points here for shareable student files.
+#
+# payment.litalkeducation.com
+#   Financial origin. Reserve for payment links, slips/receipts, financial
+#   documents and other shareable finance URLs.
+#
+# go.litalkeducation.com
+#   General LITALK share/short-link origin.
+#
+# These hostnames may route to the same Worker internally, but callers should
+# use the hostname matching the resource's responsibility. The Worker must use
+# the Host header to keep specialized domains scoped to their intended routes.
+
 # ROUTES — configured in the Cloudflare dashboard, NOT here.
-#
 # The public blog article page must be routed through this Worker so shared
-# links get real Open Graph previews (the /blog-post handler in src/blog.ts
-# rewrites the page's meta tags with the post's title/excerpt/cover).
-# Add these two routes by hand once, under
-# Workers & Pages → litalkapi → Settings → Domains & Routes → Add → Route:
+# links get real Open Graph previews.
+#   litalkeducation.com/blog-post*
+#   www.litalkeducation.com/blog-post*
 #
-#   litalkeducation.com/blog-post*        (zone: litalkeducation.com)
-#   www.litalkeducation.com/blog-post*    (zone: litalkeducation.com)
-#
-# They are deliberately NOT declared as `routes = [...]` in this file: the
-# CI deploy token (CLOUDFLARE_API_TOKEN in GitHub Secrets) only has
-# account-level Workers permissions, and attaching zone routes from wrangler
-# fails the whole deploy with "Authentication error [code: 10000]". If you
-# later grant the token "Zone → Workers Routes → Edit" on the zone, the
-# routes can move back into this file.
-#
-# URL shortener (worker/src/shortlinks.ts) — add both as Custom Domains
-# (not Routes) under Workers & Pages → litalkapi → Settings → Domains &
-# Routes → Add → Custom Domain, since neither hostname carries any other
-# traffic:
-#
+# Primary API custom domain:
+#   api.litalkeducation.com
+# Student/document custom domain:
+#   istudent.litalkeducation.com
+# Short-link custom domains:
 #   go.litalkeducation.com
 #   payment.litalkeducation.com
 
-# Daily payment-link expiry sweep (src/index.ts `scheduled` →
-# expireStalePaymentLinks): deactivates links past their expires_at on Stripe
-# and marks them 'expired'. 17:00 UTC = 00:00 Asia/Bangkok. Cron triggers are
-# account-level Worker settings, so the CI deploy token's account-level Workers
-# permission is enough — no zone scope needed (unlike the routes noted above).
 [triggers]
 crons = ["0 17 * * *"]
 
@@ -46,94 +51,41 @@ database_id = "77c10f96-55ba-4830-abcc-cd3364fb22f7"
 binding = "BUCKET"
 bucket_name = "files-litalk"
 
-# URL shortener redirect cache (worker/src/shortlinks.ts).
 [[kv_namespaces]]
 binding = "SHORTLINKS"
 id = "6243b958ee0e4207932489e5197a449e"
 
 [vars]
 AUTH0_DOMAIN = "litalkeducation.us.auth0.com"
-# The student site's Auth0Client (Website/js/student-portal.js) authenticates
-# through this custom domain, not AUTH0_DOMAIN above — its tokens' `iss`
-# claim is this domain, so portal token verification (verifyPortalToken in
-# auth.ts) needs it specifically. Keep in sync with that file's `domain:`.
 AUTH0_PORTAL_DOMAIN = "auth.litalkeducation.com"
-AUTH0_AUDIENCE = "https://admin.litalkeducation.com/files-api" # Auth0 API ID 6a475ce71d0772bca086a160
-AUTH0_EMAIL_CLAIM = "https://admin.litalkeducation.com/email" # namespaced claim added by an Auth0 Action; falls back to `sub` if absent
-AUTH0_NAME_CLAIM = "https://admin.litalkeducation.com/name"   # namespaced display-name claim; falls back to name/nickname/email
-# Comma-separated: admin panel + public student site (both call this Worker)
+AUTH0_AUDIENCE = "https://admin.litalkeducation.com/files-api"
+AUTH0_EMAIL_CLAIM = "https://admin.litalkeducation.com/email"
+AUTH0_NAME_CLAIM = "https://admin.litalkeducation.com/name"
 ALLOWED_ORIGIN = "https://admin.litalkeducation.com,https://litalkeducation.com,https://www.litalkeducation.com"
 
-# Custom domain routed to this same Worker, used only to make shareable file
-# links look like the student-facing site instead of the workers.dev URL.
+# Student Portal files and official student documents only.
 PUBLIC_FILES_ORIGIN = "https://istudent.litalkeducation.com"
 
-# URL shortener hostnames (worker/src/shortlinks.ts) — both are Custom
-# Domains routed to this same Worker (see the comment near the top of this
-# file). shortLinkRedirect matches incoming requests against these by Host
-# header, so they must exactly match what's configured in the dashboard.
+# Share-link domains. `payment` is exclusively for finance-related links;
+# ordinary shared links must use `go`.
 SHORT_DOMAIN_GO = "go.litalkeducation.com"
 SHORT_DOMAIN_PAYMENT = "payment.litalkeducation.com"
 
-# LITALK+ subscription (worker/src/plus.ts). These are recurring Stripe Price
-# ids — NOT secrets, and deliberately config rather than code so changing what
-# LITALK+ costs is a dashboard edit instead of a deploy.
-#
-# Three plans. A plan left unset is simply not offered — the portal hides that
-# button rather than failing on a click — so they can launch one at a time.
-#
-# TERM is a school term: 5 months. Note it is interval "month" with a count of
-# 5, NOT its own interval, which is why plus.ts resolves a subscription's plan
-# from the price id here rather than from the billing interval — reading the
-# interval would file a term member as monthly.
-#
-# Also enable the Customer Portal (Stripe → Settings → Billing → Customer
-# portal) — cancelling and switching plans go through it, and
-# POST /portal/:id/plus/manage returns 502 until it is turned on.
-#
-# These ids must match the mode STRIPE_SECRET_KEY is in: a live price id
-# against a test key (or the reverse) fails at checkout with "no such price".
 STRIPE_PLUS_PRICE_MONTHLY = "price_1Tz7vYACRT45Tj2qqkMB6Vkl"
 STRIPE_PLUS_PRICE_TERM    = "price_1Tz7vZACRT45Tj2qRfYrjpS3"
 STRIPE_PLUS_PRICE_YEARLY  = "price_1Tz7vYACRT45Tj2q1Sbiqemw"
 
-# Login email for an auto-created student account is <studentId>@<this domain>.
-# MUST match the convention the old GAS backend used (the student site derives
-# the student id from the email's local part).
 STUDENT_EMAIL_DOMAIN = "litalkeducation.com"
 AUTH0_DB_CONNECTION = "LITALK-Student"
-
-# Set to "true" only if the connection above has "Requires Username" enabled
-# in the Auth0 dashboard (Authentication → Database → [connection] →
-# Settings) — otherwise account creation fails with "Missing required
-# property: username". Leave unset/"false" if it's disabled there, since
-# sending a username when it's not required fails the opposite way.
-# "LITALK-Student" has it enabled.
 AUTH0_STUDENT_REQUIRES_USERNAME = "true"
-
-# Connection new teacher/staff accounts are created in (POST /staff). Falls
-# back to AUTH0_DB_CONNECTION above if unset.
 AUTH0_STAFF_CONNECTION = "Admin"
-
-# Same as AUTH0_STUDENT_REQUIRES_USERNAME above, for AUTH0_STAFF_CONNECTION.
-# "Admin" also has it enabled.
 AUTH0_STAFF_REQUIRES_USERNAME = "true"
-
-# Role ids assigned to accounts created via POST /staff — copy each from
-# Auth0 Dashboard → User Management → Roles → [role] → the id in the URL.
-# Role assignment is skipped (with a warning in the response) for any left
-# unset, matching the graceful-degradation pattern used elsewhere.
 AUTH0_ADMIN_ROLE_ID = "rol_a4boy0hKsG2tABpo"
 AUTH0_TEACHER_ROLE_ID = "rol_su0AELJNGqQB8Yk7"
 AUTH0_STAFF_ROLE_ID = "rol_ZoCzC7ZFmbjuwemu"
 
-# Calendar a booking's Meet event is created on — see README. Booking still
-# works without Google Meet configured; it just skips the link.
-# GOOGLE_CALENDAR_ID = ""   # defaults to the authorized account's own "primary" calendar
-
 # Secrets, NOT vars — set them with `npx wrangler secret put <NAME>`:
-#   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET        (Stripe payment links)
-#   AUTH0_MGMT_CLIENT_ID, AUTH0_MGMT_CLIENT_SECRET  (student/teacher/staff account management — see README)
-#   GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REFRESH_TOKEN (Google Meet auto-creation — see README)
-#   GEMINI_API_KEY (AI chat assistant — worker/src/gemini.ts. Gemini Developer API key from
-#     Google AI Studio (aistudio.google.com/apikey). Chat endpoints return 503 until this is set.)
+# STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
+# AUTH0_MGMT_CLIENT_ID, AUTH0_MGMT_CLIENT_SECRET
+# GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REFRESH_TOKEN
+# GEMINI_API_KEY

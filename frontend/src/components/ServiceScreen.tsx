@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useToast } from '../ui/ToastContext';
 import { useConfirm } from '../ui/ConfirmContext';
@@ -15,73 +15,41 @@ import {
   type ServicePreset,
   type ServiceSurface,
 } from '../api/client';
+import './ServiceScreen.css';
 
-// Each notice covers a whole event: a heads-up first, then the block, then it
-// expires on its own. That is why one row carries three times rather than an
-// admin having to create "closing soon" and "closed" as separate items.
+const MAINTENANCE = 'maintenance' as ServicePreset;
+
 const PRESETS: Array<{ id: ServicePreset; label: string; blurb: string; blocks: boolean }> = [
-  {
-    id: 'opening_soon',
-    label: 'กำลังจะเปิดเร็ว ๆ นี้',
-    blurb: 'ประกาศว่าส่วนนี้ยังไม่เปิด — ใช้คู่กับการปิดไว้จนถึงเวลาเปิด',
-    blocks: true,
-  },
-  {
-    id: 'trial_opening_soon',
-    label: 'กำลังจะเปิดให้ทดลองเร็ว ๆ นี้',
-    blurb: 'บอกล่วงหน้าว่ากำลังจะเปิดให้ทดลองใช้',
-    blocks: true,
-  },
-  {
-    id: 'closing_soon',
-    label: 'กำลังจะปิดเร็ว ๆ นี้',
-    blurb: 'แจ้งล่วงหน้าก่อนปิดปรับปรุง แล้วปิดจริงตามเวลาที่ตั้ง',
-    blocks: true,
-  },
-  {
-    id: 'trial_closing_soon',
-    label: 'กำลังปิดทดลองใช้งานเร็ว ๆ นี้',
-    blurb: 'แจ้งว่าช่วงทดลองใช้งานกำลังจะสิ้นสุด',
-    blocks: true,
-  },
-  { id: 'custom', label: 'ข้อความกำหนดเอง', blurb: 'เขียนหัวข้อและเนื้อหาเองทั้งหมด', blocks: false },
+  { id: 'custom', label: 'Status update', blurb: 'แจ้งเหตุการณ์หรือความคืบหน้า โดยไม่จำเป็นต้องปิดบริการ', blocks: false },
+  { id: MAINTENANCE, label: 'ปิดปรับปรุงระบบ', blurb: 'ประกาศ maintenance และกำหนดช่วงเวลาที่บริการจะใช้งานไม่ได้', blocks: true },
+  { id: 'opening_soon', label: 'กำลังจะเปิดเร็ว ๆ นี้', blurb: 'แจ้งว่าส่วนนี้กำลังเตรียมเปิดให้บริการ', blocks: true },
+  { id: 'trial_opening_soon', label: 'กำลังจะเปิดให้ทดลอง', blurb: 'แจ้งล่วงหน้าก่อนเปิดทดลองใช้', blocks: true },
+  { id: 'closing_soon', label: 'กำลังจะปิดเร็ว ๆ นี้', blurb: 'แจ้งล่วงหน้าก่อนปิด แล้วบล็อกเมื่อถึงเวลา', blocks: true },
+  { id: 'trial_closing_soon', label: 'กำลังปิดช่วงทดลอง', blurb: 'แจ้งว่าช่วงทดลองใช้งานกำลังจะสิ้นสุด', blocks: true },
 ];
 
-const SURFACES: Array<{ id: ServiceSurface; label: string; hint: string }> = [
-  { id: 'website', label: 'เว็บไซต์หลัก', hint: 'หน้าแรก หลักสูตร เกี่ยวกับเรา บทความ' },
-  { id: 'chat_site', label: 'แชท AI บนเว็บไซต์', hint: 'ปุ่มแชทลอยในหน้าเว็บสาธารณะ' },
-  { id: 'ask', label: 'Ask LITALK (/ask)', hint: 'หน้าถามคำศัพท์ทั้งหน้า' },
-  { id: 'portal', label: 'พอร์ทัลนักเรียน', hint: 'เข้าสู่ระบบนักเรียน ตารางเรียน การชำระเงิน' },
-  { id: 'chat_portal', label: 'แชท AI ในพอร์ทัล', hint: 'เฉพาะผู้ช่วย AI ไม่กระทบส่วนอื่นของพอร์ทัล' },
-  { id: 'checkin', label: 'หน้าเช็คอิน QR', hint: 'หน้าสแกนเข้าเรียน' },
-  { id: 'booking', label: 'หน้าจองเรียน', hint: 'หน้าจองเวลาเรียนสาธารณะ' },
-  { id: 'learning', label: 'เรียนออนไลน์ (On Demand)', hint: 'คอร์สออนไลน์ บทเรียน แบบทดสอบ และแดชบอร์ดผู้เรียน' },
-  { id: 'admin', label: 'แผงแอดมิน (ครูและพนักงาน)', hint: 'ผู้ใช้สิทธิ์ Admin ยังเข้าได้เสมอ' },
+const SURFACES: Array<{ id: ServiceSurface; label: string; hint: string; icon: string }> = [
+  { id: 'website', label: 'Website', hint: 'เว็บไซต์หลักและ Blog', icon: 'fa-globe' },
+  { id: 'ask', label: 'Ask LITALK', hint: 'AI workspace ที่ /ask', icon: 'fa-sparkles' },
+  { id: 'chat_site', label: 'Website AI Chat', hint: 'แชท AI บนเว็บไซต์', icon: 'fa-comments' },
+  { id: 'portal', label: 'Student Portal', hint: 'บัญชี ตารางเรียน และข้อมูลนักเรียน', icon: 'fa-user-graduate' },
+  { id: 'chat_portal', label: 'Portal AI Chat', hint: 'ผู้ช่วย AI ใน Portal', icon: 'fa-message' },
+  { id: 'checkin', label: 'Check-in', hint: 'เช็คอินและ QR', icon: 'fa-qrcode' },
+  { id: 'booking', label: 'Booking', hint: 'ระบบจองเวลาเรียน', icon: 'fa-calendar-check' },
+  { id: 'learning', label: 'Online Learning', hint: 'คอร์ส บทเรียน และแบบทดสอบ', icon: 'fa-graduation-cap' },
+  { id: 'admin', label: 'Admin Panel', hint: 'Admin ยังเข้าได้เสมอ', icon: 'fa-shield-halved' },
 ];
 
-// Everything an admin can close. The whole-system switch uses this rather
-// than a hand-written list so a surface added later is included by default —
-// forgetting one would leave a hole in a switch whose whole point is that it
-// closes everything.
 const ALL_SURFACES = SURFACES.map((s) => s.id);
-
 const EMPTY: ServiceNoticeDraft = {
   enabled: true,
-  preset: 'closing_soon',
-  surfaces: [],
-  titleTh: '',
-  titleEn: '',
-  bodyTh: '',
-  bodyEn: '',
-  announceFrom: null,
-  startsAt: null,
-  endsAt: null,
+  preset: 'custom',
+  surfaces: ['website'],
+  titleTh: '', titleEn: '', bodyTh: '', bodyEn: '',
+  announceFrom: null, startsAt: null, endsAt: null,
   dismissible: true,
 };
 
-// <input type="datetime-local"> speaks local wall-clock time with no zone;
-// the API stores UTC. These two convert at the boundary so an admin in
-// Bangkok types 22:00 and gets 22:00 Bangkok, not 22:00 UTC.
 function toLocalInput(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -89,66 +57,42 @@ function toLocalInput(iso: string | null): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
-
 function fromLocalInput(value: string): string | null {
   if (!value) return null;
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
-
 function formatWhen(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return 'ไม่กำหนด';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? '—'
-    : d.toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return Number.isNaN(d.getTime()) ? 'ไม่กำหนด' : d.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
 }
-
-// Mirrors phaseFor() in worker/src/serviceNotices.ts so the list shows what
-// visitors are seeing right now, not just what was scheduled.
-function phaseOf(n: ServiceNotice, now: number): 'expired' | 'blocking' | 'announcing' | 'scheduled' | 'off' {
+function phaseOf(n: ServiceNotice, now = Date.now()): 'off' | 'scheduled' | 'announcing' | 'blocking' | 'expired' {
   if (!n.enabled) return 'off';
-  const at = (v: string | null) => (v ? Date.parse(v) : NaN);
-  const ends = at(n.endsAt);
-  if (!Number.isNaN(ends) && now >= ends) return 'expired';
-  const starts = at(n.startsAt);
-  if (!Number.isNaN(starts) && now >= starts) return 'blocking';
-  const announce = at(n.announceFrom);
+  const end = n.endsAt ? Date.parse(n.endsAt) : NaN;
+  if (!Number.isNaN(end) && now >= end) return 'expired';
+  const start = n.startsAt ? Date.parse(n.startsAt) : NaN;
+  if (!Number.isNaN(start) && now >= start) return 'blocking';
+  const announce = n.announceFrom ? Date.parse(n.announceFrom) : NaN;
   if (Number.isNaN(announce) || now >= announce) return 'announcing';
   return 'scheduled';
 }
-
-const PHASE_LABEL: Record<string, { text: string; cls: string }> = {
-  blocking: { text: 'กำลังปิดอยู่', cls: 'is-off' },
-  announcing: { text: 'กำลังประกาศ', cls: '' },
-  scheduled: { text: 'รอตามเวลา', cls: '' },
-  expired: { text: 'หมดเวลาแล้ว', cls: '' },
-  off: { text: 'ปิดใช้งาน', cls: '' },
+const PHASE_LABEL: Record<string, string> = {
+  blocking: 'ไม่พร้อมใช้งาน', announcing: 'กำลังประกาศ', scheduled: 'ตั้งเวลาแล้ว', expired: 'สิ้นสุดแล้ว', off: 'ปิดอยู่',
 };
 
 export default function ServiceScreen() {
   const { getAccessTokenSilently } = useAuth0();
-  const showToast = useToast();
-  const confirmDialog = useConfirm();
-
+  const toast = useToast();
+  const confirm = useConfirm();
   const [notices, setNotices] = useState<ServiceNotice[] | null>(null);
-  const [bypassToken, setBypassToken] = useState('');
   const [failed, setFailed] = useState(false);
-  const [editingId, setEditingId] = useState<number | 'new' | null>(null);
+  const [bypassToken, setBypassToken] = useState('');
   const [draft, setDraft] = useState<ServiceNoticeDraft>(EMPTY);
+  const [editingId, setEditingId] = useState<number | 'new' | null>(null);
   const [saving, setSaving] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [shutdownUntil, setShutdownUntil] = useState('');
-  const now = Date.now();
-
-  // What is actually down right now, derived from the notices rather than
-  // stored separately — one source of truth, so a notice edited by hand and
-  // one created by the switch below are read the same way.
-  const blockingSurfaces = new Set(
-    (notices ?? []).filter((n) => phaseOf(n, now) === 'blocking').flatMap((n) => n.surfaces),
-  );
-  const everythingDown = ALL_SURFACES.every((s) => blockingSurfaces.has(s));
-  const somethingDown = blockingSurfaces.size > 0;
 
   const load = useCallback(async () => {
     try {
@@ -162,570 +106,220 @@ export default function ServiceScreen() {
     }
   }, [getAccessTokenSilently]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
-  const openNew = () => {
-    setDraft(EMPTY);
+  const blockingSurfaces = useMemo(() => new Set(
+    (notices ?? []).filter((n) => phaseOf(n) === 'blocking').flatMap((n) => n.surfaces),
+  ), [notices]);
+  const activeNotices = useMemo(() => (notices ?? []).filter((n) => ['blocking', 'announcing', 'scheduled'].includes(phaseOf(n))), [notices]);
+  const everythingDown = ALL_SURFACES.every((s) => blockingSurfaces.has(s));
+  const somethingDown = blockingSurfaces.size > 0;
+  const operationalCount = ALL_SURFACES.length - blockingSurfaces.size;
+
+  const patch = (value: Partial<ServiceNoticeDraft>) => setDraft((d) => ({ ...d, ...value }));
+  const toggleSurface = (surface: ServiceSurface) => setDraft((d) => ({
+    ...d,
+    surfaces: d.surfaces.includes(surface) ? d.surfaces.filter((s) => s !== surface) : [...d.surfaces, surface],
+  }));
+
+  const openStatusUpdate = () => {
+    setDraft({ ...EMPTY });
     setEditingId('new');
   };
-
+  const openMaintenance = () => {
+    // Do not pre-start blocking. The admin must explicitly choose a start time.
+    setDraft({ ...EMPTY, preset: MAINTENANCE, surfaces: ['website'], dismissible: false });
+    setEditingId('new');
+  };
   const openEdit = (n: ServiceNotice) => {
     const { id, updatedAt, updatedBy, ...rest } = n;
-    void id;
-    void updatedAt;
-    void updatedBy;
+    void updatedAt; void updatedBy;
     setDraft(rest);
-    setEditingId(n.id);
+    setEditingId(id);
   };
 
-  const patch = (changes: Partial<ServiceNoticeDraft>) => setDraft((d) => ({ ...d, ...changes }));
-
-  const toggleSurface = (surface: ServiceSurface) =>
-    setDraft((d) => ({
-      ...d,
-      surfaces: d.surfaces.includes(surface) ? d.surfaces.filter((s) => s !== surface) : [...d.surfaces, surface],
-    }));
-
   const save = async () => {
-    if (!draft.surfaces.length) {
-      showToast('เลือกส่วนที่ต้องการก่อน', 'ประกาศที่ไม่ได้เลือกส่วนใดเลยจะไม่แสดงที่ไหน', 'error');
-      return;
+    if (!draft.surfaces.length) return toast('เลือกบริการก่อน', 'ต้องเลือกอย่างน้อย 1 บริการที่ได้รับผลกระทบ', 'error');
+    if (!draft.titleTh.trim() && !draft.titleEn.trim()) return toast('กรอกหัวข้อก่อน', 'ควรมีหัวข้ออย่างน้อยหนึ่งภาษา', 'error');
+    if (draft.endsAt && draft.startsAt && Date.parse(draft.endsAt) <= Date.parse(draft.startsAt)) {
+      return toast('เวลาสิ้นสุดไม่ถูกต้อง', 'เวลาเปิดคืนต้องอยู่หลังเวลาเริ่มปิดบริการ', 'error');
     }
-    if (draft.preset === 'custom' && !draft.titleTh.trim() && !draft.titleEn.trim()) {
-      showToast('กรอกหัวข้อก่อน', 'ข้อความกำหนดเองไม่มีข้อความสำเร็จรูปให้ใช้แทน', 'error');
-      return;
+    if (draft.startsAt && draft.announceFrom && Date.parse(draft.announceFrom) > Date.parse(draft.startsAt)) {
+      return toast('เวลาแจ้งล่วงหน้าไม่ถูกต้อง', 'เวลาเริ่มประกาศต้องไม่อยู่หลังเวลาเริ่มปิดบริการ', 'error');
     }
     setSaving(true);
     try {
-      const getToken = makeTokenGetter(getAccessTokenSilently);
-      if (editingId === 'new') await createServiceNotice(getToken, draft);
-      else if (typeof editingId === 'number') await updateServiceNotice(getToken, editingId, draft);
-      showToast('บันทึกแล้ว', 'มีผลกับผู้ใช้ในครั้งถัดไปที่โหลดหน้า', 'success');
+      const token = makeTokenGetter(getAccessTokenSilently);
+      if (editingId === 'new') await createServiceNotice(token, draft);
+      else if (typeof editingId === 'number') await updateServiceNotice(token, editingId, draft);
       setEditingId(null);
-      load();
+      toast('บันทึกเรียบร้อย', 'Status และบริการที่เลือกจะอัปเดตในการโหลดครั้งถัดไป', 'success');
+      await load();
     } catch (error) {
-      showToast('บันทึกไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
-    } finally {
-      setSaving(false);
-    }
+      toast('บันทึกไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
+    } finally { setSaving(false); }
   };
 
   const remove = async (n: ServiceNotice) => {
-    const ok = await confirmDialog(
-      'ลบประกาศนี้? ผู้ใช้จะไม่เห็นประกาศนี้อีก และส่วนที่ถูกปิดไว้จะกลับมาใช้งานได้ทันที',
-      { danger: true, okLabel: 'ลบประกาศ' },
-    );
-    if (!ok) return;
+    if (!await confirm('ลบรายการนี้? หากรายการกำลังบล็อกบริการ บริการนั้นจะเปิดกลับทันที', { danger: true, okLabel: 'ลบรายการ' })) return;
     try {
       await deleteServiceNotice(makeTokenGetter(getAccessTokenSilently), n.id);
-      showToast('ลบแล้ว', undefined, 'success');
-      load();
+      toast('ลบแล้ว', undefined, 'success');
+      await load();
     } catch (error) {
-      showToast('ลบไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
+      toast('ลบไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
     }
   };
 
-  // The whole-system switch. It is an ordinary notice covering every surface,
-  // not a separate mechanism — so it shows up in the list below, can be edited
-  // or given better wording afterwards, and expires on its own if an end time
-  // was set.
   const shutDownEverything = async () => {
     const until = fromLocalInput(shutdownUntil);
-    const ok = await confirmDialog(
-      until
-        ? `ปิดทุกส่วนตั้งแต่ตอนนี้จนถึง ${formatWhen(until)}? เว็บไซต์ พอร์ทัลนักเรียน แชท AI เช็คอิน การจอง และแผงแอดมินสำหรับครู จะใช้งานไม่ได้ทั้งหมด`
-        : 'ปิดทุกส่วนตั้งแต่ตอนนี้แบบไม่มีกำหนด? เว็บไซต์ พอร์ทัลนักเรียน แชท AI เช็คอิน การจอง และแผงแอดมินสำหรับครู จะใช้งานไม่ได้จนกว่าจะมากดเปิดคืน',
-      { danger: true, okLabel: 'ปิดทั้งระบบ' },
-    );
-    if (!ok) return;
+    if (until && Date.parse(until) <= Date.now()) return toast('เวลาเปิดคืนไม่ถูกต้อง', 'กรุณาเลือกเวลาในอนาคต', 'error');
+    const message = until ? `ปิดปรับปรุงทุกบริการจนถึง ${formatWhen(until)}?` : 'ปิดปรับปรุงทุกบริการแบบไม่มีกำหนด?';
+    if (!await confirm(message, { danger: true, okLabel: 'ปิดปรับปรุงระบบ' })) return;
     setSwitching(true);
     try {
       await createServiceNotice(makeTokenGetter(getAccessTokenSilently), {
-        enabled: true,
-        preset: 'closing_soon',
-        surfaces: ALL_SURFACES,
-        titleTh: '',
-        titleEn: '',
-        bodyTh: '',
-        bodyEn: '',
-        announceFrom: null,
-        // A second in the past, so it counts as started the moment it is
-        // saved rather than depending on whose clock reads it.
-        startsAt: new Date(Date.now() - 1000).toISOString(),
-        endsAt: until,
-        // Nothing to get back to behind it.
-        dismissible: false,
+        enabled: true, preset: MAINTENANCE, surfaces: ALL_SURFACES,
+        titleTh: 'ปิดปรับปรุงระบบ', titleEn: 'System maintenance',
+        bodyTh: 'LITALK ปิดให้บริการชั่วคราวเพื่อปรับปรุงระบบ กรุณากลับมาใหม่ภายหลัง',
+        bodyEn: 'LITALK is temporarily unavailable while we perform system maintenance. Please check back later.',
+        announceFrom: null, startsAt: new Date(Date.now() - 1000).toISOString(), endsAt: until, dismissible: false,
       });
-      showToast('ปิดระบบแล้ว', 'คุณยังใช้แผงแอดมินได้ตามปกติเพราะเป็นสิทธิ์ Admin', 'success');
       setShutdownUntil('');
-      load();
+      toast('ปิดปรับปรุงระบบแล้ว', 'Admin ยังเข้าแผงควบคุมเพื่อเปิดระบบคืนได้', 'success');
+      await load();
     } catch (error) {
-      showToast('ปิดระบบไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
-    } finally {
-      setSwitching(false);
-    }
+      toast('ปิดระบบไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
+    } finally { setSwitching(false); }
   };
 
   const restoreEverything = async () => {
-    const ok = await confirmDialog(
-      'เปิดทุกส่วนกลับมาใช้งานตอนนี้? ประกาศที่กำลังปิดระบบอยู่จะถูกปิดใช้งานทั้งหมด (ยังเก็บไว้ในรายการ ไม่ได้ลบทิ้ง)',
-      { okLabel: 'เปิดระบบคืน' },
-    );
-    if (!ok) return;
+    if (!await confirm('เปิดบริการทั้งหมดกลับมาใช้งานตอนนี้?', { okLabel: 'เปิดระบบคืน' })) return;
     setSwitching(true);
     try {
       const result = await restoreService(makeTokenGetter(getAccessTokenSilently));
-      showToast('เปิดระบบคืนแล้ว', `ปิดใช้งานประกาศที่กำลังปิดระบบอยู่ ${result.restored} รายการ`, 'success');
-      load();
+      toast('เปิดระบบคืนแล้ว', `ยุติรายการที่กำลังบล็อก ${result.restored} รายการ`, 'success');
+      await load();
     } catch (error) {
-      showToast('เปิดระบบคืนไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
-    } finally {
-      setSwitching(false);
-    }
+      toast('เปิดระบบคืนไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
+    } finally { setSwitching(false); }
   };
 
   const rotate = async () => {
-    const ok = await confirmDialog('สร้างลิงก์พรีวิวใหม่? ลิงก์เดิมที่เคยแชร์ไว้จะใช้ไม่ได้ทันที', {
-      okLabel: 'สร้างใหม่',
-    });
-    if (!ok) return;
+    if (!await confirm('สร้าง bypass token ใหม่? ลิงก์พรีวิวเดิมจะใช้ไม่ได้ทันที', { okLabel: 'สร้าง token ใหม่' })) return;
     try {
       const result = await rotateServiceBypassToken(makeTokenGetter(getAccessTokenSilently));
       setBypassToken(result.bypassToken);
-      showToast('สร้างลิงก์ใหม่แล้ว', undefined, 'success');
+      toast('สร้าง token ใหม่แล้ว', undefined, 'success');
     } catch (error) {
-      showToast('ไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
+      toast('สร้าง token ไม่สำเร็จ', error instanceof Error ? error.message : 'เกิดข้อผิดพลาด', 'error');
     }
   };
 
-  const preset = PRESETS.find((p) => p.id === draft.preset);
-  const previewUrl = `https://litalkeducation.com/?bypass=${bypassToken}`;
+  const copyPreview = async () => {
+    if (!bypassToken) return;
+    try {
+      await navigator.clipboard.writeText(`https://litalkeducation.com/?bypass=${bypassToken}`);
+      toast('คัดลอกลิงก์แล้ว', undefined, 'success');
+    } catch {
+      toast('คัดลอกไม่สำเร็จ', 'เบราว์เซอร์ไม่อนุญาตให้เข้าถึง Clipboard', 'error');
+    }
+  };
 
-  return (
-    <div id="screen-service" className="tab-content active">
-      <div className="screen-header">
-        <h1>ควบคุมการเปิด-ปิดระบบ</h1>
-        <p>
-          ตั้งเวลาแจ้งล่วงหน้าและปิดให้บริการเป็นส่วน ๆ ได้ — ประกาศจะขึ้นเป็น popup ให้ผู้ใช้เห็น
-          และเมื่อถึงเวลาปิด ระบบจะปฏิเสธคำขอจริงด้วย ไม่ใช่แค่ขึ้นข้อความ
-        </p>
+  return <div id="screen-service" className="tab-content active service-screen">
+    <div className="service-hero">
+      <div>
+        <div className="service-kicker"><i className="fas fa-signal"></i> LITALK Operations</div>
+        <h1>Service & Status</h1>
+        <p>จัดการสถานะบริการ ประกาศเหตุการณ์ และ maintenance จากหน้าจอเดียว</p>
       </div>
-
-      <div className="info-notice">
-        <i className="fas fa-shield-halved"></i>
-        <div>
-          <strong>สิทธิ์ Admin ไม่เคยถูกปิดกั้น</strong> — แม้จะปิดแผงแอดมินไว้ บัญชีที่เป็น Admin
-          ก็ยังเข้าใช้งานและกดเปิดระบบคืนได้เสมอ ข้อยกเว้นนี้เขียนไว้ในโค้ด ไม่ใช่ตัวเลือกที่เผลอปิดได้
-          ส่วนหน้าข้อกำหนดและความเป็นส่วนตัวปิดไม่ได้เลย เพราะผู้ใช้ต้องอ่านได้ตลอดเวลา
-        </div>
-      </div>
-
-      {/* ---- whole-system switch ---- */}
-      <div className="admin-card">
-        <div className="card-title-bar">
-          <span className="card-icon">
-            <i className="fas fa-power-off"></i>
-          </span>
-          <div>
-            <h3>ปิดปรับปรุงทั้งระบบ</h3>
-            <p>ปิดทุกส่วนพร้อมกันในคลิกเดียว สำหรับงานปรับปรุงเร่งด่วน</p>
-          </div>
-        </div>
-
-        <div className="form-body">
-          {somethingDown && (
-            <div className="info-notice">
-              <i className="fas fa-circle-pause" style={{ color: 'var(--accent-danger)' }}></i>
-              <div>
-                {everythingDown ? (
-                  <>
-                    <strong>ขณะนี้ปิดทั้งระบบอยู่</strong> — ผู้ใช้ทุกคนเห็นประกาศปิดปรับปรุง
-                    ยกเว้นบัญชีสิทธิ์ Admin
-                  </>
-                ) : (
-                  <>
-                    <strong>ขณะนี้ปิดอยู่บางส่วน</strong> —{' '}
-                    {ALL_SURFACES.filter((s) => blockingSurfaces.has(s))
-                      .map((s) => SURFACES.find((x) => x.id === s)?.label || s)
-                      .join(', ')}
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {!somethingDown && (
-            <div className="form-group">
-              <label htmlFor="svc-kill-until">
-                <i className="fas fa-circle-play"></i> กำหนดเวลากลับมาเปิด (ไม่บังคับ)
-              </label>
-              <input
-                id="svc-kill-until"
-                type="datetime-local"
-                value={shutdownUntil}
-                onChange={(e) => setShutdownUntil(e.target.value)}
-              />
-              <div className="form-hint">
-                ใส่เวลาไว้จะปลอดภัยกว่า — ระบบจะกลับมาเปิดเองเมื่อถึงเวลา ไม่ต้องพึ่งว่าจะมีคนจำได้
-              </div>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {!everythingDown && (
-              <button className="btn btn-danger" onClick={shutDownEverything} disabled={switching || notices === null}>
-                <i className="fas fa-power-off"></i>{' '}
-                {switching ? 'กำลังดำเนินการ...' : somethingDown ? 'ปิดส่วนที่เหลือทั้งหมด' : 'ปิดทั้งระบบตอนนี้'}
-              </button>
-            )}
-            {somethingDown && (
-              <button className="btn btn-primary" onClick={restoreEverything} disabled={switching}>
-                <i className="fas fa-circle-play"></i> {switching ? 'กำลังดำเนินการ...' : 'เปิดระบบคืนทั้งหมด'}
-              </button>
-            )}
-          </div>
-
-          <div className="form-hint" style={{ marginTop: 10 }}>
-            ปุ่มนี้สร้างประกาศหนึ่งรายการที่ครอบคลุมทุกส่วน จึงแก้ไขข้อความหรือเวลาได้ในรายการด้านล่าง
-            เหมือนประกาศทั่วไป — ไม่ใช่กลไกแยกต่างหาก
-          </div>
-        </div>
-      </div>
-
-      {failed && (
-        <div className="admin-card">
-          <div className="info-notice">
-            <i className="fas fa-triangle-exclamation" style={{ color: 'var(--accent-danger)' }}></i>
-            <div>
-              โหลดรายการไม่สำเร็จ —{' '}
-              <button className="btn btn-secondary" style={{ marginLeft: 8 }} onClick={load}>
-                ลองใหม่
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ---- list ---- */}
-      <div className="admin-card">
-        <div className="card-title-bar">
-          <span className="card-icon">
-            <i className="fas fa-tower-broadcast"></i>
-          </span>
-          <div>
-            <h3>ประกาศทั้งหมด</h3>
-            <p>เรียงตามเวลาที่ตั้งไว้ ล่าสุดอยู่บนสุด</p>
-          </div>
-        </div>
-
-        {notices === null && !failed && <div className="skeleton skeleton-line" style={{ width: '60%' }}></div>}
-
-        {notices && !notices.length && (
-          <div className="empty-state">
-            <i className="fas fa-tower-broadcast"></i>
-            <div className="empty-title">ยังไม่มีประกาศ</div>
-            <div className="empty-sub">ทุกส่วนเปิดให้บริการตามปกติ</div>
-          </div>
-        )}
-
-        {notices && notices.length > 0 && (
-          <div className="row-list">
-            {notices.map((n) => {
-              const phase = phaseOf(n, now);
-              const label = PHASE_LABEL[phase];
-              return (
-                <div className="alert-row" style={{ alignItems: 'flex-start' }} key={n.id}>
-                  <i
-                    className={`fas ${phase === 'blocking' ? 'fa-circle-pause' : 'fa-bullhorn'}`}
-                    style={{ marginTop: 3, color: phase === 'blocking' ? 'var(--accent-danger)' : 'var(--text-muted)' }}
-                  ></i>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="alert-text">
-                      <strong>{n.titleTh || PRESETS.find((p) => p.id === n.preset)?.label || n.preset}</strong>
-                    </div>
-                    <div className="ai-status-strip" style={{ marginTop: 6 }}>
-                      <span className={`ai-status-pill ${label.cls}`}>
-                        <i className="fas fa-circle-dot"></i>
-                        {label.text}
-                      </span>
-                      <span className="ai-status-pill">
-                        <i className="fas fa-layer-group"></i>
-                        {n.surfaces.length
-                          ? n.surfaces.map((s) => SURFACES.find((x) => x.id === s)?.label || s).join(', ')
-                          : 'ยังไม่ได้เลือกส่วน'}
-                      </span>
-                    </div>
-                    <div className="alert-text" style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 6 }}>
-                      แจ้งล่วงหน้า {formatWhen(n.announceFrom)} · ปิด {formatWhen(n.startsAt)} · กลับมา{' '}
-                      {formatWhen(n.endsAt)}
-                      {!n.endsAt && n.startsAt ? ' (ไม่มีกำหนด)' : ''}
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                      <button className="btn btn-secondary" style={{ padding: '6px 10px' }} onClick={() => openEdit(n)}>
-                        <i className="fas fa-pen"></i> แก้ไข
-                      </button>
-                      <button className="btn btn-danger" style={{ padding: '6px 10px' }} onClick={() => remove(n)}>
-                        <i className="fas fa-trash"></i> ลบ
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {editingId === null && (
-          <div className="form-body">
-            <button className="btn btn-primary" onClick={openNew}>
-              <i className="fas fa-plus"></i> สร้างประกาศใหม่
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ---- editor ---- */}
-      {editingId !== null && (
-        <div className="admin-card">
-          <div className="card-title-bar">
-            <span className="card-icon">
-              <i className="fas fa-pen-to-square"></i>
-            </span>
-            <div>
-              <h3>{editingId === 'new' ? 'ประกาศใหม่' : 'แก้ไขประกาศ'}</h3>
-              <p>เลือกรูปแบบ ส่วนที่กระทบ และเวลา</p>
-            </div>
-          </div>
-
-          <div className="form-body">
-            <div className="form-group">
-              <label htmlFor="svc-preset">
-                <i className="fas fa-bullhorn"></i> รูปแบบประกาศ
-              </label>
-              <select
-                id="svc-preset"
-                value={draft.preset}
-                onChange={(e) => patch({ preset: e.target.value as ServicePreset })}
-              >
-                {PRESETS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-              <div className="form-hint">{preset?.blurb}</div>
-            </div>
-
-            <div className="form-group">
-              <label>
-                <i className="fas fa-layer-group"></i> ปิด/ประกาศส่วนใดบ้าง
-              </label>
-              <div className="form-hint" style={{ marginBottom: 8 }}>
-                เลือกได้หลายส่วน — แต่ละส่วนจะเห็น popup เดียวกัน
-              </div>
-              {SURFACES.map((s) => (
-                <label className="ai-toggle-row" key={s.id}>
-                  <span className="ai-switch">
-                    <input
-                      type="checkbox"
-                      checked={draft.surfaces.includes(s.id)}
-                      onChange={() => toggleSurface(s.id)}
-                    />
-                    <span className="ai-switch-track"></span>
-                  </span>
-                  <span className="ai-toggle-text">
-                    <span className="ai-toggle-title">{s.label}</span>
-                    <span className="ai-toggle-hint">{s.hint}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-
-            <div className="ai-option-grid">
-              <div className="form-group">
-                <label htmlFor="svc-announce">
-                  <i className="fas fa-clock"></i> เริ่มแจ้งล่วงหน้า
-                </label>
-                <input
-                  id="svc-announce"
-                  type="datetime-local"
-                  value={toLocalInput(draft.announceFrom)}
-                  onChange={(e) => patch({ announceFrom: fromLocalInput(e.target.value) })}
-                />
-                <div className="form-hint">ว่างไว้ = แสดงทันทีที่เปิดใช้งาน</div>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="svc-start">
-                  <i className="fas fa-circle-pause"></i> เวลาปิดจริง
-                </label>
-                <input
-                  id="svc-start"
-                  type="datetime-local"
-                  value={toLocalInput(draft.startsAt)}
-                  onChange={(e) => patch({ startsAt: fromLocalInput(e.target.value) })}
-                />
-                <div className="form-hint">ว่างไว้ = ประกาศอย่างเดียว ไม่ปิดระบบ</div>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="svc-end">
-                  <i className="fas fa-circle-play"></i> เวลากลับมาเปิด
-                </label>
-                <input
-                  id="svc-end"
-                  type="datetime-local"
-                  value={toLocalInput(draft.endsAt)}
-                  onChange={(e) => patch({ endsAt: fromLocalInput(e.target.value) })}
-                />
-                <div className="form-hint">
-                  ว่างไว้ = ปิดไม่มีกำหนด ต้องมาปิดประกาศเอง
-                  {draft.startsAt && !draft.endsAt ? ' — แนะนำให้ใส่เวลาไว้เสมอ' : ''}
-                </div>
-              </div>
-            </div>
-
-            {draft.startsAt && !draft.endsAt && (
-              <div className="info-notice">
-                <i className="fas fa-triangle-exclamation" style={{ color: 'var(--accent-danger)' }}></i>
-                <div>
-                  ประกาศนี้จะปิดระบบไปเรื่อย ๆ จนกว่าจะมีคนมาแก้ — ถ้าลืม ระบบจะปิดค้างไว้
-                  ใส่เวลากลับมาเปิดไว้ก่อนจะปลอดภัยกว่า
-                </div>
-              </div>
-            )}
-
-            <div className="form-group">
-              <label htmlFor="svc-title-th">
-                <i className="fas fa-heading"></i> หัวข้อ (ไทย)
-              </label>
-              <input
-                id="svc-title-th"
-                type="text"
-                placeholder={draft.preset === 'custom' ? 'จำเป็นต้องกรอก' : 'ว่างไว้ = ใช้ข้อความสำเร็จรูป'}
-                value={draft.titleTh}
-                onChange={(e) => patch({ titleTh: e.target.value })}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="svc-body-th">
-                <i className="fas fa-align-left"></i> รายละเอียด (ไทย)
-              </label>
-              <textarea
-                id="svc-body-th"
-                rows={3}
-                value={draft.bodyTh}
-                onChange={(e) => patch({ bodyTh: e.target.value })}
-              />
-            </div>
-
-            <div className="ai-option-grid">
-              <div className="form-group">
-                <label htmlFor="svc-title-en">หัวข้อ (อังกฤษ)</label>
-                <input
-                  id="svc-title-en"
-                  type="text"
-                  value={draft.titleEn}
-                  onChange={(e) => patch({ titleEn: e.target.value })}
-                />
-                <div className="form-hint">เว็บไซต์มีสองภาษา — ว่างไว้จะใช้ข้อความสำเร็จรูปภาษาอังกฤษแทน</div>
-              </div>
-              <div className="form-group">
-                <label htmlFor="svc-body-en">รายละเอียด (อังกฤษ)</label>
-                <textarea
-                  id="svc-body-en"
-                  rows={3}
-                  value={draft.bodyEn}
-                  onChange={(e) => patch({ bodyEn: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <label className="ai-toggle-row">
-              <span className="ai-switch">
-                <input
-                  type="checkbox"
-                  checked={draft.dismissible}
-                  onChange={(e) => patch({ dismissible: e.target.checked })}
-                />
-                <span className="ai-switch-track"></span>
-              </span>
-              <span className="ai-toggle-text">
-                <span className="ai-toggle-title">ให้ผู้ใช้ปิด popup ได้ (ช่วงแจ้งล่วงหน้า)</span>
-                <span className="ai-toggle-hint">
-                  ช่วงที่ปิดระบบจริงจะปิด popup ไม่ได้เสมอ เพราะไม่มีอะไรให้ใช้อยู่ข้างหลัง
-                </span>
-              </span>
-            </label>
-
-            <label className="ai-toggle-row">
-              <span className="ai-switch">
-                <input type="checkbox" checked={draft.enabled} onChange={(e) => patch({ enabled: e.target.checked })} />
-                <span className="ai-switch-track"></span>
-              </span>
-              <span className="ai-toggle-text">
-                <span className="ai-toggle-title">เปิดใช้งานประกาศนี้</span>
-                <span className="ai-toggle-hint">ปิดไว้เพื่อร่างไว้ก่อนโดยยังไม่มีผลกับผู้ใช้</span>
-              </span>
-            </label>
-          </div>
-
-          <div className="ai-save-bar">
-            <button className="btn btn-primary" onClick={save} disabled={saving}>
-              <i className="fas fa-floppy-disk"></i> {saving ? 'กำลังบันทึก...' : 'บันทึกประกาศ'}
-            </button>
-            <button className="btn btn-secondary" onClick={() => setEditingId(null)} disabled={saving}>
-              ยกเลิก
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ---- preview link ---- */}
-      <div className="admin-card">
-        <div className="card-title-bar">
-          <span className="card-icon">
-            <i className="fas fa-key"></i>
-          </span>
-          <div>
-            <h3>ลิงก์พรีวิวสำหรับแอดมิน</h3>
-            <p>เปิดหน้าที่ถูกปิดอยู่เพื่อตรวจสอบได้ โดยผู้ใช้ทั่วไปยังเห็นประกาศตามปกติ</p>
-          </div>
-        </div>
-        <div className="form-body">
-          <div className="info-notice">
-            <i className="fas fa-circle-info"></i>
-            <div>
-              เว็บไซต์หลักไม่มีระบบ login จึงไม่มีตัวตนให้ยกเว้นแบบฝั่ง API — ลิงก์นี้ทำหน้าที่แทน
-              เปิดครั้งเดียวแล้วเบราว์เซอร์นั้นจะข้ามประกาศไปตลอด session
-            </div>
-          </div>
-          <div className="form-group">
-            <label>
-              <i className="fas fa-link"></i> ลิงก์พรีวิว
-            </label>
-            <input type="text" readOnly value={previewUrl} onFocus={(e) => e.currentTarget.select()} />
-            <div className="form-hint">ใช้ต่อท้ายหน้าไหนก็ได้ เช่น /ask?bypass=... — อย่าแชร์ให้คนนอก</div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                navigator.clipboard.writeText(previewUrl);
-                showToast('คัดลอกแล้ว', undefined, 'success');
-              }}
-            >
-              <i className="fas fa-copy"></i> คัดลอกลิงก์
-            </button>
-            <button className="btn btn-secondary" onClick={rotate}>
-              <i className="fas fa-rotate"></i> สร้างลิงก์ใหม่
-            </button>
-          </div>
-        </div>
+      <div className="service-hero-actions">
+        <a className="btn btn-secondary" href="https://litalkeducation.com/status" target="_blank" rel="noreferrer"><i className="fas fa-arrow-up-right-from-square"></i> เปิดหน้า Status</a>
+        <button className="btn btn-primary" onClick={openStatusUpdate}><i className="fas fa-plus"></i> New update</button>
       </div>
     </div>
-  );
+
+    {failed && <div className="service-banner is-danger"><i className="fas fa-triangle-exclamation"></i><div><strong>โหลดสถานะไม่สำเร็จ</strong><span>ข้อมูลบนหน้านี้อาจไม่เป็นปัจจุบัน</span></div><button className="btn btn-secondary" onClick={() => void load()}>ลองใหม่</button></div>}
+
+    <section className="service-metrics" aria-label="Service overview">
+      <div className={`service-metric ${somethingDown ? 'is-danger' : 'is-good'}`}><span className="service-metric-icon"><i className={`fas ${somethingDown ? 'fa-triangle-exclamation' : 'fa-circle-check'}`}></i></span><div><small>Overall status</small><strong>{everythingDown ? 'System maintenance' : somethingDown ? 'Partial outage' : 'Operational'}</strong></div></div>
+      <div className="service-metric"><span className="service-metric-icon"><i className="fas fa-server"></i></span><div><small>Services online</small><strong>{operationalCount} / {ALL_SURFACES.length}</strong></div></div>
+      <div className="service-metric"><span className="service-metric-icon"><i className="fas fa-bullhorn"></i></span><div><small>Active / scheduled</small><strong>{activeNotices.length}</strong></div></div>
+      <div className="service-metric"><span className="service-metric-icon"><i className="fas fa-circle-pause"></i></span><div><small>Unavailable</small><strong>{blockingSurfaces.size}</strong></div></div>
+    </section>
+
+    <div className="service-grid-main">
+      <section className="service-panel service-panel-services">
+        <div className="service-panel-head"><div><h2>Services</h2><p>สถานะล่าสุดของแต่ละส่วน</p></div><button className="service-icon-button" onClick={() => void load()} aria-label="Refresh"><i className="fas fa-rotate"></i></button></div>
+        <div className="service-list">
+          {SURFACES.map((s) => {
+            const down = blockingSurfaces.has(s.id);
+            return <div className="service-row" key={s.id}><span className="service-row-icon"><i className={`fas ${s.icon}`}></i></span><div className="service-row-copy"><strong>{s.label}</strong><small>{s.hint}</small></div><span className={`service-state ${down ? 'is-down' : 'is-up'}`}><i className="fas fa-circle"></i>{down ? 'Unavailable' : 'Operational'}</span></div>;
+          })}
+        </div>
+      </section>
+
+      <aside className="service-side-stack">
+        <section className="service-panel service-quick-panel">
+          <div className="service-panel-head"><div><h2>Publish</h2><p>สื่อสารกับผู้ใช้</p></div></div>
+          <button className="service-action-card" onClick={openStatusUpdate}><span><i className="fas fa-bullhorn"></i></span><div><strong>Status update</strong><small>แจ้งปัญหา ความคืบหน้า หรือการแก้ไข</small></div><i className="fas fa-chevron-right"></i></button>
+          <button className="service-action-card" onClick={openMaintenance}><span><i className="fas fa-screwdriver-wrench"></i></span><div><strong>Schedule maintenance</strong><small>เลือกบริการและกำหนดเวลาเอง</small></div><i className="fas fa-chevron-right"></i></button>
+        </section>
+
+        <section className={`service-panel service-emergency ${somethingDown ? 'is-active' : ''}`}>
+          <div className="service-panel-head"><div><h2>Emergency control</h2><p>ใช้เฉพาะเมื่อจำเป็นต้องหยุดบริการ</p></div></div>
+          {somethingDown && <div className="service-current-outage"><i className="fas fa-circle-pause"></i><div><strong>{everythingDown ? 'ปิดทั้งระบบอยู่' : 'มีบางบริการถูกปิด'}</strong><small>{everythingDown ? 'ผู้ใช้ไม่สามารถเข้าบริการที่กำหนดได้' : `${blockingSurfaces.size} บริการไม่พร้อมใช้งาน`}</small></div></div>}
+          {!everythingDown && <label className="service-field"><span>เปิดคืนอัตโนมัติ</span><input type="datetime-local" value={shutdownUntil} onChange={(e) => setShutdownUntil(e.target.value)} /><small>เว้นว่างเพื่อปิดแบบไม่มีกำหนด</small></label>}
+          <div className="service-emergency-actions">
+            {!everythingDown && <button className="btn btn-danger" disabled={switching || notices === null} onClick={shutDownEverything}><i className="fas fa-power-off"></i>{switching ? 'กำลังดำเนินการ…' : somethingDown ? 'ปิดส่วนที่เหลือ' : 'ปิดปรับปรุงทั้งระบบ'}</button>}
+            {somethingDown && <button className="btn btn-primary" disabled={switching} onClick={restoreEverything}><i className="fas fa-circle-play"></i>เปิดระบบคืนทั้งหมด</button>}
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    {editingId && <section className="service-panel service-editor">
+      <div className="service-panel-head"><div><div className="service-kicker">{editingId === 'new' ? 'New publication' : 'Editing publication'}</div><h2>{draft.preset === MAINTENANCE ? 'Maintenance' : 'Status update'}</h2><p>ข้อมูลนี้จะแสดงตามภาษาของผู้ใช้และบริการที่เลือก</p></div><button className="service-icon-button" onClick={() => setEditingId(null)} aria-label="Close editor"><i className="fas fa-xmark"></i></button></div>
+
+      <div className="service-editor-grid">
+        <label className="service-field"><span>ประเภท</span><select value={draft.preset} onChange={(e) => patch({ preset: e.target.value as ServicePreset })}>{PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select><small>{PRESETS.find((p) => p.id === draft.preset)?.blurb}</small></label>
+        <label className="service-field service-toggle-field"><span>เปิดใช้งานรายการนี้</span><input type="checkbox" checked={draft.enabled} onChange={(e) => patch({ enabled: e.target.checked })} /></label>
+      </div>
+
+      <div className="service-field"><span>บริการที่ได้รับผลกระทบ</span><div className="service-surface-grid">{SURFACES.map((s) => <label key={s.id} className={`service-surface-option ${draft.surfaces.includes(s.id) ? 'is-selected' : ''}`}><input type="checkbox" checked={draft.surfaces.includes(s.id)} onChange={() => toggleSurface(s.id)} /><span className="service-row-icon"><i className={`fas ${s.icon}`}></i></span><span><strong>{s.label}</strong><small>{s.hint}</small></span></label>)}</div><div className="service-selection-actions"><button type="button" className="service-text-button" onClick={() => patch({ surfaces: ALL_SURFACES })}>เลือกทั้งหมด</button><button type="button" className="service-text-button" onClick={() => patch({ surfaces: [] })}>ล้างทั้งหมด</button></div></div>
+
+      <div className="service-two-col">
+        <label className="service-field"><span>หัวข้อภาษาไทย</span><input value={draft.titleTh} onChange={(e) => patch({ titleTh: e.target.value })} placeholder="เช่น พบปัญหาการเข้าใช้งาน Ask LITALK" /></label>
+        <label className="service-field"><span>Title in English</span><input value={draft.titleEn} onChange={(e) => patch({ titleEn: e.target.value })} placeholder="e.g. Ask LITALK login issue" /></label>
+        <label className="service-field"><span>รายละเอียดภาษาไทย</span><textarea rows={5} value={draft.bodyTh} onChange={(e) => patch({ bodyTh: e.target.value })} placeholder="เกิดอะไรขึ้น กระทบอย่างไร และทีมกำลังทำอะไร" /></label>
+        <label className="service-field"><span>English details</span><textarea rows={5} value={draft.bodyEn} onChange={(e) => patch({ bodyEn: e.target.value })} placeholder="What happened, impact, and what the team is doing" /></label>
+      </div>
+
+      <div className="service-time-grid">
+        <label className="service-field"><span>เริ่มแสดงประกาศ</span><input type="datetime-local" value={toLocalInput(draft.announceFrom)} onChange={(e) => patch({ announceFrom: fromLocalInput(e.target.value) })} /><small>เว้นว่าง = แสดงทันที</small></label>
+        <label className="service-field"><span>เริ่มปิดบริการ</span><input type="datetime-local" value={toLocalInput(draft.startsAt)} onChange={(e) => patch({ startsAt: fromLocalInput(e.target.value) })} /><small>เว้นว่าง = ไม่บล็อกบริการ</small></label>
+        <label className="service-field"><span>สิ้นสุด / เปิดคืน</span><input type="datetime-local" value={toLocalInput(draft.endsAt)} onChange={(e) => patch({ endsAt: fromLocalInput(e.target.value) })} /><small>เว้นว่าง = ไม่มีกำหนด</small></label>
+      </div>
+
+      <label className="service-check"><input type="checkbox" checked={draft.dismissible} onChange={(e) => patch({ dismissible: e.target.checked })} /><span><strong>ผู้ใช้ปิดประกาศได้</strong><small>เมื่อเข้าสู่ช่วง blocking ผู้ใช้จะปิดหน้าปิดบริการไม่ได้อยู่แล้ว</small></span></label>
+
+      <div className="service-editor-footer"><button className="btn btn-secondary" onClick={() => setEditingId(null)}>ยกเลิก</button><button className="btn btn-primary" disabled={saving} onClick={save}><i className="fas fa-paper-plane"></i>{saving ? 'กำลังบันทึก…' : editingId === 'new' ? 'เผยแพร่' : 'บันทึกการแก้ไข'}</button></div>
+    </section>}
+
+    <section className="service-panel service-activity">
+      <div className="service-panel-head"><div><h2>Updates & history</h2><p>รายการล่าสุดและสถานะการเผยแพร่</p></div><span className="service-count">{notices?.length ?? 0}</span></div>
+      {notices === null && !failed && <div className="service-empty"><i className="fas fa-spinner fa-spin"></i><span>กำลังโหลด…</span></div>}
+      {notices && notices.length === 0 && <div className="service-empty"><i className="fas fa-circle-check"></i><strong>ไม่มีประกาศ</strong><span>ทุกบริการเปิดใช้งานตามปกติ</span></div>}
+      <div className="service-activity-list">{notices?.map((n) => {
+        const phase = phaseOf(n);
+        const title = n.titleTh || n.titleEn || PRESETS.find((p) => p.id === n.preset)?.label || n.preset;
+        return <article className="service-activity-row" key={n.id}><span className={`service-activity-dot is-${phase}`}></span><div className="service-activity-copy"><div className="service-activity-title"><strong>{title}</strong><span className={`service-phase is-${phase}`}>{PHASE_LABEL[phase]}</span></div><p>{n.bodyTh || n.bodyEn || 'ไม่มีรายละเอียดเพิ่มเติม'}</p><small>{n.surfaces.map((id) => SURFACES.find((s) => s.id === id)?.label || id).join(' · ')}{n.endsAt ? ` • สิ้นสุด ${formatWhen(n.endsAt)}` : ''}</small></div><div className="service-row-actions"><button className="service-icon-button" onClick={() => openEdit(n)} title="แก้ไข"><i className="fas fa-pen"></i></button><button className="service-icon-button is-danger" onClick={() => void remove(n)} title="ลบ"><i className="fas fa-trash"></i></button></div></article>;
+      })}</div>
+    </section>
+
+    <section className="service-panel service-preview-panel">
+      <div className="service-panel-head"><div><h2>Maintenance preview</h2><p>ลิงก์สำหรับ Admin ใช้ตรวจหน้าที่ถูกปิด โดยไม่เปิดให้ผู้ใช้ทั่วไปเข้า</p></div></div>
+      <div className="service-preview-row"><div className="service-preview-url"><i className="fas fa-link"></i><span>{bypassToken ? `https://litalkeducation.com/?bypass=${bypassToken}` : 'กำลังโหลด token…'}</span></div><button className="btn btn-secondary" onClick={copyPreview} disabled={!bypassToken}><i className="fas fa-copy"></i>คัดลอก</button><button className="btn btn-secondary" onClick={() => void rotate()}><i className="fas fa-rotate"></i>เปลี่ยน token</button></div>
+    </section>
+  </div>;
 }
