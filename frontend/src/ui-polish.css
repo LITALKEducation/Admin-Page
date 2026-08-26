@@ -332,6 +332,136 @@ tbody tr:hover { background: color-mix(in srgb, var(--bg-tertiary) 68%, transpar
   white-space: nowrap;
 }
 
+/* Online learning authoring — courses and quizzes share one calmer hierarchy. */
+.admin-card:has(> .card-title-bar .fa-graduation-cap),
+.admin-card:has(> .card-title-bar .fa-clipboard-question),
+.admin-card:has(> .card-title-bar .fa-clipboard-list) {
+  border: 1px solid var(--ui-border);
+  border-radius: 18px;
+  box-shadow: var(--ui-shadow);
+  overflow: hidden;
+}
+
+.admin-card:has(> .card-title-bar .fa-graduation-cap) > .card-title-bar,
+.admin-card:has(> .card-title-bar .fa-clipboard-question) > .card-title-bar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 16px 18px;
+  background: color-mix(in srgb, var(--bg-secondary) 96%, transparent);
+  border-bottom: 1px solid var(--ui-border);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.admin-card:has(> .card-title-bar .fa-clipboard-list) > .card-title-bar {
+  padding: 18px;
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-surface-soft);
+}
+
+.admin-card:has(> .card-title-bar .fa-graduation-cap) > .form-body,
+.admin-card:has(> .card-title-bar .fa-clipboard-question) > .form-body,
+.admin-card:has(> .card-title-bar .fa-clipboard-list) > .form-body {
+  padding: 18px;
+}
+
+.admin-card:has(> .card-title-bar .fa-graduation-cap) .form-group,
+.admin-card:has(> .card-title-bar .fa-clipboard-question) .form-group {
+  padding: 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--bg-tertiary) 38%, transparent);
+}
+
+.admin-card:has(> .card-title-bar .fa-graduation-cap) .form-group > label,
+.admin-card:has(> .card-title-bar .fa-clipboard-question) .form-group > label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-card:has(> .card-title-bar .fa-graduation-cap) input:focus,
+.admin-card:has(> .card-title-bar .fa-graduation-cap) select:focus,
+.admin-card:has(> .card-title-bar .fa-graduation-cap) textarea:focus,
+.admin-card:has(> .card-title-bar .fa-clipboard-question) input:focus,
+.admin-card:has(> .card-title-bar .fa-clipboard-question) select:focus,
+.admin-card:has(> .card-title-bar .fa-clipboard-question) textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--text-primary) 16%, transparent);
+  outline-offset: 1px;
+  border-color: color-mix(in srgb, var(--text-primary) 28%, var(--ui-border));
+}
+
+.admin-card:has(> .card-title-bar .fa-clipboard-question) .admin-card {
+  margin-bottom: 12px !important;
+  border: 1px solid var(--ui-border);
+  border-radius: 14px;
+  box-shadow: none;
+  background: var(--bg-secondary);
+}
+
+.admin-card:has(> .card-title-bar .fa-clipboard-question) .admin-card > .card-title-bar {
+  min-height: 54px;
+  padding: 10px 12px;
+  background: var(--ui-surface-soft);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.admin-card:has(> .card-title-bar .fa-clipboard-question) .blog-wizard-nav {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  margin: 22px -18px -18px !important;
+  padding: 12px 18px;
+  border-top: 1px solid var(--ui-border);
+  background: color-mix(in srgb, var(--bg-secondary) 96%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.admin-card:has(> .card-title-bar .fa-clipboard-list) input[type="search"] {
+  min-height: 44px;
+  padding-left: 14px;
+  background: var(--bg-secondary);
+}
+
+.admin-card:has(> .card-title-bar .fa-clipboard-list) select {
+  min-width: 150px;
+  min-height: 44px;
+  background: var(--bg-secondary);
+}
+
+.admin-card:has(> .card-title-bar .fa-clipboard-list) table,
+.admin-card:has(> .card-title-bar .fa-graduation-cap) table {
+  width: 100%;
+}
+
+.admin-card:has(> .card-title-bar .fa-clipboard-list) tbody tr,
+.admin-card:has(> .card-title-bar .fa-graduation-cap) tbody tr {
+  background: var(--bg-secondary);
+}
+
+.admin-card:has(> .card-title-bar .fa-clipboard-list) tbody tr:hover,
+.admin-card:has(> .card-title-bar .fa-graduation-cap) tbody tr:hover {
+  background: var(--ui-surface-soft);
+}
+
+.admin-card:has(> .card-title-bar .fa-clipboard-list) .btn,
+.admin-card:has(> .card-title-bar .fa-graduation-cap) .btn,
+.admin-card:has(> .card-title-bar .fa-clipboard-question) .btn {
+  transition: transform .12s ease, background-color .15s ease, border-color .15s ease, opacity .15s ease;
+}
+
+.admin-card:has(> .card-title-bar .fa-clipboard-list) .btn:active:not(:disabled),
+.admin-card:has(> .card-title-bar .fa-graduation-cap) .btn:active:not(:disabled),
+.admin-card:has(> .card-title-bar .fa-clipboard-question) .btn:active:not(:disabled) {
+  transform: translateY(1px) scale(.99);
+}
+
 @media (max-width: 1180px) {
   :root { --ui-sidebar-width: 236px; --ui-shell-gap: 14px; }
   .dashboard-content { padding-top: 18px; }
@@ -350,6 +480,25 @@ tbody tr:hover { background: color-mix(in srgb, var(--bg-tertiary) 68%, transpar
   }
   .mobile-menu-panel { width: min(360px, 92vw); }
   .card, .content-card, .panel, .settings-card, .table-container { border-radius: 14px !important; }
+
+  .admin-card:has(> .card-title-bar .fa-graduation-cap) > .card-title-bar,
+  .admin-card:has(> .card-title-bar .fa-clipboard-question) > .card-title-bar,
+  .admin-card:has(> .card-title-bar .fa-clipboard-list) > .card-title-bar {
+    position: static;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .admin-card:has(> .card-title-bar .fa-graduation-cap) > .form-body,
+  .admin-card:has(> .card-title-bar .fa-clipboard-question) > .form-body,
+  .admin-card:has(> .card-title-bar .fa-clipboard-list) > .form-body {
+    padding: 14px;
+  }
+
+  .admin-card:has(> .card-title-bar .fa-clipboard-question) .blog-wizard-nav {
+    margin: 18px -14px -14px !important;
+    padding: 12px 14px;
+  }
 }
 
 @media (max-width: 560px) {
@@ -358,6 +507,15 @@ tbody tr:hover { background: color-mix(in srgb, var(--bg-tertiary) 68%, transpar
   .btn { min-height: 42px; }
   .mobile-menu-panel { width: 92vw; max-width: 92vw; }
   .admin-bottom-nav button span { font-size: 10px; }
+
+  .admin-card:has(> .card-title-bar .fa-graduation-cap) .form-group,
+  .admin-card:has(> .card-title-bar .fa-clipboard-question) .form-group {
+    padding: 11px;
+  }
+
+  .admin-card:has(> .card-title-bar .fa-clipboard-list) select {
+    width: 100%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
