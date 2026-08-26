@@ -41,9 +41,9 @@ export const NAV_SECTIONS: NavSection[] = [
     key: 'online-learning',
     label: 'การเรียนออนไลน์',
     items: [
-      { screen: 'courses', label: 'คอร์สเรียน', icon: 'fa-graduation-cap' },
+      { screen: 'courses', label: 'คอร์สเรียนออนไลน์', icon: 'fa-graduation-cap' },
+      { screen: 'quizzes', label: 'ออกข้อสอบ 1 ต่อ 1', icon: 'fa-file-signature' },
       { screen: 'learners', label: 'ผู้เรียนออนไลน์', icon: 'fa-user-check' },
-      { screen: 'quizzes', label: 'แบบทดสอบ', icon: 'fa-clipboard-question' },
     ],
   },
   {
