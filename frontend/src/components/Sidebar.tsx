@@ -2,15 +2,10 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import logo from '../assets/img/LITALK-Black.png';
 import { SCREEN_ROUTES } from '../utils/screenRoutes';
-import { NAV_SECTIONS as SECTIONS } from '../utils/navSections';
+import { DASHBOARD_ITEM, NAV_SECTIONS as SECTIONS } from '../utils/navSections';
 
 const COLLAPSE_KEY = 'litalk_sidebar_collapsed';
 
-// Desktop sidebar in the shadcn sidebar-03 style: a floating rounded card
-// with an icon-collapsible rail and collapsible nav groups (chevron per
-// section). The visual treatment lives in legacy.css (.sidebar / .icon-
-// collapsed / .sidebar-nav-section.collapsed) — this wires the state to it.
-// Hidden below 900px, where MobileNav takes over.
 export default function Sidebar({
   isAdmin,
   email,
@@ -54,57 +49,66 @@ export default function Sidebar({
         </button>
       </div>
 
-      <nav className="sidebar-nav">
-        <NavLink
-          to="/"
-          end
-          className={({ isActive }) => `sidebar-nav-item${isActive ? ' active' : ''}`}
-          title="Dashboard"
-        >
-          <i className="fas fa-gauge-high"></i> <span className="sidebar-label">Dashboard</span>
-        </NavLink>
-
-        {SECTIONS.filter((section) => !section.adminOnly || isAdmin).map((section) => (
-          <div
-            className={`sidebar-nav-section${collapsedSections.has(section.key) ? ' collapsed' : ''}`}
-            key={section.key}
+      <nav className="sidebar-nav" aria-label="เมนูผู้ดูแลระบบ">
+        <div className="sidebar-primary-nav">
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) => `sidebar-nav-item sidebar-dashboard-item${isActive ? ' active' : ''}`}
+            title={DASHBOARD_ITEM.label}
           >
-            <button
-              type="button"
-              className="sidebar-nav-heading"
-              style={{ marginTop: 12 }}
-              onClick={() => toggleSection(section.key)}
-              aria-expanded={!collapsedSections.has(section.key)}
+            <i className={`fas ${DASHBOARD_ITEM.icon}`}></i>
+            <span className="sidebar-label">{DASHBOARD_ITEM.label}</span>
+          </NavLink>
+        </div>
+
+        <div className="sidebar-section-list">
+          {SECTIONS.filter((section) => !section.adminOnly || isAdmin).map((section) => (
+            <div
+              className={`sidebar-nav-section${collapsedSections.has(section.key) ? ' collapsed' : ''}`}
+              key={section.key}
             >
-              <span className="sidebar-label">{section.label}</span>
-              <i className="fas fa-chevron-down section-chevron sidebar-label"></i>
-            </button>
-            <div className="sidebar-nav-section-items">
-              <div className="nav-items-inner">
-                {section.items
-                  .filter((item) => !item.adminOnly || isAdmin)
-                  .map((item) => (
-                    <NavLink
-                      key={item.screen}
-                      to={SCREEN_ROUTES[item.screen]}
-                      className={({ isActive }) => `sidebar-nav-item${isActive ? ' active' : ''}`}
-                      title={item.label}
-                    >
-                      <i className={`fas ${item.icon}`}></i> <span className="sidebar-label">{item.label}</span>
-                    </NavLink>
-                  ))}
+              <button
+                type="button"
+                className="sidebar-nav-heading"
+                onClick={() => toggleSection(section.key)}
+                aria-expanded={!collapsedSections.has(section.key)}
+              >
+                <span className="sidebar-label">{section.label}</span>
+                <i className="fas fa-chevron-down section-chevron sidebar-label"></i>
+              </button>
+              <div className="sidebar-nav-section-items">
+                <div className="nav-items-inner">
+                  {section.items
+                    .filter((item) => !item.adminOnly || isAdmin)
+                    .map((item) => (
+                      <NavLink
+                        key={item.screen}
+                        to={SCREEN_ROUTES[item.screen]}
+                        className={({ isActive }) => `sidebar-nav-item${isActive ? ' active' : ''}`}
+                        title={item.label}
+                      >
+                        <i className={`fas ${item.icon}`}></i>
+                        <span className="sidebar-label">{item.label}</span>
+                      </NavLink>
+                    ))}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </nav>
 
       <div className="sidebar-footer">
         <div className="sidebar-footer-row">
+          <div className="sidebar-account-icon" aria-hidden="true">
+            <i className="fas fa-circle-user"></i>
+          </div>
           <span className="sidebar-email sidebar-label">{email}</span>
         </div>
-        <button className="btn btn-secondary" style={{ width: '100%' }} title="Logout" onClick={onLogout}>
-          <i className="fas fa-sign-out-alt"></i> <span className="sidebar-label">Logout</span>
+        <button className="btn btn-secondary sidebar-logout-btn" title="ออกจากระบบ" onClick={onLogout}>
+          <i className="fas fa-sign-out-alt"></i>
+          <span className="sidebar-label">ออกจากระบบ</span>
         </button>
       </div>
     </aside>

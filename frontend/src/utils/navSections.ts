@@ -14,7 +14,7 @@ export interface NavSection {
   items: NavItem[];
 }
 
-export const DASHBOARD_ITEM: NavItem = { screen: 'dashboard', label: 'Dashboard', icon: 'fa-gauge-high' };
+export const DASHBOARD_ITEM: NavItem = { screen: 'dashboard', label: 'ภาพรวม', icon: 'fa-gauge-high' };
 
 export const NAV_SECTIONS: NavSection[] = [
   {
@@ -28,15 +28,21 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    key: 'teaching',
-    label: 'การเรียนการสอน',
+    key: 'lessons',
+    label: 'ชั้นเรียนและตาราง',
     items: [
       { screen: 'booking', label: 'จองเวลาเรียน', icon: 'fa-calendar-check' },
-      { screen: 'schedule', label: 'ตารางเรียนรายเดือน', icon: 'fa-calendar-days' },
-      { screen: 'hours', label: 'ปรับชั่วโมงเรียน', icon: 'fa-arrows-up-down' },
+      { screen: 'schedule', label: 'ตารางเรียน', icon: 'fa-calendar-days' },
       { screen: 'logs', label: 'บันทึกการเรียน', icon: 'fa-book-open' },
-      { screen: 'quizzes', label: 'แบบทดสอบออนไลน์', icon: 'fa-clipboard-question' },
+      { screen: 'hours', label: 'ชั่วโมงเรียน', icon: 'fa-clock-rotate-left' },
+    ],
+  },
+  {
+    key: 'online-learning',
+    label: 'การเรียนออนไลน์',
+    items: [
       { screen: 'courses', label: 'คอร์สเรียนออนไลน์', icon: 'fa-graduation-cap' },
+      { screen: 'quizzes', label: 'ออกข้อสอบ 1 ต่อ 1', icon: 'fa-file-signature' },
       { screen: 'learners', label: 'ผู้เรียนออนไลน์', icon: 'fa-user-check' },
     ],
   },
@@ -46,29 +52,36 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { screen: 'payments', label: 'บันทึกการชำระเงิน', icon: 'fa-money-bill-wave' },
       { screen: 'finance', label: 'สรุปการเงิน', icon: 'fa-chart-line', adminOnly: true },
+      { screen: 'credits', label: 'เครดิตนักเรียน', icon: 'fa-coins', adminOnly: true },
     ],
   },
   {
-    key: 'website',
-    label: 'เว็บไซต์',
+    key: 'content',
+    label: 'เว็บไซต์และคอนเทนต์',
     items: [
       { screen: 'blog', label: 'บทความเว็บไซต์', icon: 'fa-newspaper' },
       { screen: 'links', label: 'ลิงก์ย่อ', icon: 'fa-link' },
+      { screen: 'tcas-fortune', label: 'TCAS Fortune', icon: 'fa-wand-magic-sparkles', adminOnly: true },
     ],
   },
   {
-    key: 'admin',
-    label: 'ผู้ดูแลระบบ',
+    key: 'people',
+    label: 'บุคลากรและการเข้าถึง',
     adminOnly: true,
     items: [
       { screen: 'staff', label: 'ครูและพนักงาน', icon: 'fa-users-gear' },
       { screen: 'access', label: 'สิทธิ์การมองเห็น', icon: 'fa-user-shield' },
-      { screen: 'credits', label: 'แก้ไขเครดิต', icon: 'fa-coins' },
       { screen: 'nfc', label: 'บัตร NFC', icon: 'fa-wifi' },
       { screen: 'checkins', label: 'บันทึกเข้า-ออก', icon: 'fa-right-left' },
+    ],
+  },
+  {
+    key: 'system',
+    label: 'ระบบและการตั้งค่า',
+    adminOnly: true,
+    items: [
       { screen: 'ai-settings', label: 'ตั้งค่า AI Chat', icon: 'fa-message' },
-      { screen: 'tcas-fortune', label: 'TCAS Fortune', icon: 'fa-wand-magic-sparkles' },
-      { screen: 'service', label: 'เปิด-ปิดระบบ', icon: 'fa-tower-broadcast' },
+      { screen: 'service', label: 'สถานะและการเปิด-ปิดระบบ', icon: 'fa-tower-broadcast' },
     ],
   },
 ];
